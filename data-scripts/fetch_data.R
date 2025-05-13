@@ -2,13 +2,12 @@
 # fetch_data.R — Non-interaktivt script til at hente, transformere og gemme clean_data.rds
 
 # 0) Pakker
-libs <- c("rvest","stringr","readxl","dplyr","tidyr")
-install_if_missing <- function(pkgs){
-  to_install <- pkgs[!pkgs %in% installed.packages()[,"Package"]]
-  if(length(to_install)) install.packages(to_install, repos="https://cran.rstudio.com/")
-}
-install_if_missing(libs)
-lapply(libs, library, character.only = TRUE)
+library(xml2)
+library(rvest)
+library(stringr)
+library(readxl)
+library(dplyr)
+library(tidyr)
 
 # 1) Argumenter: output-mappe
 args <- commandArgs(trailingOnly = TRUE)
