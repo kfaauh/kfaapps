@@ -1,20 +1,14 @@
+
 #!/usr/bin/env Rscript
-# fetch_data.R — Non-interaktivt script til at hente, transformere og gemme clean_data.rds
+library(rvest); library(stringr)
+library(readxl); library(dplyr); library(tidyr)
 
-# 0) Pakker
-library(xml2)
-library(rvest)
-library(stringr)
-library(readxl)
-library(dplyr)
-library(tidyr)
-
-cat_data <- read_excel("Alle lægemidler.xlsx")
-
-# 1) Argumenter: output-mappe
 args <- commandArgs(trailingOnly = TRUE)
-out_dir <- if(length(args)>=1) args[1] else "data"
-if(!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+out_dir  <- if (length(args)>=1) args[1] else "data"
+cat_file <- if (length(args)>=2) args[2] else "Alle lægemidler.xlsx"
+
+if (!dir.exists(out_dir)) dir.create(out_dir)
+cat_data <- read_excel(cat_file)
 
 # 2) Hent pris-data
 url_price <- "https://www.esundhed.dk/Emner/Laegemidler/Medicinpriser"
@@ -68,6 +62,5 @@ clean_data <- price_wide |> left_join(
 
 # 7) Gem output
 # gem output i en undermappe "data"
-if (!dir.exists("data")) dir.create("data")
-saveRDS(clean_data, file.path("data", "clean_data.rds"))
+saveRDS(clean_data, file.path(out_dir, "clean_data.rds"))
 message("✔ clean_data.rds skrevet til ", normalizePath(out_dir))
