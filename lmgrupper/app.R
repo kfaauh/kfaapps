@@ -10,31 +10,49 @@ library(DT)
 # Adjust this path if your RDS is in a different location
 clean_data <- readRDS("/srv/shiny-server/kfaapps/data-scripts/data/clean_data.rds")
 
-# Prepare valid categories for the tree
-valid_categories <- clean_data$Kategori %>%
-  unique() %>%
-  na.omit() %>%
-  setdiff("unknown")
+# Filter out invalid categories/subcategories.
+valid_categories <- unique(clean_data$Kategori)
+valid_categories <- valid_categories[!is.na(valid_categories) & valid_categories != "unknown"]
 
-# Build nested list structure for shinyTree
-tree_data <- lapply(valid_categories, function(cat) {
-  df_cat <- filter(clean_data, Kategori == cat)
-  subcats <- df_cat$Underkategori %>% unique() %>% na.omit() %>% setdiff("unknown")
-  if (length(subcats) == 0) return(cat)
-  uc_list <- lapply(subcats, function(uc) {
-    df_uc <- filter(df_cat, Underkategori == uc)
-    atc_vals <- df_uc$ATCtekst %>% unique() %>% na.omit() %>% setdiff("unknown")
-    if (length(atc_vals) == 0) return(uc)
-    lst <- as.list(atc_vals)
-    names(lst) <- atc_vals
-    lst
-  })
-  names(uc_list) <- subcats
-  uc_list
-})
-names(tree_data) <- valid_categories
+# Build the tree structure for the sidebar.
+tree_data <- list()
 
-# UI definition
+for (cat in valid_categories) {
+  # All rows for the current kategori
+  cat_rows <- clean_data[clean_data$Kategori == cat, ]
+  
+  # Find unique underkategorier
+  subcats <- unique(cat_rows$Underkategori)
+  subcats <- subcats[!is.na(subcats) & subcats != "unknown"]
+  
+  # If no underkategorier for this kategori, treat kategori as a leaf
+  if (length(subcats) == 0) {
+    tree_data[[cat]] <- cat
+  } else {
+    # Build a named list of subcategories (which themselves may have children)
+    subcat_list <- list()
+    
+    for (subcat in subcats) {
+      subcat_rows <- cat_rows[cat_rows$Underkategori == subcat, ]
+      atc_values  <- unique(subcat_rows$ATCtekst)
+      atc_values  <- atc_values[!is.na(atc_values) & atc_values != "unknown"]
+      
+      if (length(atc_values) == 0) {
+        # No ATCtekst here, so subcat is a leaf
+        subcat_list[[subcat]] <- subcat
+      } else {
+        # Build a named list of ATCtekst as children
+        atc_list <- as.list(atc_values)
+        names(atc_list) <- atc_values
+        subcat_list[[subcat]] <- atc_list
+      }
+    }
+    
+    # Assign the subcategory list to the kategori
+    tree_data[[cat]] <- subcat_list
+  }
+}
+
 ui <- fluidPage(
   titlePanel("Prisoversigter for lægemiddelgrupper"),
   sidebarLayout(
@@ -48,93 +66,158 @@ ui <- fluidPage(
   )
 )
 
-# Server logic
 server <- function(input, output, session) {
-  # Render the tree
-  output$tree <- renderTree({ tree_data })
-
-  # Determine selection
+  
+  output$tree <- renderTree({
+    tree_data
+  })
+  
   selectedValue <- reactive({
+    req(input$tree)
     sel <- unlist(shinyTree::get_selected(input$tree, format = "names"))
     if (length(sel) == 0) return(NULL)
-    val <- sel[1]
-    type <- if (val %in% valid_categories) {
-      "kategori"
-    } else if (val %in% clean_data$Underkategori) {
-      "underkategori"
+    
+    # Grab the first selected name
+    sel <- sel[1]
+    
+    if (sel %in% valid_categories) {
+      return(list(type = "kategori", value = sel))
+    } else if (sel %in% unique(clean_data$Underkategori)) {
+      return(list(type = "underkategori", value = sel))
+    } else if (sel %in% unique(clean_data$ATCtekst)) {
+      return(list(type = "atctekst", value = sel))
     } else {
-      "atctekst"
+      # Fallback
+      return(list(type = "other", value = sel))
     }
-    list(type = type, value = val)
   })
-
-  # Filter data based on selection
-  filteredData <- reactive({
-    sel <- selectedValue()
-    if (is.null(sel)) return(clean_data[0, ])
-    df <- switch(sel$type,
-      kategori      = filter(clean_data, Kategori == sel$value),
-      underkategori = filter(clean_data, Underkategori == sel$value),
-      atctekst      = filter(clean_data, ATCtekst == sel$value)
-    )
-    df %>%
-      select(
-        Substitutionsgruppe = SubstGruppe,
-        Indholdsstof       = Indholdsstof,
-        Styrke             = Styrke,
-        Form               = Form,
-        Pakning            = Pakning,
-        Handelsnavn        = Lægemiddel,
-        Pris               = AUP,
-        Pris_pr_DDD        = AUP_pr_DDD,
-        Prisændring        = Prisændring
-      ) %>%
-      mutate(Styrke = as.character(Styrke))
-  })
-
-  # Output title
-  output$tableTitle <- renderText({
+  
+  categoryData <- reactive({
     sel <- selectedValue()
     if (is.null(sel)) {
+      return(data.frame())
+    }
+    
+    if (sel$type == "kategori") {
+      clean_data %>% dplyr::filter(Kategori == sel$value)
+    } else if (sel$type == "underkategori") {
+      clean_data %>% dplyr::filter(Underkategori == sel$value)
+    } else if (sel$type == "atctekst") {
+      clean_data %>% dplyr::filter(ATCtekst == sel$value)
+    } else {
+      # Fallback or empty
+      data.frame()
+    }
+  })
+  
+  filteredData <- reactive({
+    # First filter based on category selection, then select and reorder columns.
+    # Also convert 'Styrke' to character so that the DT search works on it.
+    categoryData() %>% 
+      select(
+        `Substitutionsgruppe` = SubstGruppe,
+        `Indholdsstof`       = Indholdsstof,
+        `Styrke`             = Styrke,
+        `Form`               = Form,
+        `Pakning`            = Pakning,
+        `Handelsnavn`        = Lægemiddel,
+        `Pris` = AUP,
+        `Pris pr. DDD` = AUP_pr_DDD,
+        `14-dages prisændring` = Prisændring
+      ) %>% 
+      mutate(Styrke = as.character(Styrke))
+  })
+  
+  output$tableTitle <- renderText({
+    sel <- selectedValue()
+    if(is.null(sel)){
       "Vælg kategori eller underkategori"
     } else {
       sel$value
     }
   })
-
-  # Render DataTable
+  
   output$tableOutput <- renderDT({
     df <- filteredData()
-    if (nrow(df) == 0) return(datatable(df))
-    # Convert certain columns to factor for dropdown filters
-    for (col in c("Substitutionsgruppe", "Indholdsstof", "Styrke", "Form", "Pakning", "Handelsnavn")) {
-      df[[col]] <- as.factor(df[[col]])
+    
+    if (nrow(df) == 0) {
+      return(datatable(df))
     }
-    # Compute breakpoints for color scales
-    brks <- quantile(df$Pris_pr_DDD, probs = seq(0, 1, 0.01), na.rm = TRUE)
-    brks_price <- c(seq(-1, 0, length.out = 50), seq(0, 1, length.out = 50)[-1])
-    base_clrs <- colorRampPalette(c("green","yellow","red"))(length(brks) + 1)
+    
+    # Convert columns used in filtering explicitly to factors
+    filter_columns <- c(
+      "Substitutionsgruppe",
+      "Indholdsstof",
+      "Styrke",
+      "Form",
+      "Pakning",
+      "Handelsnavn"
+    )
+    
+    df[filter_columns] <- lapply(df[filter_columns], as.factor)
+    
+    # Gradient color preparation (your existing logic)
+    col_vals <- df[["Pris pr. DDD"]]
+    col_vals_price <- df[["14-dages prisændring"]]
+    brks <- quantile(col_vals, probs = seq(0, 1, 0.01), na.rm = TRUE)
+    
+    n1 <- 50
+    n2 <- 50
+    brks_price <- c(
+      seq(-1, 0, length.out = n1),
+      seq(0, 1, length.out = n2)[-1]
+    )
+    
+    clrs_green_to_white <- colorRampPalette(c("green", "white"))(n1)
+    clrs_white_to_red <- colorRampPalette(c("white", "red"))(n2)
+    
+    base_clrs <- colorRampPalette(c("green","yellow", "red"))(length(brks) + 1)
+    
     clrs <- sapply(base_clrs, function(x) adjustcolor(x, alpha.f = 0.5))
     clrs_price <- c(
       "green",
-      colorRampPalette(c("green","white"))(50)[-1],
-      colorRampPalette(c("white","red"))(50)[-1],
+      clrs_green_to_white[-1],
+      clrs_white_to_red[-1],
       "red"
     )
     clrs_price <- adjustcolor(clrs_price, alpha.f = 0.5)
-
+    
+    # Datatable with proper dropdown filters
     datatable(
       df,
       rownames = FALSE,
-      filter = "top",
-      options = list(orderClasses = TRUE)
+      filter = "top", # <-- Use simple 'top' here, factors ensure dropdown filters
+      options = list(
+        order = list(list(0, "asc")),
+        orderClasses = TRUE,
+        lengthMenu = list(c(-1,10,50,100), c("Alle","10","50","100")),
+        language = list(
+          lengthMenu = "Vis _MENU_ rækker",
+          zeroRecords = "Ingen rækker fundet",
+          info = "Viser _START_ til _END_ af _TOTAL_ rækker",
+          infoEmpty = "Ingen rækker fundet",
+          infoFiltered = "(filtreret fra _MAX_ rækker)",
+          search = "Søg",
+          paginate = list(
+            first = "Første",
+            last = "Sidste",
+            'next' = "Næste",
+            'previous' = "Forrige"
+          )
+        )
+      )
     ) %>%
-      formatStyle("Pris_pr_DDD", backgroundColor = styleInterval(brks, clrs)) %>%
-      formatStyle("Prisændring", backgroundColor = styleInterval(brks_price, clrs_price)) %>%
-      formatRound("Pris_pr_DDD", 2) %>%
-      formatPercentage("Prisændring", digits = 0)
+      formatStyle(
+        columns = c("Pris pr. DDD"),
+        backgroundColor = styleInterval(brks, clrs)
+      ) %>%
+      formatStyle(
+        columns = c("14-dages prisændring"),
+        backgroundColor = styleInterval(brks_price,clrs_price)
+      ) %>%
+      formatRound("Pris pr. DDD", 2) %>%
+      formatPercentage("14-dages prisændring", digits = 0)
   })
 }
 
-# Run the app
 shinyApp(ui = ui, server = server)
