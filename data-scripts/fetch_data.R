@@ -9,6 +9,8 @@ library(readxl)
 library(dplyr)
 library(tidyr)
 
+cat_data <- read_excel("Alle lægemidler.xlsx")
+
 # 1) Argumenter: output-mappe
 args <- commandArgs(trailingOnly = TRUE)
 out_dir <- if(length(args)>=1) args[1] else "data"
@@ -65,5 +67,7 @@ clean_data <- price_wide |> left_join(
 )
 
 # 7) Gem output
-saveRDS(clean_data, file.path(out_dir, "clean_data.rds"))
+# gem output i en undermappe "data"
+if (!dir.exists("data")) dir.create("data")
+saveRDS(clean_data, file.path("data", "clean_data.rds"))
 message("✔ clean_data.rds skrevet til ", normalizePath(out_dir))
