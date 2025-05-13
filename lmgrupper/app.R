@@ -6,7 +6,7 @@ library(DT)
 
 # 2) Load for-processed data ---------------------------------------------
 # Sørg for, at du har kørt fetch_data.R, så clean_data.rds ligger i data/
-clean_data <- readRDS("data/clean_data.rds")
+clean_data <- readRDS("/srv/shiny-server/kfaapps/data-scripts/data/clean_data.rds")
 
 # 3) Forbered dropdown/tree strukturen -----------------------------------
 valid_categories <- clean_data$Kategori %>%
