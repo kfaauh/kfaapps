@@ -1,7 +1,7 @@
-# R artefakter
+# R midlertidige filer
 .Rhistory
 .RData
 *.Rproj
 
-# Data output
-data/*.rds
+# Git artefakter
+.DS_Store
