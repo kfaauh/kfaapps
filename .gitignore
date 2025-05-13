@@ -1,0 +1,7 @@
+# R artefakter
+.Rhistory
+.RData
+*.Rproj
+
+# Data output
+data/*.rds
