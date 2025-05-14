@@ -37,7 +37,11 @@ generisk_data_grouped <- generisk_data %>%
 
 # Merge datasets
 merged_data <- medicinforbrug_data %>%
-  left_join(generisk_data_grouped, by = c("Produktnavn" = "Lægemiddel")) %>%
+   left_join(
+     generisk_data_grouped,
+     by           = c("Produktnavn" = "Lægemiddel"),
+     relationship = "many-to-many"
+   ) %>%
   mutate(
     Dato = as.Date(paste(År, sprintf("%02d", as.numeric(Måned)), "01", sep = "-"))
   )
