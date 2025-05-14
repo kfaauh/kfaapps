@@ -74,7 +74,10 @@ server <- function(input, output, session) {
   
   selectedValue <- reactive({
     req(input$tree)
-    sel <- unlist(shinyTree::get_selected(input$tree, format = "names"))
+    sel <- tryCatch(
+      unlist(shinyTree::get_selected(input$tree, format = "names")),
+      error = function(e) NULL
+    )
     if (length(sel) == 0) return(NULL)
     
     # Grab the first selected name
