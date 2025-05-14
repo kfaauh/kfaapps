@@ -8,7 +8,7 @@ library(DT)
 
 # Load preprocessed data
 # Adjust this path if your RDS is in a different location
-clean_data <- readRDS("/srv/shiny-server/kfaapps/data-scripts/data/clean_data.rds")
+clean_data  <- readRDS("data/clean_data.rds")
 
 # Filter out invalid categories/subcategories.
 valid_categories <- unique(clean_data$Kategori)
