@@ -32,22 +32,6 @@ tmp_xls   <- tempfile(fileext=".xls")
 download.file(url_subst, tmp_xls, mode="wb")
 subst_data<- read_excel(tmp_xls, sheet=2)
 
-# 4) Læs kategori‐fil (antag den ligger i samme repo under data/)
-# 4) Læs kategori‐fil ud fra script‐placering
-get_script_dir <- function(){
-  # Look for “--file=” in the full set of commandArgs()
-  args <- commandArgs(trailingOnly = FALSE)
-  file_arg <- grep("^--file=", args, value = TRUE)
-  if (length(file_arg)) {
-    return(dirname(normalizePath(sub("^--file=", "", file_arg))))
-  }
-  stop("Cannot determine script directory (no --file=)")
-}
-
-script_dir <- get_script_dir()
-cat_path   <- file.path(script_dir, "..", "data", "Alle lægemidler.xlsx")
-cat_data   <- read_excel(cat_path)
-
 # 5) Rens pris-data
 date_cols <- grep("^\\d{8}$", names(price_data), value=TRUE) |> sort()
 latest   <- tail(date_cols,1)
