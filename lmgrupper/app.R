@@ -95,11 +95,12 @@ server <- function(input, output, session) {
     }
   })
   
-  categoryData <- reactive({
-    sel <- selectedValue()
-    if (is.null(sel)) {
-      return(data.frame())
-    }
+    categoryData <- reactive({
+     sel <- selectedValue()
+     if (is.null(sel)) {
+       # return an empty slice of clean_data so it still has all your columns
+        return(clean_data[FALSE, ])
+      }
     
     if (sel$type == "kategori") {
       clean_data %>% dplyr::filter(Kategori == sel$value)
