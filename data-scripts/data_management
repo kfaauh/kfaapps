@@ -8,6 +8,11 @@ library(dplyr)
 library(tidyr)
 library(rvest)
 
+# Ensure data directory exists
+if (!dir.exists("data")) {
+  dir.create("data")
+}
+
 # Define and download eSundhed medicinforbrug data
 url <- "https://www.esundhed.dk/Emner/Laegemidler/Medicintilskud#tabpanel8D68CD313C234CD7810555310F6171AC"
 page <- read_html(url)
@@ -38,4 +43,5 @@ merged_data <- medicinforbrug_data %>%
   )
 
 # Save cleaned data for Shiny app
-saveRDS(merged_data, file = "merged_data.rds")
+# Save cleaned data for Shiny app
+saveRDS(merged_data, file = "data/merged_data.rds")
