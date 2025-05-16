@@ -4,13 +4,15 @@
 library(shiny)                                                                                                          
 library(dplyr)                                                                                                          
 library(tidyr)                                                                                                          
-library(ggplot2)                                                                                                                                                                                                                                
+library(ggplot2)
+library(shinymanager)
 
 # Load cleaned data                                                                                                     
 merged_data <- readRDS('data/merged_data.rds')                                                                                                                                                                                                  
 
 # Define UI                                                                                                             
-ui <- fluidPage(                                                                                                          
+ui <- secure_app(
+fluidPage(                                                                                                          
 	titlePanel("Medicinforbrug fra eSundhed.dk"),                                                                           	
 	sidebarLayout(                                                                                                            
 		sidebarPanel(                                                                                                             
@@ -39,10 +41,15 @@ ui <- fluidPage(
       			tableOutput("summary_table")
     		)
 	)
-) 
+)
+)
 
 # Define Server
 server <- function(input, output, session) {
+
+res_auth <- secure_server(
+	check_credentials = check_credentials(credentials)
+	
   # Y-axis label mapping
   y_axis_labels <- list(
     "Regionale udgifter til medicintilskud, kr."              = "Samlede tilskudsudgifter, kr.",
