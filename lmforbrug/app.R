@@ -7,6 +7,12 @@ library(tidyr)
 library(ggplot2)
 library(shinymanager)
 
+credentials <- data.frame(
+  user = "KFA",
+  password = "kfekfa123",
+  stringsAsFactors = FALSE
+)
+
 # Load cleaned data                                                                                                     
 merged_data <- readRDS('data/merged_data.rds')                                                                                                                                                                                                  
 
