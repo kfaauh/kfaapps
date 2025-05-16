@@ -9,7 +9,7 @@ library(shinymanager)
 
 credentials <- data.frame(
   user = "KFA",
-  password = kfekfa123,
+  password = "kfekfa123",
   stringsAsFactors = FALSE
 )
 
