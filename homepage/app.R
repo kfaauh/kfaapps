@@ -1,10 +1,18 @@
 # app.R for homepage
 library(shiny)
+library(shinymanager)
+
+credentials <- data.frame(
+  user = "KFA",
+  password = "kfekfa123",
+  stringsAsFactors = FALSE
+)
 
 # 1) adjust this to point at whichever file you want to show the update date of
 DATA_FILE <- "/srv/shiny-server/kfaapps/data-scripts/data/merged_data.rds"
 
-ui <- fluidPage(
+ui <- secure_app(
+fluidPage(
   tags$head(
     tags$style(HTML("
       body {
@@ -65,8 +73,12 @@ ui <- fluidPage(
 
   div(class="footer", textOutput("footer_text"))
 )
+)
 
 server <- function(input, output, session) {
+  res_auth <- secure_server(
+    check_credentials = check_credentials(credentials)
+  )
   # Compute last-update date
   last_date <- if (file.exists(DATA_FILE)) {
     format(file.info(DATA_FILE)$mtime, "%d-%m-%Y")
