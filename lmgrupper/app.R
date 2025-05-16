@@ -5,6 +5,13 @@ library(shiny)
 library(shinyTree)
 library(dplyr)
 library(DT)
+library(shinymanager)
+
+credentials <- data.frame(
+  user = "KFA",
+  password = kfekfa123,
+  stringsAsFactors = FALSE
+)
 
 # Load preprocessed data
 # Adjust this path if your RDS is in a different location
@@ -53,7 +60,8 @@ for (cat in valid_categories) {
   }
 }
 
-ui <- fluidPage(
+ui <- secure_app( 
+fluidPage(
   titlePanel("Prisoversigter for lægemiddelgrupper"),
   sidebarLayout(
     sidebarPanel(
@@ -65,8 +73,12 @@ ui <- fluidPage(
     )
   )
 )
+) 
 
 server <- function(input, output, session) {
+
+res_auth <- secure_server(
+    check_credentials = check_credentials(credentials)
   
   output$tree <- renderTree({
     tree_data
