@@ -1,6 +1,3 @@
-# data_prep.R
-# This script fetches raw data, processes it, and saves a cleaned RDS file for the Shiny app.
-
 # Load required packages
 library(readxl)
 library(stringr)
@@ -13,7 +10,7 @@ if (!dir.exists("data")) {
   dir.create("data")
 }
 
-# Define and download eSundhed medicinforbrug data
+# Download medicinforbrug data (sheet 7) from eSundhed
 url <- "https://www.esundhed.dk/Emner/Laegemidler/Medicintilskud#tabpanel8D68CD313C234CD7810555310F6171AC"
 page <- read_html(url)
 links <- page %>% html_nodes("a") %>% html_attr("href")
@@ -22,11 +19,28 @@ download_link <- links[str_detect(links, "Medicintilskud_regionsinddelt")]
 if (!str_detect(download_link, "^http")) {
   download_link <- paste0("https://www.esundhed.dk", download_link)
 }
+
 temp1 <- tempfile(fileext = ".xlsx")
 download.file(download_link, destfile = temp1, mode = "wb")
-medicinforbrug_data <- read_excel(temp1, sheet = 7, skip = 5)
+raw_med <- read_excel(temp1, sheet = 7, skip = 5)
 
-# Define and download generisk data
+# Aggregate to one row per År, Måned, Område, Produktnavn
+med_agg <- raw_med %>%
+  group_by(År, Måned, Område, Produktnavn, `ATC kode`, `ATC tekst`) %>%
+  summarize(
+    across(
+      c(
+        `Regionale udgifter til medicintilskud, kr.`,
+        `Regionale udgifter til medicintilskud, kr. pr. indbygger`,
+        Mængdesalg,
+        `Mængdesalgsenhed pr. indbygger`
+      ),
+      ~ sum(.x, na.rm = TRUE)
+    ),
+    .groups = "drop"
+  )
+
+# Download generic substitution group data
 url_excel <- "https://laegemiddelstyrelsen.dk/LinkArchive.ashx?id=23D846362C144111B63358E63C44E32C&lang=en"
 temp2 <- tempfile(fileext = ".xls")
 download.file(url_excel, destfile = temp2, mode = "wb")
@@ -35,17 +49,15 @@ generisk_data_grouped <- generisk_data %>%
   select(Lægemiddel, SubstGruppe, Styrke, LægemiddelForm) %>%
   distinct()
 
-# Merge datasets
-merged_data <- medicinforbrug_data %>%
-   left_join(
-     generisk_data_grouped,
-     by           = c("Produktnavn" = "Lægemiddel"),
-     relationship = "many-to-many"
-   ) %>%
+# Merge aggregated data with substitution groups (one-to-many)
+merged_data <- med_agg %>%
+  left_join(
+    generisk_data_grouped,
+    by = c("Produktnavn" = "Lægemiddel")
+  ) %>%
   mutate(
-    Dato = as.Date(paste(År, sprintf("%02d", as.numeric(Måned)), "01", sep = "-"))
+    Dato = as.Date(paste(År, sprintf("%02d", as.integer(Måned)), "01", sep = "-"))
   )
 
-# Save cleaned data for Shiny app
-# Save cleaned data for Shiny app
+# Save cleaned dataset
 saveRDS(merged_data, file = "data/merged_data.rds")
