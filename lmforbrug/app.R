@@ -117,7 +117,7 @@ server <- function(input, output, session) {
   observeEvent(input$select_all_regions,    updateCheckboxGroupInput(session, "selected_regions",   selected = unique(filtered_data()$Område)))
   observeEvent(input$deselect_all_regions,  updateCheckboxGroupInput(session, "selected_regions",   selected = character(0)))
 
-  # Reactive plot with conditional explode for stratification (Option A)
+   # Reactive plot with conditional explode for stratification (Option A)
   plot_reactive <- reactive({
     # Base filtering by product and region
     df_base <- filtered_data() %>%
@@ -136,46 +136,42 @@ server <- function(input, output, session) {
       df_base[[y_var]] <- df_base[[y_var]] * 100000
     }
 
-      strat <- input$stratify_option
-  
-  if (strat == "None") {
-    # (unchanged) sum all rows by Dato into one series
-    summed <- df_base %>%
-      filter(…subst‐group filtering…) %>%
-      group_by(Dato) %>%
-      summarize(value = sum(.data[[y_var]], na.rm=TRUE), .groups="drop")
-    
-    p <- ggplot(summed, aes(Dato, value)) + geom_line(size=1)
-    
-  } else if (strat == "Produktnavn") {
-    # sum by Produktnavn
-    summed <- df_base %>%
-      filter(…subst‐group filtering…) %>%
-      group_by(Dato, Produktnavn) %>%
-      summarize(value = sum(.data[[y_var]], na.rm=TRUE), .groups="drop")
-    
-    p <- ggplot(summed, aes(Dato, value, color=Produktnavn)) + geom_line(size=1)
-    
-  } else if (strat == "SubstGruppe") {
-    # explode only for SubstGruppe, then sum by group
-    summed <- df_base %>%
-      separate_rows(SubstGruppe, sep=", ") %>%
-      filter(SubstGruppe %in% input$selected_subst_groups) %>%
-      group_by(Dato, SubstGruppe) %>%
-      summarize(value = sum(.data[[y_var]], na.rm=TRUE), .groups="drop")
-    
-    p <- ggplot(summed, aes(Dato, value, color=SubstGruppe)) + geom_line(size=1)
-    
-  } else if (strat == "Område") {
-    # sum by Område
-    summed <- df_base %>%
-      filter(SubstGruppe matches input$selected_subst_groups…) %>%
-      group_by(Dato, Område) %>%
-      summarize(value = sum(.data[[y_var]], na.rm=TRUE), .groups="drop")
-    
-    p <- ggplot(summed, aes(Dato, value, color=Område)) + geom_line(size=1)
-  }
-    
+    strat <- input$stratify_option
+
+    if (strat == "None") {
+      # For no stratification, remove any products whose groups are fully deselected
+      df0 <- df_base %>%
+        filter(
+          sapply(strsplit(SubstGruppe, ", "), function(x)
+            any(x %in% input$selected_subst_groups)
+          )
+        )
+      # Sum over date only
+      summed <- df0 %>%
+        group_by(Dato) %>%
+        summarize(value = sum(.data[[y_var]], na.rm = TRUE), .groups = "drop")
+      p <- ggplot(summed, aes(x = Dato, y = value)) +
+        geom_line(size = 1)
+
+    } else {
+      # Explode into separate substitution-groups
+      df1 <- df_base %>%
+        separate_rows(SubstGruppe, sep = ", ") %>%
+        filter(SubstGruppe %in% input$selected_subst_groups)
+
+      # Deduplicate and sum per group
+      df_unique <- df1 %>%
+        group_by(Dato, Produktnavn, SubstGruppe, Område) %>%
+        summarize(y = first(.data[[y_var]]), .groups = "drop")
+
+      summed <- df_unique %>%
+        group_by(Dato, .data[[strat]]) %>%
+        summarize(value = sum(y, na.rm = TRUE), .groups = "drop")
+
+      p <- ggplot(summed, aes(x = Dato, y = value, color = .data[[strat]])) +
+        geom_line(size = 1)
+    }
+
     # Common plot styling
     p +
       scale_y_continuous(
