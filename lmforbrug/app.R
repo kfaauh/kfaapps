@@ -157,7 +157,6 @@ server <- function(input, output, session) {
   
   p <- ggplot(summed, aes(x = Dato, y = value)) +
     geom_line(size = 1)
-}
 
     } else {
       # Explode into separate substitution-groups
