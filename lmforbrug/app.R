@@ -52,19 +52,20 @@ ui <- secure_app(
 
 # Define Server
 server <- function(input, output, session) {
+  # Authentication
   res_auth <- secure_server(
     check_credentials = check_credentials(credentials)
   )
 
   # Y-axis label mapping
   y_axis_labels <- list(
-    "Regionale udgifter til medicintilskud, kr."              = "Samlede tilskudsudgifter, kr.",
+    "Regionale udgifter til medicintilskud, kr."               = "Samlede tilskudsudgifter, kr.",
     "Regionale udgifter til medicintilskud, kr. pr. indbygger" = "Tilskudsudgifter per 100.000 indbyggere, kr.",
     "Mængdesalg"                                              = "Samlet forbrug",
     "Mængdesalgsenhed pr. indbygger"                          = "Forbrug pr. 100.000 indbyggere"
   )
 
-  # Reactive filtered data (no explosive separate_rows here)
+  # Reactive filtered data
   filtered_data <- reactive({
     codes <- trimws(unlist(strsplit(input$atc_input, '\n')))
     req(length(codes) > 0)
@@ -72,13 +73,13 @@ server <- function(input, output, session) {
       filter(`ATC kode` %in% codes)
   })
 
-  # Reactive ATC text for title
+  # Reactive ATC text for plot title
   atc_text <- reactive({
     df <- filtered_data()
     if (nrow(df)) paste(unique(df$`ATC tekst`), collapse = ", ") else "Medicinforbrug"
   })
 
-  # Dynamic UIs with explicit select/deselect links
+ # Dynamic UIs with explicit select/deselect links
   output$product_selection <- renderUI({
     df <- filtered_data(); req(nrow(df) > 0)
     prods <- unique(df$Produktnavn)
@@ -115,13 +116,16 @@ server <- function(input, output, session) {
   observeEvent(input$select_all_subst,      updateCheckboxGroupInput(session, "selected_subst_groups", selected = unique(unlist(strsplit(paste(filtered_data()$SubstGruppe, collapse = ", "), ", ")))))
   observeEvent(input$deselect_all_subst,    updateCheckboxGroupInput(session, "selected_subst_groups", selected = character(0)))
   observeEvent(input$select_all_regions,    updateCheckboxGroupInput(session, "selected_regions",   selected = unique(filtered_data()$Område)))
-  observeEvent(input$deselect_all_regions,  updateCheckboxGroupInput(session, "selected_regions",   selected = character(0)))
+  observeEvent(input$deselect_all_regions,  updateCheckboxGroupInput(session, "selected_regions",   selected = character(0))
 
-   # Reactive plot with conditional explode for stratification (Option A)
+  # Reactive plot with de-duplication for stratifications
   plot_reactive <- reactive({
-    # Base filtering by product and region
+    # Base filtering by selected substitution-groups, products, and regions
     df_base <- filtered_data() %>%
       filter(
+        sapply(strsplit(SubstGruppe, ", "), function(x)
+          any(x %in% input$selected_subst_groups)
+        ),
         Produktnavn %in% input$selected_products,
         Område      %in% input$selected_regions
       )
@@ -133,46 +137,54 @@ server <- function(input, output, session) {
       "Regionale udgifter til medicintilskud, kr. pr. indbygger",
       "Mængdesalgsenhed pr. indbygger"
     )) {
-      df_base[[y_var]] <- df_base[[y_var]] * 100000
+      df_base[[y_var]] <- df_base[[y_var]] * 1e5
     }
 
     strat <- input$stratify_option
 
-    if (strat == "None") {
-      # For no stratification, remove any products whose groups are fully deselected
-      df0 <- df_base %>%
-        filter(
-          sapply(strsplit(SubstGruppe, ", "), function(x)
-            any(x %in% input$selected_subst_groups)
-          )
-        )
-      # Sum over date only
-      summed <- df0 %>%
-        group_by(Dato) %>%
-        summarize(value = sum(.data[[y_var]], na.rm = TRUE), .groups = "drop")
-      p <- ggplot(summed, aes(x = Dato, y = value)) +
-        geom_line(size = 1)
-
-    } else {
-      # Explode into separate substitution-groups
+    if (strat == "SubstGruppe") {
+      # Explode only when stratifying by substitution-group
       df1 <- df_base %>%
-        separate_rows(SubstGruppe, sep = ", ") %>%
-        filter(SubstGruppe %in% input$selected_subst_groups)
+        separate_rows(SubstGruppe, sep = ", ")
 
-      # Deduplicate and sum per group
+      # One row per (date × product × substgroup × region)
       df_unique <- df1 %>%
         group_by(Dato, Produktnavn, SubstGruppe, Område) %>%
         summarize(y = first(.data[[y_var]]), .groups = "drop")
 
+      # Sum per substitution-group
       summed <- df_unique %>%
-        group_by(Dato, .data[[strat]]) %>%
+        group_by(Dato, SubstGruppe) %>%
         summarize(value = sum(y, na.rm = TRUE), .groups = "drop")
 
-      p <- ggplot(summed, aes(x = Dato, y = value, color = .data[[strat]])) +
+      p <- ggplot(summed, aes(x = Dato, y = value, color = SubstGruppe)) +
         geom_line(size = 1)
+
+    } else {
+      # No explosion for None, Produktnavn, or Område
+      if (strat == "None") {
+        # De-duplicate each product once per date, then sum
+        df_unique <- df_base %>%
+          group_by(Dato, Produktnavn) %>%
+          summarize(y = first(.data[[y_var]]), .groups = "drop") %>%
+          group_by(Dato) %>%
+          summarize(value = sum(y, na.rm = TRUE), .groups = "drop")
+
+        p <- ggplot(df_unique, aes(x = Dato, y = value)) +
+          geom_line(size = 1)
+
+      } else {
+        # Stratify by Produktnavn or Område directly
+        df_unique <- df_base %>%
+          group_by(Dato, .data[[strat]]) %>%
+          summarize(value = sum(.data[[y_var]], na.rm = TRUE), .groups = "drop")
+
+        p <- ggplot(df_unique, aes(x = Dato, y = value, color = .data[[strat]])) +
+          geom_line(size = 1)
+      }
     }
 
-    # Common plot styling
+    # Common styling
     p +
       scale_y_continuous(
         labels = scales::label_number(scale_cut = scales::cut_short_scale()),
@@ -199,8 +211,7 @@ server <- function(input, output, session) {
   )
 
   output$summary_table <- renderTable({
-    df <- filtered_data(); req(nrow(df) > 0)
-    df %>%
+    filtered_data() %>%
       group_by(SubstGruppe, Styrke) %>%
       summarise(
         Lægemiddelform               = first(LægemiddelForm),
