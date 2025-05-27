@@ -164,19 +164,29 @@ server <- function(input, output, session) {
   } else if (strat == "Produktnavn") {
     df0 <- df_base %>% keep_subst()
 
-    summed <- df0 %>%
+    # de-duplicate so each product shows up only once per date+region
+    df_unique <- df0 %>%
+      group_by(Dato, Produktnavn, Område) %>%
+      summarize(y = first(.data[[y_var]]), .groups = "drop")
+
+    summed <- df_unique %>%
       group_by(Dato, Produktnavn) %>%
-      summarize(value = sum(.data[[y_var]], na.rm = TRUE), .groups = "drop")
+      summarize(value = sum(y, na.rm = TRUE), .groups = "drop")
 
     p <- ggplot(summed, aes(x = Dato, y = value, color = Produktnavn)) +
       geom_line(size = 1)
 
   } else if (strat == "Område") {
-    df0 <- df_base %>% keep_subst()
+       df0 <- df_base %>% keep_subst()
 
-    summed <- df0 %>%
+    # de-duplicate so each product shows up only once per date+region
+    df_unique <- df0 %>%
+      group_by(Dato, Produktnavn, Område) %>%
+      summarize(y = first(.data[[y_var]]), .groups = "drop")
+
+    summed <- df_unique %>%
       group_by(Dato, Område) %>%
-      summarize(value = sum(.data[[y_var]], na.rm = TRUE), .groups = "drop")
+      summarize(value = sum(y, na.rm = TRUE), .groups = "drop")
 
     p <- ggplot(summed, aes(x = Dato, y = value, color = Område)) +
       geom_line(size = 1)
