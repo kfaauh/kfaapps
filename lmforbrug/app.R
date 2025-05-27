@@ -139,19 +139,25 @@ server <- function(input, output, session) {
     strat <- input$stratify_option
 
     if (strat == "None") {
-      # For no stratification, remove any products whose groups are fully deselected
-      df0 <- df_base %>%
-        filter(
-          sapply(strsplit(SubstGruppe, ", "), function(x)
-            any(x %in% input$selected_subst_groups)
-          )
-        )
-      # Sum over date only
-      summed <- df0 %>%
-        group_by(Dato) %>%
-        summarize(value = sum(.data[[y_var]], na.rm = TRUE), .groups = "drop")
-      p <- ggplot(summed, aes(x = Dato, y = value)) +
-        geom_line(size = 1)
+  # 1) filter out any products whose groups are fully de-selected
+  df0 <- df_base %>%
+    filter(
+      sapply(strsplit(SubstGruppe, ", "), function(x)
+        any(x %in% input$selected_subst_groups)
+      )
+    )
+  
+  # 2) de-duplicate per date + product (+ region, if you care),
+  #    then sum across products
+  summed <- df0 %>%
+    group_by(Dato, Produktnavn, Område) %>%             #  <-- remove duplicates here
+    summarize(y = first(.data[[y_var]]), .groups = "drop") %>%
+    group_by(Dato) %>%
+    summarize(value = sum(y, na.rm = TRUE), .groups = "drop")
+  
+  p <- ggplot(summed, aes(x = Dato, y = value)) +
+    geom_line(size = 1)
+}
 
     } else {
       # Explode into separate substitution-groups
