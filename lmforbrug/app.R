@@ -119,78 +119,100 @@ server <- function(input, output, session) {
 
    # Reactive plot with conditional explode for stratification (Option A)
   plot_reactive <- reactive({
-    # Base filtering by product and region
-    df_base <- filtered_data() %>%
-      filter(
-        Produktnavn %in% input$selected_products,
-        Område      %in% input$selected_regions
-      )
-    req(nrow(df_base) > 0)
-
-    # Scale per-100k if selected
-    y_var <- input$y_axis_option
-    if (y_var %in% c(
-      "Regionale udgifter til medicintilskud, kr. pr. indbygger",
-      "Mængdesalgsenhed pr. indbygger"
-    )) {
-      df_base[[y_var]] <- df_base[[y_var]] * 100000
-    }
-
-    strat <- input$stratify_option
-
-    if (strat == "None") {
-  # 1) filter out any products whose groups are fully de-selected
-  df0 <- df_base %>%
+  # Base filtering by product and region
+  df_base <- filtered_data() %>%
     filter(
-      sapply(strsplit(SubstGruppe, ", "), function(x)
-        any(x %in% input$selected_subst_groups)
-      )
+      Produktnavn %in% input$selected_products,
+      Område      %in% input$selected_regions
     )
-  
-  # 2) de-duplicate per date + product (+ region, if you care),
-  #    then sum across products
-  summed <- df0 %>%
-    group_by(Dato, Produktnavn, Område) %>%             #  <-- remove duplicates here
-    summarize(y = first(.data[[y_var]]), .groups = "drop") %>%
-    group_by(Dato) %>%
-    summarize(value = sum(y, na.rm = TRUE), .groups = "drop")
-  
-  p <- ggplot(summed, aes(x = Dato, y = value)) +
-    geom_line(size = 1)
+  req(nrow(df_base) > 0)
 
-    } else {
-      # Explode into separate substitution-groups
-      df1 <- df_base %>%
-        separate_rows(SubstGruppe, sep = ", ") %>%
-        filter(SubstGruppe %in% input$selected_subst_groups)
+  # Scale per-100k if selected
+  y_var <- input$y_axis_option
+  if (y_var %in% c(
+    "Regionale udgifter til medicintilskud, kr. pr. indbygger",
+    "Mængdesalgsenhed pr. indbygger"
+  )) {
+    df_base[[y_var]] <- df_base[[y_var]] * 100000
+  }
 
-      # Deduplicate and sum per group
-      df_unique <- df1 %>%
-        group_by(Dato, Produktnavn, SubstGruppe, Område) %>%
-        summarize(y = first(.data[[y_var]]), .groups = "drop")
+  strat <- input$stratify_option
 
-      summed <- df_unique %>%
-        group_by(Dato, .data[[strat]]) %>%
-        summarize(value = sum(y, na.rm = TRUE), .groups = "drop")
+  # helper to filter out fully‐deselected products
+  keep_subst <- function(df) {
+    df %>%
+      filter(
+        sapply(strsplit(SubstGruppe, ", "), function(x)
+          any(x %in% input$selected_subst_groups)
+        )
+      )
+  }
 
-      p <- ggplot(summed, aes(x = Dato, y = value, color = .data[[strat]])) +
-        geom_line(size = 1)
-    }
+  if (strat == "None") {
+    df0 <- df_base %>% keep_subst()
 
-    # Common plot styling
-    p +
-      scale_y_continuous(
-        labels = scales::label_number(scale_cut = scales::cut_short_scale()),
-        limits = c(0, NA)
-      ) +
-      labs(
-        title = atc_text(),
-        x     = "Dato",
-        y     = y_axis_labels[[y_var]],
-        color = if (strat != "None") strat else NULL
-      ) +
-      theme_minimal(base_size = 16)
-  })
+    # de-duplicate per date+product+region, then sum across products
+    summed <- df0 %>%
+      group_by(Dato, Produktnavn, Område) %>%
+      summarize(y = first(.data[[y_var]]), .groups = "drop") %>%
+      group_by(Dato) %>%
+      summarize(value = sum(y, na.rm = TRUE), .groups = "drop")
+
+    p <- ggplot(summed, aes(x = Dato, y = value)) +
+      geom_line(size = 1)
+
+  } else if (strat == "Produktnavn") {
+    df0 <- df_base %>% keep_subst()
+
+    summed <- df0 %>%
+      group_by(Dato, Produktnavn) %>%
+      summarize(value = sum(.data[[y_var]], na.rm = TRUE), .groups = "drop")
+
+    p <- ggplot(summed, aes(x = Dato, y = value, color = Produktnavn)) +
+      geom_line(size = 1)
+
+  } else if (strat == "Område") {
+    df0 <- df_base %>% keep_subst()
+
+    summed <- df0 %>%
+      group_by(Dato, Område) %>%
+      summarize(value = sum(.data[[y_var]], na.rm = TRUE), .groups = "drop")
+
+    p <- ggplot(summed, aes(x = Dato, y = value, color = Område)) +
+      geom_line(size = 1)
+
+  } else {
+    # SubstGruppe stratification (explode → dedupe → sum per group)
+    df1 <- df_base %>%
+      separate_rows(SubstGruppe, sep = ", ") %>%
+      filter(SubstGruppe %in% input$selected_subst_groups)
+
+    df_unique <- df1 %>%
+      group_by(Dato, Produktnavn, SubstGruppe, Område) %>%
+      summarize(y = first(.data[[y_var]]), .groups = "drop")
+
+    summed <- df_unique %>%
+      group_by(Dato, SubstGruppe) %>%
+      summarize(value = sum(y, na.rm = TRUE), .groups = "drop")
+
+    p <- ggplot(summed, aes(x = Dato, y = value, color = SubstGruppe)) +
+      geom_line(size = 1)
+  }
+
+  # Common styling
+  p +
+    scale_y_continuous(
+      labels = scales::label_number(scale_cut = scales::cut_short_scale()),
+      limits = c(0, NA)
+    ) +
+    labs(
+      title = atc_text(),
+      x     = "Dato",
+      y     = y_axis_labels[[y_var]],
+      color = if (strat != "None") strat else NULL
+    ) +
+    theme_minimal(base_size = 16)
+})
 
   output$line_plot <- renderPlot({ plot_reactive() })
 
