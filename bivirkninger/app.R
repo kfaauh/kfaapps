@@ -107,7 +107,7 @@ fetch_ade_table <- function(url, sleep_time = 1) {
 
 
 # Read in the list of drugs
-drugs <- read.csv2("ListeOverGodkendteLaegemidler.csv", header = FALSE, sep =";")
+drugs <- read.csv2("data/ListeOverGodkendteLaegemidler.csv", header = FALSE, sep =";")
 drugs <- select(drugs, c("Drugid" = "V1"), c("drugname" = "V5"), c("ATC" = "V7"))
 drugs <- drugs[-1, ]
 drugs <- distinct(drugs, ATC, .keep_all = TRUE)
