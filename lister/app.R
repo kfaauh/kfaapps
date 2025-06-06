@@ -195,8 +195,6 @@ ui <- secure_app(fluidPage(
 mainPanel(
       div(id = "all_output",
           uiOutput("drug_name_output"),  
-          hr(style = "border-top:1px solid black;"),   
-          
           uiOutput("generic_atc_codes"),
           hr(style = "border-top:1px solid black;"),
           
@@ -224,7 +222,6 @@ mainPanel(
           hr(style = "border-top:1px solid black;"),
           
           uiOutput("kidney_output"),
-          hr(style = "border-top:1px solid black;"),
           
           uiOutput("interaction_url_dk"),
           uiOutput("interaction_url_no"),
