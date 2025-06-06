@@ -194,41 +194,25 @@ mainPanel(
           hr(style = "border-top:1px solid black;"),
           
           uiOutput("acb_output"),
-          hr(style = "border-top:1px solid black;"),
-          
           uiOutput("acb_atc_codes"),
-          hr(style = "border-top:1px solid black;"),
-          
           uiOutput("acb_cat3_output"),
-          hr(style = "border-top:1px solid black;"),
-          
           uiOutput("acb_cat2_output"),
-          hr(style = "border-top:1px solid black;"),
-          
           uiOutput("acb_cat1_output"),
           hr(style = "border-top:1px solid black;"),
           
           uiOutput("seponeringslisten_output"),
-          hr(style = "border-top:1px solid black;"),
-          
           uiOutput("seponeringslist_atc_codes"),
           hr(style = "border-top:1px solid black;"),
           
           uiOutput("qtc_output"),
-          hr(style = "border-top:1px solid black;"),
-          
           uiOutput("qtc_atc_codes"),
           hr(style = "border-top:1px solid black;"),
           
           uiOutput("serotonergic_output"),
-          hr(style = "border-top:1px solid black;"),
-          
           uiOutput("serotonergic_atc_codes"),
           hr(style = "border-top:1px solid black;"),
           
           uiOutput("bleeding_risk_output"),
-          hr(style = "border-top:1px solid black;"),
-          
           uiOutput("bleeding_risk_atc_codes"),
           hr(style = "border-top:1px solid black;"),
           
@@ -236,11 +220,7 @@ mainPanel(
           hr(style = "border-top:1px solid black;"),
           
           uiOutput("interaction_url_dk"),
-          hr(style = "border-top:1px solid black;"),
-          
           uiOutput("interaction_url_no"),
-          hr(style = "border-top:1px solid black;"),
-          
           uiOutput("stockleys_url")
       )
     )
