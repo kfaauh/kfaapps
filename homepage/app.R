@@ -81,7 +81,7 @@ ui <- fluidPage(
   div(class = "subheader", "Batchopslag af ATC-koder"),
   div(class = "links",
       tags$a(
-        href = "https://kfaapps.au.dk/lister_interaktioner/",
+        href = "https://kfaapps.au.dk/lister/",
         class = "link-button",
         "Lister og interaktioner"
       ),
