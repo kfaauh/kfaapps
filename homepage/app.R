@@ -1,4 +1,5 @@
-# app.R for homepage
+# app.R for homepage (revised)
+
 library(shiny)
 library(shinymanager)
 
@@ -8,12 +9,18 @@ DATA_FILE <- "/srv/shiny-server/kfaapps/data-scripts/data/merged_data.rds"
 ui <- fluidPage(
   tags$head(
     tags$style(HTML("
+      /* Ensure the page always fills viewport and footer can stick to bottom */
+      html, body {
+        height: 100%;
+        margin: 0;
+        position: relative;
+      }
       body {
         background-color: white;
         color: #0033A0;          /* Pantone 287 */
         font-family: Arial, sans-serif;
         text-align: center;
-        padding: 60px;
+        padding: 60px 20px 120px; /* bottom padding leaves room for footer */
       }
       .header {
         font-size: 3em;
@@ -21,11 +28,12 @@ ui <- fluidPage(
       }
       .subheader {
         font-size: 1.5em;
-        margin-top: 0;
+        margin-top: 1.5em;
+        margin-bottom: 0.5em;
         color: #555;
       }
       .links {
-        margin: 2em 0;
+        margin: 1.5em 0;
       }
       .link-button {
         display: inline-block;
@@ -41,32 +49,67 @@ ui <- fluidPage(
         opacity: 0.9;
       }
       .footer {
-        margin-top: 4em;
+        position: absolute;
+        bottom: 20px;
+        left: 0;
+        right: 0;
         font-size: 0.9em;
         color: #555;
       }
     "))
   ),
 
-  div(class = "header",    "Klinisk Farmakologi, AUH"),
-  div(class = "subheader", "Redskaber til medicinmonitorering"),
+  # Main title
+  div(class = "header", "Klinisk Farmakologi, AUH"),
 
-  div(class="links",
-    tags$a(
-      href="https://kfaapps.au.dk/lmgrupper/",
-      class="link-button",
-      "Opdaterede prisoversigter for lægemiddelgrupper"
-    ),
-    tags$a(
-      href="https://kfaapps.au.dk/lmforbrug/",
-      class="link-button",
-      "Forbrug og tilskudsudgifter over tid"
-    )
+  # Section 1: Redskaber til medicinmonitorering
+  div(class = "subheader", "Redskaber til medicinmonitorering"),
+  div(class = "links",
+      tags$a(
+        href = "https://kfaapps.au.dk/lmgrupper/",
+        class = "link-button",
+        "Opdaterede prisoversigter for lægemiddelgrupper"
+      ),
+      tags$a(
+        href = "https://kfaapps.au.dk/lmforbrug/",
+        class = "link-button",
+        "Forbrug og tilskudsudgifter over tid"
+      )
   ),
 
-  div(class="footer", textOutput("footer_text"))
-)
+  # Section 2: Batchopslag af ATC-koder
+  div(class = "subheader", "Batchopslag af ATC-koder"),
+  div(class = "links",
+      tags$a(
+        href = "https://kfaapps.au.dk/lister_interaktioner/",
+        class = "link-button",
+        "Lister og interaktioner"
+      ),
+      tags$a(
+        href = "https://kfaapps.au.dk/bivirkninger/",
+        class = "link-button",
+        "Bivirkninger fra pro.medicin.dk"
+      )
+  ),
 
+  # Section 3: Visualiseringer
+  div(class = "subheader", "Visualiseringer"),
+  div(class = "links",
+      tags$a(
+        href = "https://kfaapps.au.dk/farmakokinetik/",
+        class = "link-button",
+        "Farmakokinetik"
+      ),
+      tags$a(
+        href = "https://kfaapps.au.dk/compliance/",
+        class = "link-button",
+        "Compliance"
+      )
+  ),
+
+  # Footer (sticks to bottom)
+  div(class = "footer", textOutput("footer_text"))
+)
 
 server <- function(input, output, session) {
   # Compute last-update date
