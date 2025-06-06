@@ -1,0 +1,316 @@
+﻿Generic Name;ATC:;QTc kategori (special=0, possible=1, known=2, conditional=3);Condition;Avoid in congenital long QT (0=nej, 1=ja);
+Abarelix;L02BX01;1;;1;Possible Risk of TdP
+Abiraterone;L02BX03;3;Use causes low serum K or Mg;1;Conditional Risk of TdP
+Aclarubicin;L01DB04;2;;1;Known Risk of TdP
+Adagrasib;L01XX77;1;;1;Possible Risk of TdP
+Albuterol (salbutamol);R03AC02;0;;1;SRSpecial Risk
+Alfuzosin;G04CA01;1;;1;Possible Risk of TdP
+Alimemazine;R06AD01;1;;1;Possible Risk of TdP
+Amantadine;N04BB01;3;Bradycardia, Low serum K or Mg, Excessive dose, Used with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Amiodarone;C01BD01;2;;1;Known Risk of TdP
+Amisulpride;N05AL05;3;Low serum K or Mg, Excessive dose, Used with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Amitriptyline;N06AA09;3;Bradycardia, Low serum K or Mg, Excessive dose, Impaired drug elimination;1;Conditional Risk of TdP
+Amphetamine (Amfetamine);N06BA01;0;;1;SRSpecial Risk
+Amphotericin B;J02AA01;3;Use with concomitant QT/TdP drug, Use causes low serum K or Mg;1;Conditional Risk of TdP
+Amsacrine (Acridinyl anisidide);L01XX01;3;Use causes low serum K or Mg;1;Conditional Risk of TdP
+Anagrelide;L01XX35;2;;1;Known Risk of TdP
+Apalutamide;L02BB05;1;;1;Possible Risk of TdP
+Apomorphine;N04BC07;1;;1;Possible Risk of TdP
+Arformoterol;R03AC13;0;;1;SRSpecial Risk
+Aripiprazole;N05AX12;1;;1;Possible Risk of TdP
+Arsenic trioxide;L01XX27;2;;1;Known Risk of TdP
+Artemether/Lumefantrine;P01BF01;1;;1;Possible Risk of TdP
+Artenimol/Piperaquine;P01BF05;1;;1;Possible Risk of TdP
+Asenapine;N05AH05;1;;1;Possible Risk of TdP
+Astemizole;R06AX11;2;;1;Known Risk of TdP
+Atazanavir;J05AE08;3;Use with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Atomoxetine;N06BA09;1;;1;Possible Risk of TdP
+Azithromycin;J01FA10;2;;1;Known Risk of TdP
+Bedaquiline;J04AK05;1;;1;Possible Risk of TdP
+Bendamustine;L01AA09;1;;1;Possible Risk of TdP
+Bendroflumethiazide (Bendrofluazide);C03AA01;3;Use with concomitant QT/TdP drug, Use causes low serum K or Mg;1;Conditional Risk of TdP
+Benzphetamine;;0;;1;SRSpecial Risk
+Bepridil;C08EA02;2;;1;Known Risk of TdP
+Betrixaban;B01AF04;1;;1;Possible Risk of TdP
+Bicalutamide;L02BB03;1;;1;Possible Risk of TdP
+Bortezomib (Bortexomib);L01XG01;1;;1;Possible Risk of TdP
+Bosutinib;L01EA04;1;;1;Possible Risk of TdP
+Buprenorphine;N02AE01;1;;1;Possible Risk of TdP
+Buprenorphine;N07BC01;1;;1;Possible Risk of TdP
+Cabozantinib;L01EX07;1;;1;Possible Risk of TdP
+Capecitabine;L01BC06;1;;1;Possible Risk of TdP
+Carbetocin;H01BB03;1;;1;Possible Risk of TdP
+Ceritinib;L01ED02;1;;1;Possible Risk of TdP
+Cesium Chloride;;2;;1;Known Risk of TdP
+Chloral hydrate;N05CC01;3;Excessive dose;1;Conditional Risk of TdP
+Chloroquine;P01BA01;2;;1;Known Risk of TdP
+Chlorpromazine;N05AA01;2;;1;Known Risk of TdP
+Chlorprothixene;N05AF03;2;;1;Known Risk of TdP
+Cilostazol;B01AC23;2;;1;Known Risk of TdP
+Cimetidine;A02BA01;3;Bradycardia, Low serum K or Mg, Used with concomitant QT/TdP drug, Reduces elimination of a QT/TdP drug;1;Conditional Risk of TdP
+Ciprofloxacin;J01MA02;2;;1;Known Risk of TdP
+Cisapride;A03FA02;2;;1;Known Risk of TdP
+Citalopram;N06AB04;2;;1;Known Risk of TdP
+Clarithromycin;J01FA09;2;;1;Known Risk of TdP
+Clofazimine;J04BA01;3;Low serum K or Mg, Used with concomitant QT/TdP drug, Use in cLQTS patients;1;Conditional Risk of TdP
+Clomipramine;N06AA04;3;Low serum K or Mg, Excessive dose, Used with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Clotiapine;N05AH06;1;;1;Possible Risk of TdP
+Clozapine;N05AH02;1;;1;Possible Risk of TdP
+Cobimetinib;L01EE02;1;;1;Possible Risk of TdP
+Cocaine;;2;;1;Known Risk of TdP
+Crizotinib;L01ED01;1;;1;Possible Risk of TdP
+Cyamemazine (Cyamepromazine);N05AA06;1;;1;Possible Risk of TdP
+Dabrafenib;L01EC02;1;;1;Possible Risk of TdP
+Dasatinib;L01EA02;1;;1;Possible Risk of TdP
+Degarelix;L02BX02;1;;1;Possible Risk of TdP
+Delamanid;J04AK06;1;;1;Possible Risk of TdP
+Desipramine;N06AA01;1;;1;Possible Risk of TdP
+Dexmedetomidine;N05CM18;1;;1;Possible Risk of TdP
+Dexmethylphenidate;N06BA11;0;;1;SRSpecial Risk
+Dextroamphetamine (Dexamfetamine);N06BA02;0;;1;SRSpecial Risk
+Dextromethorphan/Quinidine;N07XX59;1;;1;Possible Risk of TdP
+Diethylpropion (amfepramone);A08AA03;0;;1;SRSpecial Risk
+Diltiazem;C08DB01;3;Bradycardia, Low serum K or Mg, Used with concomitant QT/TdP drug, Reduces elimination of a QT/TdP drug;1;Conditional Risk of TdP
+Diphenhydramine;R06AA02;3;Excessive dose, Used with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Disopyramide;C01BA03;2;;1;Known Risk of TdP
+Dobutamine;C01CA07;0;;1;SRSpecial Risk
+Dofetilide;C01BD04;2;;1;Known Risk of TdP
+Dolasetron;A04AA04;1;;1;Possible Risk of TdP
+Domperidone;A03FA03;2;;1;Known Risk of TdP
+Donepezil;N06DA02;2;;1;Known Risk of TdP
+Dopamine;C01CA04;0;;1;SRSpecial Risk
+Doxepin;N06AA12;3;Low serum K or Mg, Excessive dose, Impaired drug elimination, Used with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Dronedarone;C01BD07;2;;1;Known Risk of TdP
+Droperidol;N05AD08;2;;1;Known Risk of TdP
+Droxidopa;C01CA27;0;;1;SRSpecial Risk
+Efavirenz;J05AG03;1;;1;Possible Risk of TdP
+Eliglustat;A16AX10;1;;1;Possible Risk of TdP
+Encorafenib;L01EC03;1;;1;Possible Risk of TdP
+Entrectinib;L01EX14;1;;1;Possible Risk of TdP
+Eperisone;M03BX09;3;Excessive dose;1;Conditional Risk of TdP
+Ephedrine;C01CA26;0;;1;SRSpecial Risk
+Epinephrine (Adrenaline);C01CA24;0;;1;SRSpecial Risk
+Epirubicin;L01DB03;1;;1;Possible Risk of TdP
+Eribulin mesylate;L01XX41;1;;1;Possible Risk of TdP
+Erythromycin;J01FA01;2;;1;Known Risk of TdP
+Escitalopram;N06AB10;2;;1;Known Risk of TdP
+Esomeprazole;A02BC05;3;Use with concomitant QT/TdP drug, Use causes low serum K or Mg;1;Conditional Risk of TdP
+Ezogabine (Retigabine);N03AX21;1;;1;Possible Risk of TdP
+Famotidine;A02BA03;3;Low serum K or Mg, Excessive dose, Impaired drug elimination, Use with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Felbamate;N03AX10;1;;1;Possible Risk of TdP
+Fenfluramine;N03AX26;0;;1;SRSpecial Risk
+Fenoterol;R03AC04;0;;1;SRSpecial Risk
+Fexinidazole;P01CA03;1;;1;Possible Risk of TdP
+Fingolimod;L04AA27;1;;1;Possible Risk of TdP
+Flecainide;C01BC04;2;;1;Known Risk of TdP
+Fluconazole;J02AC01;2;;1;Known Risk of TdP
+Fluorouracil (5-FU);L01BC02;1;;1;Possible Risk of TdP
+Fluoxetine;N06AB03;3;Bradycardia, Low serum K or Mg, Excessive dose, Impaired drug elimination, Use with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Flupentixol;N05AF01;1;;1;Possible Risk of TdP
+Fluticasone and Salmeterol;R03AK06;0;;1;SRSpecial Risk
+Fluvoxamine;N06AB08;3;Low serum K or Mg, Excessive dose, Used with concomitant QT/TdP drug, Reduces elimination of a QT/TdP drug;1;Conditional Risk of TdP
+Formoterol;R03AC13;0;;1;SRSpecial Risk
+Furosemide;C03CA01;3;Use with concomitant QT/TdP drug, Use causes low serum K or Mg;1;Conditional Risk of TdP
+Galantamine;N06DA04;3;Bradycardia, Low serum K or Mg, Excessive dose, Used with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Garenoxacin;J01MA19;3;Low serum K or Mg, Use with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Gatifloxacin;J01MA16;2;;1;Known Risk of TdP
+Gemifloxacin;J01MA15;1;;1;Possible Risk of TdP
+Gepirone;N06AX19;1;;1;Possible Risk of TdP
+Gilteritinib;L01EX13;1;;1;Possible Risk of TdP
+Givinostat;M09AX14;1;;1;Possible Risk of TdP
+Glasdegib;L01XJ03;1;;1;Possible Risk of TdP
+Granisetron;A04AA02;1;;1;Possible Risk of TdP
+Grepafloxacin;J01MA11;2;;1;Known Risk of TdP
+Halofantrine;P01BX01;2;;1;Known Risk of TdP
+Haloperidol;N05AD01;2;;1;Known Risk of TdP
+Hydrochlorothiazide;C03AA03;3;Use causes low serum Mg or K;1;Conditional Risk of TdP
+Hydrocodone - ER;R05DA03;1;;1;Possible Risk of TdP
+Hydroquinidine (Dihydroquinidine);C01BA13;2;;1;Known Risk of TdP
+Hydroxychloroquine;P01BA02;2;;1;Known Risk of TdP
+Hydroxyzine;N05BB01;3;Bradycardia, Low serum K or Mg, Excessive dose;1;Conditional Risk of TdP
+Ibogaine;;2;;1;Known Risk of TdP
+Ibutilide;C01BD05;2;;1;Known Risk of TdP
+Iloperidone;N05AX14;1;;1;Possible Risk of TdP
+Imatinib;L01EA01;1;;1;Possible Risk of TdP
+Imipramine (Melipramine);N06AA02;1;;1;Possible Risk of TdP
+Indacaterol;R03AC18;0;;1;SRSpecial Risk
+Indapamide;C03BA11;3;Low serum K or Mg, Use with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Inotuzumab ozogamicin;L01FB01;1;;1;Possible Risk of TdP
+Isoflurane;N01AB06;1;;1;Possible Risk of TdP
+Isoproterenol (Isoprenaline);C01CA02;0;;1;SRSpecial Risk
+Isradipine;C08CA03;1;;1;Possible Risk of TdP
+Itraconazole;J02AC02;3;Use with concomitant QT/TdP drug, Reduces elimination of a QT/TdP drug;1;Conditional Risk of TdP
+Ivabradine;C01EB17;2;;1;Known Risk of TdP
+Ivosidenib;L01XX62;1;;1;Possible Risk of TdP
+Ketanserin;C02KD01;1;;1;Possible Risk of TdP
+Ketoconazole;D01AC08;3;Bradycardia, Use with concomitant QT/TdP drug, Reduces elimination of a QT/TdP drug;1;Conditional Risk of TdP
+Lacidipine;C08CA09;1;;1;Possible Risk of TdP
+Lansoprazole;A02BC03;3;Used with concomitant QT/TdP drug, Use causes low serum K or Mg;1;Conditional Risk of TdP
+Lapatinib;L01EH01;1;;1;Possible Risk of TdP
+Lefamulin;J01XX12;1;;1;Possible Risk of TdP
+Lenvatinib;L01EX08;1;;1;Possible Risk of TdP
+Leuprolide (Leuprorelin);L02AE02;1;;1;Possible Risk of TdP
+Levalbuterol (Levosalbutamol);R03AC;0;;1;SRSpecial Risk
+Levetiracetam;N03AX14;1;;1;Possible Risk of TdP
+Levofloxacin;J01MA12;2;;1;Known Risk of TdP
+Levoketoconazole;;1;;1;Possible Risk of TdP
+Levomepromazine (Methotrimeprazine);N05AA02;2;;1;Known Risk of TdP
+Levomethadone (Levamethadone);N07BC05;1;;1;Possible Risk of TdP
+Levomethadyl acetate;N07BC03;2;;1;Known Risk of TdP
+Levomethamphetamine (Levmetamfetamine);;0;;1;SRSpecial Risk
+Levosulpiride;N05AL07;2;;1;Known Risk of TdP
+Lisdexamfetamine;N06BA12;0;;1;SRSpecial Risk
+Lithium;N05AN01;1;;1;Possible Risk of TdP
+Lofexidine;N07BC04;1;;1;Possible Risk of TdP
+Loperamide;A07DA03;3;Excessive dose, Impaired drug elimination;1;Conditional Risk of TdP
+Lopinavir/Ritonavir;J05AR10;1;;1;Possible Risk of TdP
+Lumateperone;N05AD10;1;;1;Possible Risk of TdP
+Lurasidone;N05AE05;1;;1;Possible Risk of TdP
+Macimorelin;V04CD06;1;;1;Possible Risk of TdP
+Maprotiline;N06AA21;1;;1;Possible Risk of TdP
+Mavorixafor;;1;;1;Possible Risk of TdP
+Meglumine antimoniate;P01CB01;2;;1;Known Risk of TdP
+Melperone;N05AD03;1;;1;Possible Risk of TdP
+Mesoridazine;N05AC03;2;;1;Known Risk of TdP
+Metaproterenol (Orciprenaline);R03AB03;0;;1;SRSpecial Risk
+Methadone;N07BC02;2;;1;Known Risk of TdP
+Methamphetamine (Metamfetamine);N06BA03;0;;1;SRSpecial Risk
+Methylphenidate;N06BA04;0;;1;SRSpecial Risk
+Metoclopramide;A03FA01;3;Bradycardia, Low serum K or Mg, Used with concomitant QT/TdP drug, Use in cLQTS patients;1;Conditional Risk of TdP
+Metolazone;C03BA08;3;Low serum K or Mg, Excessive dose, Use with concomitant QT/TdP drug, Use causes low serum K or Mg;1;Conditional Risk of TdP
+Metronidazole;J01XD01;3;Low serum K or Mg, Used with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Mianserin;N06AX03;1;;1;Possible Risk of TdP
+Midodrine;C01CA17;0;;1;SRSpecial Risk
+Midostaurin;L01EX10;1;;1;Possible Risk of TdP
+Mifepristone;G03XB01;1;;1;Possible Risk of TdP
+Mirabegron;G04BD12;1;;1;Possible Risk of TdP
+Mirtazapine;N06AX11;1;;1;Possible Risk of TdP
+Mobocertinib;L01EB10;2;;1;Known Risk of TdP
+Moclobemide;N06AG02;1;;1;Possible Risk of TdP
+Motixafortide;;1;;1;Possible Risk of TdP
+Moxifloxacin;J01MA14;2;;1;Known Risk of TdP
+Necitumumab;L01FE03;1;;1;Possible Risk of TdP
+Nelfinavir;J05AE04;3;Bradycardia, Low serum K or Mg, Use with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Nicardipine;C08CA04;1;;1;Possible Risk of TdP
+Nifekalant;;2;;1;Known Risk of TdP
+Nilotinib;L01EA03;1;;1;Possible Risk of TdP
+Norepinephrine;C01CA03;0;;1;SRSpecial Risk
+Norfloxacin;J01MA06;1;;1;Possible Risk of TdP
+Nortriptyline;N06AA10;1;;1;Possible Risk of TdP
+Nusinersen;M09AX07;1;;1;Possible Risk of TdP
+Ofloxacin;J01MA01;1;;1;Possible Risk of TdP
+Olanzapine;N05AH03;3;Low serum K or Mg, Used with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Oliceridine;N02AX07;1;;1;Possible Risk of TdP
+Olodaterol;R03AC19;0;;1;SRSpecial Risk
+Omeprazole;A02BC01;3;Used with concomitant QT/TdP drug, Use causes low serum K or Mg;1;Conditional Risk of TdP
+Ondansetron;A04AA01;2;;1;Known Risk of TdP
+Osilodrostat;H02CA02;1;;1;Possible Risk of TdP
+Osimertinib;L01EB04;2;;1;Known Risk of TdP
+Oxaliplatin;L01XA03;2;;1;Known Risk of TdP
+Oxymetazoline;R01AA05;0;;1;SRSpecial Risk
+Oxytocin;H01BB02;1;;1;Possible Risk of TdP
+Ozanimod;L04AE02;1;;1;Possible Risk of TdP
+Pacritinib;L01EJ03;1;;1;Possible Risk of TdP
+Paliperidone;N05AX13;1;;1;Possible Risk of TdP
+Palonosetron;A04AA05;1;;1;Possible Risk of TdP
+Panobinostat;L01XH03;1;;1;Possible Risk of TdP
+Pantoprazole;A02BC02;3;Use with concomitant QT drug, Use causes low serum Mg or K;1;Conditional Risk of TdP
+Papaverine HCl (Intra-coronary);A03AD01;2;;1;Known Risk of TdP
+Paroxetine;N06AB05;3;Reduces elimination of a QT/TdP drug;1;Conditional Risk of TdP
+Pasireotide;H01CB05;1;;1;Possible Risk of TdP
+Pazopanib;L01EX03;1;;1;Possible Risk of TdP
+Pentamidine;P01CX01;2;;1;Known Risk of TdP
+Perphenazine;N05AB03;1;;1;Possible Risk of TdP
+Phendimetrazine;;0;;1;SRSpecial Risk
+Phentermine;A08AA01;0;;1;SRSpecial Risk
+Phenylephrine;C01CA06;0;;1;SRSpecial Risk
+Phenylpropanolamine;R01BA01;0;;1;SRSpecial Risk
+Pilsicainide;;1;;1;Possible Risk of TdP
+Pimavanserin;N05AX17;1;;1;Possible Risk of TdP
+Pimozide;N05AG02;2;;1;Known Risk of TdP
+Pipamperone;N05AD05;1;;1;Possible Risk of TdP
+Piperacillin/Tazobactam;J01CR05;3;Bradycardia, Low serum K or Mg, Use with concomitant QT/TdP drug, Use causes low serum K or Mg;1;Conditional Risk of TdP
+Pitolisant;N07XX11;1;;1;Possible Risk of TdP
+Ponesimod;L04AE04;1;;1;Possible Risk of TdP
+Posaconazole;J02AC04;3;Bradycardia, Low serum K or Mg, Excessive dose, Used with concomitant QT/TdP drug, Reduces elimination of a QT/TdP drug;1;Conditional Risk of TdP
+Pralsetinib;L01EX23;1;;1;Possible Risk of TdP
+Pretomanid;J04AK08;1;;1;Possible Risk of TdP
+Primaquine phosphate;P01BA03;1;;1;Possible Risk of TdP
+Probucol;C10AX02;2;;1;Known Risk of TdP
+Procainamide;C01BA02;2;;1;Known Risk of TdP
+Promethazine;R06AD02;1;;1;Possible Risk of TdP
+Propafenone;C01BC03;3;Bradycardia, Excessive dose;1;Conditional Risk of TdP
+Propofol;N01AX10;2;;1;Known Risk of TdP
+Prothipendyl;N05AX07;1;;1;Possible Risk of TdP
+Pseudoephedrine;R01BA02;0;;1;SRSpecial Risk
+Quetiapine;N05AH04;3;Bradycardia, Low serum K or Mg, Excessive dose, Impaired drug elimination;1;Conditional Risk of TdP
+Quinidine;C01BA01;2;;1;Known Risk of TdP
+Quinine sulfate;P01BC01;3;Low serum K or Mg, Excessive dose, Use with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Quizartinib;L01EX11;2;;1;Known Risk of TdP
+Ranolazine;C01EB18;3;Bradycardia, Low serum K or Mg, Impaired drug elimination, Use with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Relugolix;L02BX04;1;;1;Possible Risk of TdP
+Remdesivir;J05AB16;1;;1;Possible Risk of TdP
+Remimazolam;N05CD14;1;;1;Possible Risk of TdP
+Ribociclib;L01EF02;1;;1;Possible Risk of TdP
+Rilpivirine;J05AG05;1;;1;Possible Risk of TdP
+Risperidone;N05AX08;3;Bradycardia, Low serum K or Mg, Excessive dose, Used with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Ritodrine;G02CA01;0;;1;SRSpecial Risk
+Rivastigmine;N06DA03;1;;1;Possible Risk of TdP
+Romidepsin;L01XH02;1;;1;Possible Risk of TdP
+Roxithromycin;J01FA06;2;;1;Known Risk of TdP
+Rucaparib;L01XK03;1;;1;Possible Risk of TdP
+Salmeterol;R03AC12;0;;1;SRSpecial Risk
+Saquinavir (with ritonavir);J05AE01;1;;1;Possible Risk of TdP
+Selpercatinib;L01EX22;1;;1;Possible Risk of TdP
+Serdexmethylphenidate;N06BA15;0;;1;SRSpecial Risk
+Sertindole;N05AE03;2;;1;Known Risk of TdP
+Sertraline;N06AB06;3;Bradycardia, Low serum K or Mg, Use with concomitant QT/TdP drug, Reduces elimination of a QT/TdP drug;1;Conditional Risk of TdP
+Sevoflurane;N01AB08;2;;1;Known Risk of TdP
+Sibutramine;A08AA10;0;;1;SRSpecial Risk
+Siponimod;L04AA42;1;;1;Possible Risk of TdP
+Solifenacin;G04BD08;3;Bradycardia, Low serum K or Mg, Use with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Sorafenib;L01EX02;1;;1;Possible Risk of TdP
+Sotalol;C07AA07;2;;1;Known Risk of TdP
+Sparfloxacin;J01MA09;2;;1;Known Risk of TdP
+Sulfamethoxazole and Trimethoprim;J01EE01;0;;1;SRSpecial Risk
+Sulpiride;N05AL01;2;;1;Known Risk of TdP
+Sultopride;N05AL02;2;;1;Known Risk of TdP
+Sunitinib;L01EX01;1;;1;Possible Risk of TdP
+Tacrolimus;L04AD02;1;;1;Possible Risk of TdP
+Tamoxifen;L02BA01;1;;1;Possible Risk of TdP
+Tazemetostat;L01XX72;1;;1;Possible Risk of TdP
+Tebentafusp;L01XX75;1;;1;Possible Risk of TdP
+Telaprevir;J05AP02;3;Use with concomitant QT drug, Reduces elimination of a QT drug;1;Conditional Risk of TdP
+Telavancin;J01XA03;1;;1;Possible Risk of TdP
+Telithromycin;J01FA15;1;;1;Possible Risk of TdP
+Terbutaline;R03AC03;0;;1;SRSpecial Risk
+Terfenadine;R06AX12;2;;1;Known Risk of TdP
+Terlipressin;H01BA04;2;;1;Known Risk of TdP
+Terodiline;G04BD05;2;;1;Known Risk of TdP
+Tetrabenazine;N07XX06;1;;1;Possible Risk of TdP
+Thioridazine;N05AC02;2;;1;Known Risk of TdP
+Tiapride;N05AL03;1;;1;Possible Risk of TdP
+Tipiracil/Trifluridine;L01BC59;1;;1;Possible Risk of TdP
+Tizanidine;M03BX02;1;;1;Possible Risk of TdP
+Tolterodine;G04BD07;1;;1;Possible Risk of TdP
+Toremifene;L02BA02;1;;1;Possible Risk of TdP
+Torsemide (Torasemide);C03CA04;3;Use with concomitant QT/TdP drug, Use causes low serum K or Mg;1;Conditional Risk of TdP
+Tramadol;N02AX02;1;;1;Possible Risk of TdP
+Trazodone;N06AX05;3;Bradycardia, Low serum K or Mg, Excessive dose, Used with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Triclabendazole;P02BX04;1;;1;Possible Risk of TdP
+Trimipramine;N06AA06;1;;1;Possible Risk of TdP
+Tropisetron;A04AA03;1;;1;Possible Risk of TdP
+Valbenazine;N07XX13;1;;1;Possible Risk of TdP
+Vandetanib;L01EX04;2;;1;Known Risk of TdP
+Vardenafil;G04BE09;1;;1;Possible Risk of TdP
+Vemurafenib;L01EC01;1;;1;Possible Risk of TdP
+Venlafaxine;N06AX16;1;;1;Possible Risk of TdP
+Vernakalant;C01BG11;1;;1;Possible Risk of TdP
+Vilanterol/fluticasone furoate;R03AK10;0;;1;SRSpecial Risk
+Voclosporin;L04AD03;1;;1;Possible Risk of TdP
+Voriconazole;J02AC03;3;Low serum K or Mg, Reduces elimination of a QT/TdP drug;1;Conditional Risk of TdP
+Vorinostat;L01XH01;1;;1;Possible Risk of TdP
+Xylometazoline (Xylomethazoline);R01AA07;0;;1;SRSpecial Risk
+Ziprasidone;N05AE04;3;Bradycardia, Low serum K or Mg, Excessive dose, Used with concomitant QT/TdP drug;1;Conditional Risk of TdP
+Zotepine;N05AX11;1;;1;Possible Risk of TdP
+Zuclopenthixol (Zuclopentixol);N05AF05;1;;1;Possible Risk of TdP
