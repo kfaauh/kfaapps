@@ -9,6 +9,13 @@ library(rvest)
 library(httr)
 library(stringr)
 library(shinycssloaders)
+library(shinymanager)
+
+credentials <- data.frame(
+  user = "KFA",
+  password = "kfekfa123",
+  stringsAsFactors = FALSE
+)
 
 # Load your data from local files
 drugs_data <- read.csv2("data/ListeOverGodkendteLaegemidler.csv", header = FALSE, sep =";")
@@ -137,7 +144,7 @@ generate_stockleys_url <- function(atc_codes) {
 }
 
 # Define UI
-ui <- fluidPage(
+ui <- secure_app(fluidPage(
   titlePanel("Lister og interaktioner"),
   
   # Add CSS to style the buttons with vertical alignment and spacing
@@ -245,10 +252,14 @@ mainPanel(
       }
     });
   "))
-)
+))
 
 # Revised Server function
 server <- function(input, output, session) {
+
+ res_auth <- secure_server(
+    check_credentials = check_credentials(credentials)
+  )
   
   # Reactive expression to clean and process ATC codes input
   atc_codes <- reactive({
