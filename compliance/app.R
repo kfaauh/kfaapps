@@ -1,6 +1,13 @@
 library(shiny)
+library(shinymanager)
 
-ui <- fluidPage(
+credentials <- data.frame(
+  user = "KFA",
+  password = "kfekfa123",
+  stringsAsFactors = FALSE
+)
+
+ui <- secure_page(fluidPage(
   
   # Titel
   titlePanel("Kør compliance-appen lokalt på egen computer"),
@@ -97,11 +104,16 @@ ui <- fluidPage(
       uiOutput(\"plots\") # Output for plots
     )
   )
-)
+))
 
 
 # Definér serveren
 server <- function(input, output, session) {
+
+ res_auth <- secure_server(
+    check_credentials = check_credentials(credentials)
+  )
+
   # Indlæs og processér den indlæste fil
   processed_data <- reactive({
     req(input$file)
