@@ -53,8 +53,7 @@ ui <- secure_app(
     titlePanel("Prisoversigter for lægemiddelgrupper"),
     sidebarLayout(
       sidebarPanel(
-        shinyTree("tree", checkbox = FALSE, search = TRUE, multiple = FALSE),
-        h(),
+        shinyTree("tree", checkbox = FALSE, search = TRUE, multiple = FALSE),    
         helpText("Sådan bruger du appen:
                  1. Vælg en kategori, underkategori eller et generisk lægemiddel til venstre.
                  2. Tabellen opdateres automatisk med de relevante lægemidler.
