@@ -132,15 +132,15 @@ server <- function(input, output, session) {
     # Also convert 'Styrke' to character so that the DT search works on it.
     categoryData() %>% 
       select(
-        Substitutionsgruppe = SubstGruppe,
-        Indholdsstof       = Indholdsstof,
-        Styrke             = Styrke,
-        Form               = Form,
-        Pakning            = Pakning,
-        Handelsnavn        = Lægemiddel,
-        Pris = AUP,
-        Pris pr. DDD = AUP_pr_DDD,
-        14-dages prisændring = Prisændring
+        `Substitutionsgruppe` = SubstGruppe,
+        `Indholdsstof`       = Indholdsstof,
+        `Styrke`             = Styrke,
+        `Form`               = Form,
+        `Pakning`            = Pakning,
+        `Handelsnavn`        = Lægemiddel,
+        `Pris` = AUP,
+        `Pris pr. DDD` = AUP_pr_DDD,
+        `14-dages prisændring` = Prisændring
       ) %>% 
       mutate(Styrke = as.character(Styrke))
   })
