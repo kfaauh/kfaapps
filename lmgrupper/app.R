@@ -65,9 +65,7 @@ fluidPage(
   titlePanel("Prisoversigter for lægemiddelgrupper"),
   sidebarLayout(
     sidebarPanel(
-      shinyTree("tree", checkbox = FALSE, search = TRUE, multiple = FALSE),
-      hr(),
-      textOutput("userGuide")
+      shinyTree("tree", checkbox = FALSE, search = TRUE, multiple = FALSE)
     ),
     mainPanel(
       h3(textOutput("tableTitle")),
@@ -82,22 +80,11 @@ server <- function(input, output, session) {
   res_auth <- secure_server(
     check_credentials = check_credentials(credentials)
   )
-
+  
   output$tree <- renderTree({
     tree_data
   })
-
-  # You may want to control the guide text from the server (optional)
-  output$userGuide <- renderText({
-    "Sådan bruger du appen: 
-    1. Vælg en kategori, underkategori eller et generisk lægemiddel til venstre.
-    2. Tabellen opdateres automatisk med de relevante lægemidler.
-    3. Brug filtrene over hver kolonne for at indsnævre søgningen.
-    5. Sortér efter en kolonne ved at klikke på overskriften.
-    4. Hold musen over kolonneoverskrifterne for at se en forklaring.
-    Priserne er hentet fra 14-dages medicinpriser fra esundhed.dk, der publiceres hver 14. dag."
-  })
-
+  
   selectedValue <- reactive({
     req(input$tree)
     sel <- tryCatch(
@@ -105,7 +92,10 @@ server <- function(input, output, session) {
       error = function(e) NULL
     )
     if (length(sel) == 0) return(NULL)
+    
+    # Grab the first selected name
     sel <- sel[1]
+    
     if (sel %in% valid_categories) {
       return(list(type = "kategori", value = sel))
     } else if (sel %in% unique(clean_data$Underkategori)) {
@@ -113,15 +103,18 @@ server <- function(input, output, session) {
     } else if (sel %in% unique(clean_data$ATCtekst)) {
       return(list(type = "atctekst", value = sel))
     } else {
+      # Fallback
       return(list(type = "other", value = sel))
     }
   })
-
-  categoryData <- reactive({
-    sel <- selectedValue()
-    if (is.null(sel)) {
-      return(clean_data[FALSE, ])
-    }
+  
+    categoryData <- reactive({
+     sel <- selectedValue()
+     if (is.null(sel)) {
+       # return an empty slice of clean_data so it still has all your columns
+        return(clean_data[FALSE, ])
+      }
+    
     if (sel$type == "kategori") {
       clean_data %>% dplyr::filter(Kategori == sel$value)
     } else if (sel$type == "underkategori") {
@@ -129,83 +122,88 @@ server <- function(input, output, session) {
     } else if (sel$type == "atctekst") {
       clean_data %>% dplyr::filter(ATCtekst == sel$value)
     } else {
+      # Fallback or empty
       data.frame()
     }
   })
-
+  
   filteredData <- reactive({
-    # Rearranged order, Substitutionsgruppe is now LAST.
-    categoryData() %>%
+    # First filter based on category selection, then select and reorder columns.
+    # Also convert 'Styrke' to character so that the DT search works on it.
+    categoryData() %>% 
       select(
-        `Indholdsstof`       = Indholdsstof,
-        `Styrke`             = Styrke,
-        `Form`               = Form,
-        `Pakning`            = Pakning,
-        `Handelsnavn`        = Lægemiddel,
-        `Pris`               = AUP,
-        `Pris pr. DDD`       = AUP_pr_DDD,
-        #`14-dages prisændring` = Prisændring, # No longer shown in the DT table
-        `Substitutionsgruppe` = SubstGruppe
-      ) %>%
+        Substitutionsgruppe = SubstGruppe,
+        Indholdsstof       = Indholdsstof,
+        Styrke             = Styrke,
+        Form               = Form,
+        Pakning            = Pakning,
+        Handelsnavn        = Lægemiddel,
+        Pris = AUP,
+        Pris pr. DDD = AUP_pr_DDD,
+        14-dages prisændring = Prisændring
+      ) %>% 
       mutate(Styrke = as.character(Styrke))
   })
-
+  
   output$tableTitle <- renderText({
     sel <- selectedValue()
-    if (is.null(sel)) {
+    if(is.null(sel)){
       "Vælg kategori eller underkategori"
     } else {
       sel$value
     }
   })
-
+  
   output$tableOutput <- renderDT({
     df <- filteredData()
+    
     if (nrow(df) == 0) {
       return(datatable(df))
     }
-    # Convert to factor for dropdown filters
+    
+    # Convert columns used in filtering explicitly to factors
     filter_columns <- c(
+      "Substitutionsgruppe",
       "Indholdsstof",
       "Styrke",
       "Form",
       "Pakning",
-      "Handelsnavn",
-      "Substitutionsgruppe"
+      "Handelsnavn"
     )
+    
     df[filter_columns] <- lapply(df[filter_columns], as.factor)
-
-    # Prepare color gradient for Pris pr. DDD
+    
+    # Gradient color preparation (your existing logic)
     col_vals <- df[["Pris pr. DDD"]]
+    col_vals_price <- df[["14-dages prisændring"]]
     brks <- quantile(col_vals, probs = seq(0, 1, 0.01), na.rm = TRUE)
-    base_clrs <- colorRampPalette(c("green","yellow", "red"))(length(brks) + 1)
-    clrs <- sapply(base_clrs, function(x) adjustcolor(x, alpha.f = 0.5))
-
-    # Define tooltips for each header (in the same order as columns)
-    header_tooltips <- c(
-      "Det aktive stof i lægemidlet og det generiske navn.",
-      "Styrken på lægemidlet (fx 500 mg).",
-      "Lægemidlets form (fx tablet, kapsel, opløsning).",
-      "Pakningens størrelse og indhold.",
-      "Produktets handelsnavn.",
-      "Prisen på hele pakningen.",
-      "Pris pr. WHO defineret døgndosis (DDD). DDD er defineret som den formodede gennemsnitlige vedligeholdelsesdosis pr. døgn for et lægemiddel anvendt til dets primære indikation. Formålet er at kunne sammenligne lægemidler på tværs af forskellige doseringer. DDD er ikke defineret for alle præparater, fx kan det ikke defineres for kombinationspræparater.",
-      "Substitutionsgruppen er en gruppe af synonyme lægemidler. Apoteket har pligt til at udlevere det billigste lægemiddel inden for en given substitutionsgruppe med mindre recepten specificerer andet."
+    
+    n1 <- 50
+    n2 <- 50
+    brks_price <- c(
+      seq(-1, 0, length.out = n1),
+      seq(0, 1, length.out = n2)[-1]
     )
-    # Custom JS to add tooltips to header cells
-    js_callback <- JS(sprintf("
-      table.on('draw', function() {
-        var tooltips = %s;
-        table.columns().header().each(function(th, i) {
-          $(th).attr('title', tooltips[i]);
-        });
-      });
-    ", jsonlite::toJSON(header_tooltips, auto_unbox = TRUE)))
-
+    
+    clrs_green_to_white <- colorRampPalette(c("green", "white"))(n1)
+    clrs_white_to_red <- colorRampPalette(c("white", "red"))(n2)
+    
+    base_clrs <- colorRampPalette(c("green","yellow", "red"))(length(brks) + 1)
+    
+    clrs <- sapply(base_clrs, function(x) adjustcolor(x, alpha.f = 0.5))
+    clrs_price <- c(
+      "green",
+      clrs_green_to_white[-1],
+      clrs_white_to_red[-1],
+      "red"
+    )
+    clrs_price <- adjustcolor(clrs_price, alpha.f = 0.5)
+    
+    # Datatable with proper dropdown filters
     datatable(
       df,
       rownames = FALSE,
-      filter = "top",
+      filter = "top", # <-- Use simple 'top' here, factors ensure dropdown filters
       options = list(
         order = list(list(0, "asc")),
         orderClasses = TRUE,
@@ -223,19 +221,19 @@ server <- function(input, output, session) {
             'next' = "Næste",
             'previous' = "Forrige"
           )
-        ),
-        columnDefs = list(
-          list(visible = FALSE, targets = which(names(df) == "14-dages prisændring") - 1) # If the col is present (shouldn't be)
-        ),
-        # JS callback for tooltips
-        drawCallback = js_callback
+        )
       )
     ) %>%
       formatStyle(
         columns = c("Pris pr. DDD"),
         backgroundColor = styleInterval(brks, clrs)
       ) %>%
-      formatRound("Pris pr. DDD", 2)
+      formatStyle(
+        columns = c("14-dages prisændring"),
+        backgroundColor = styleInterval(brks_price,clrs_price)
+      ) %>%
+      formatRound("Pris pr. DDD", 2) %>%
+      formatPercentage("14-dages prisændring", digits = 0)
   })
 }
 
