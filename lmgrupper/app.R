@@ -67,7 +67,7 @@ fluidPage(
     sidebarPanel(
       shinyTree("tree", checkbox = FALSE, search = TRUE, multiple = FALSE),
       hr(),
-      helpText("userGuide")
+      textOutput("userGuide")
     ),
     mainPanel(
       h3(textOutput("tableTitle")),
