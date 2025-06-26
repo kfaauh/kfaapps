@@ -24,6 +24,7 @@ ui <- secure_app(
       sidebarPanel(
         textAreaInput("atc_input", "Indtast ATC-kode:", rows = 1),
         uiOutput("product_selection"),
+        uiOutput("subst_group_selection"),
         uiOutput("region_selection"),
         radioButtons("stratify_option", "Stratificering af data:",
           choices = list(
