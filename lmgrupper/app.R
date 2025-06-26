@@ -55,14 +55,13 @@ ui <- secure_app(
       sidebarPanel(
         shinyTree("tree", checkbox = FALSE, search = TRUE, multiple = FALSE),
         h(),
-        helpText(
-          html("Sådan bruger du appen:<br/>
-                 1. Vælg en kategori, underkategori eller et generisk lægemiddel til venstre.<br/>
-                 2. Tabellen opdateres automatisk med de relevante lægemidler.<br/>
-                 3. Brug filtrene over hver kolonne for at indsnævre søgningen.<br/>
-                 5. Sortér efter en kolonne ved at klikke på overskriften.<br/>
-                 4. Hold musen over kolonneoverskrifterne for at se en forklaring.<br/>
-                 Priserne er hentet fra 14-dages medicinpriser fra esundhed.dk, der publiceres hver 14. dag."))
+        helpText("Sådan bruger du appen:
+                 1. Vælg en kategori, underkategori eller et generisk lægemiddel til venstre.
+                 2. Tabellen opdateres automatisk med de relevante lægemidler.
+                 3. Brug filtrene over hver kolonne for at indsnævre søgningen.
+                 5. Sortér efter en kolonne ved at klikke på overskriften.
+                 4. Hold musen over kolonneoverskrifterne for at se en forklaring.
+                 Priserne er hentet fra 14-dages medicinpriser fra esundhed.dk, der publiceres hver 14. dag.")
       ),
       mainPanel(
         h3(textOutput("tableTitle")),
