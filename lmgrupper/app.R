@@ -54,13 +54,16 @@ ui <- secure_app(
     sidebarLayout(
       sidebarPanel(
         shinyTree("tree", checkbox = FALSE, search = TRUE, multiple = FALSE),    
-        helpText("Sådan bruger du appen:",
-                 "1. Vælg en kategori, underkategori eller et generisk lægemiddel til venstre.",
-                 "2. Tabellen opdateres automatisk med de relevante lægemidler.",
-                 "3. Brug filtrene over hver kolonne for at indsnævre søgningen.",
-                 "5. Sortér efter en kolonne ved at klikke på overskriften.",
-                 "4. Hold musen over kolonneoverskrifterne for at se en forklaring.",
-                 "Priserne er hentet fra 14-dages medicinpriser fra esundhed.dk, der publiceres hver 14. dag.")
+        tags$div(
+          tags$p("Sådan bruger du appen:"),
+          tags$ol(
+            tags$li("1) Vælg en kategori, underkategori eller et generisk lægemiddel til venstre."),
+            tags$li("2) Tabellen opdateres automatisk med de relevante lægemidler."),
+            tags$li("3) Brug filtrene over hver kolonne for at indsnævre søgningen."),
+            tags$li("4) Sortér efter en kolonne ved at klikke på overskriften.")
+          ),
+          tags$p("Priserne er hentet fra 14-dages medicinpriser fra esundhed.dk, der publiceres hver 14. dag.")
+        )
       ),
       mainPanel(
         h3(textOutput("tableTitle")),
