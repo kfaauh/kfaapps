@@ -90,10 +90,12 @@ server <- function(input, output, session) {
   # You may want to control the guide text from the server (optional)
   output$userGuide <- renderText({
     "Sådan bruger du appen: 
-    1. Vælg en kategori eller underkategori til venstre.
+    1. Vælg en kategori, underkategori eller et generisk lægemiddel til venstre.
     2. Tabellen opdateres automatisk med de relevante lægemidler.
-    3. Brug filtrene over hver kolonne for at indsnævre din søgning.
-    4. Hold musen over kolonneoverskrifterne for at se en forklaring."
+    3. Brug filtrene over hver kolonne for at indsnævre søgningen.
+    5. Sortér efter en kolonne ved at klikke på overskriften.
+    4. Hold musen over kolonneoverskrifterne for at se en forklaring.
+    Priserne er hentet fra 14-dages medicinpriser fra esundhed.dk, der publiceres hver 14. dag."
   })
 
   selectedValue <- reactive({
