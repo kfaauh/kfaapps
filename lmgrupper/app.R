@@ -181,14 +181,14 @@ server <- function(input, output, session) {
 
     # Define tooltips for each header (in the same order as columns)
     header_tooltips <- c(
-      "Det aktive stof i lægemidlet.",
+      "Det aktive stof i lægemidlet og det generiske navn.",
       "Styrken på lægemidlet (fx 500 mg).",
       "Lægemidlets form (fx tablet, kapsel, opløsning).",
       "Pakningens størrelse og indhold.",
       "Produktets handelsnavn.",
       "Prisen på hele pakningen.",
-      "Pris pr. defineret døgndosis (DDD).",
-      "Substitutionsgruppe, dvs. om præparatet kan substitueres med andre."
+      "Pris pr. WHO defineret døgndosis (DDD). DDD er defineret som den formodede gennemsnitlige vedligeholdelsesdosis pr. døgn for et lægemiddel anvendt til dets primære indikation. Formålet er at kunne sammenligne lægemidler på tværs af forskellige doseringer. DDD er ikke defineret for alle præparater, fx kan det ikke defineres for kombinationspræparater.",
+      "Substitutionsgruppen er en gruppe af synonyme lægemidler. Apoteket har pligt til at udlevere det billigste lægemiddel inden for en given substitutionsgruppe med mindre recepten specificerer andet."
     )
     # Custom JS to add tooltips to header cells
     js_callback <- JS(sprintf("
