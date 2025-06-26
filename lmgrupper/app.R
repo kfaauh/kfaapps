@@ -62,7 +62,9 @@ ui <- secure_app(
             tags$li("Brug filtrene over hver kolonne for at indsnævre søgningen."),
             tags$li("Sortér efter en kolonne ved at klikke på overskriften.")
           ),
-          tags$p("Priserne er hentet fra 14-dages medicinpriser fra esundhed.dk, der publiceres hver 14. dag.")
+          tags$p("Priserne er hentet fra 14-dages medicinpriser fra esundhed.dk, der publiceres hver 14. dag."),
+          tags$p("WHO defineret døgndosis (DDD) er defineret som den formodede gennemsnitlige vedligeholdelsesdosis pr. døgn for et lægemiddel anvendt til dets primære indikation. Formålet er at kunne sammenligne lægemidler på tværs af forskellige doseringer. DDD er ikke defineret for alle præparater, fx kan det ikke defineres for kombinationspræparater."),
+          tags$p("Substitutionsgruppen er en gruppe af synonyme lægemidler. Apoteket har pligt til at udlevere det billigste lægemiddel inden for en given substitutionsgruppe med mindre recepten specificerer andet.")
         )
       ),
       mainPanel(
