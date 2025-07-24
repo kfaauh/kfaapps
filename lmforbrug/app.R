@@ -1,5 +1,7 @@
 # app_fixed_local.R
-# Shiny app for pre-processed data with robust stratification and explicit select/deselect controls
+# Shiny app for pre‑processed data with robust stratification
+# – SubstGruppe labels include form & strength
+# – SubstGruppe selection UI removed
 
 library(shiny)
 library(dplyr)
@@ -8,7 +10,7 @@ library(ggplot2)
 library(shinymanager)
 
 credentials <- data.frame(
-  user = "KFA",
+  user     = "KFA",
   password = "kfekfa123",
   stringsAsFactors = FALSE
 )
@@ -24,27 +26,32 @@ ui <- secure_app(
       sidebarPanel(
         textAreaInput("atc_input", "Indtast ATC-kode:", rows = 1),
         uiOutput("product_selection"),
-        uiOutput("subst_group_selection"),
         uiOutput("region_selection"),
+        # Removed SubstGruppe option here
         radioButtons("stratify_option", "Stratificering af data:",
-          choices = list(
-            "Ingen" = "None",
-            "Produktnavn" = "Produktnavn",
-            "Substitutionsgruppe" = "SubstGruppe",
-            "Region" = "Område"
-          ), selected = "None"),
+                     choices = list(
+                       "Ingen"       = "None",
+                       "Produktnavn" = "Produktnavn",
+                       "Region"      = "Område"
+                     ),
+                     selected = "None"
+        ),
         radioButtons("y_axis_option", "Y-akse:",
-          choices = list(
-            "Samlede tilskudsudgifter, kr." = "Regionale udgifter til medicintilskud, kr.",
-            "Tilskudsudgifter per 100.000 indbyggere, kr." = "Regionale udgifter til medicintilskud, kr. pr. indbygger",
-            "Samlet forbrug" = "Mængdesalg",
-            "Forbrug pr. 100.000 indbyggere" = "Mængdesalgsenhed pr. indbygger"
-          ), selected = "Regionale udgifter til medicintilskud, kr."),
+                     choices = list(
+                       "Samlede tilskudsudgifter, kr."        = "Regionale udgifter til medicintilskud, kr.",
+                       "Tilskudsudgifter per 100.000 indbyggere, kr." = "Regionale udgifter til medicintilskud, kr. pr. indbygger",
+                       "Samlet forbrug"                       = "Mængdesalg",
+                       "Forbrug pr. 100.000 indbyggere"            = "Mængdesalgsenhed pr. indbygger"
+                     ),
+                     selected = "Regionale udgifter til medicintilskud, kr."
+        ),
         downloadButton("download_pdf", "Download figur som PDF")
       ),
       mainPanel(
         plotOutput("line_plot"),
-        tableOutput("summary_table")
+        tableOutput("product_table"),
+        br(),
+        tableOutput("group_table")
       )
     )
   )
@@ -52,180 +59,149 @@ ui <- secure_app(
 
 # Define Server
 server <- function(input, output, session) {
-  res_auth <- secure_server(
-    check_credentials = check_credentials(credentials)
-  )
-
-  # Y-axis label mapping
+  # 1) Authentication
+  res_auth <- secure_server(check_credentials = check_credentials(credentials))
+  
+  # 2) Y-axis label mapping
   y_axis_labels <- list(
-    "Regionale udgifter til medicintilskud, kr."              = "Samlede tilskudsudgifter, kr.",
+    "Regionale udgifter til medicintilskud, kr."               = "Samlede tilskudsudgifter, kr.",
     "Regionale udgifter til medicintilskud, kr. pr. indbygger" = "Tilskudsudgifter per 100.000 indbyggere, kr.",
     "Mængdesalg"                                              = "Samlet forbrug",
     "Mængdesalgsenhed pr. indbygger"                          = "Forbrug pr. 100.000 indbyggere"
   )
-
-  # Reactive filtered data (no explosive separate_rows here)
+  
+  # 3) Reactive filtered data by ATC codes
   filtered_data <- reactive({
-    codes <- trimws(unlist(strsplit(input$atc_input, '\n')))
+    codes <- trimws(unlist(strsplit(input$atc_input, "\n")))
     req(length(codes) > 0)
     merged_data %>%
       filter(`ATC kode` %in% codes)
   })
-
-  # Reactive ATC text for title
+  
+  # 4) Title text from ATC descriptions
   atc_text <- reactive({
     df <- filtered_data()
-    if (nrow(df)) paste(unique(df$`ATC tekst`), collapse = ", ") else "Medicinforbrug"
+    if (nrow(df)) paste(unique(df$`ATC tekst`), collapse = ", ")
+    else           "Medicinforbrug"
   })
-
-  # Dynamic UIs with explicit select/deselect links
+  
+  # 5) Product selection UI + observers (unchanged)  
   output$product_selection <- renderUI({
     df <- filtered_data(); req(nrow(df) > 0)
     prods <- unique(df$Produktnavn)
     tagList(
-      actionLink("select_all_products", "Markér alle"), " | ",
+      actionLink("select_all_products",   "Markér alle"), " | ",
       actionLink("deselect_all_products", "Fjern markering"),
-      checkboxGroupInput("selected_products", "Vælg produktnavne:", choices = prods, selected = prods)
+      checkboxGroupInput(
+        "selected_products", "Vælg produktnavne:",
+        choices = prods, selected = prods
+      )
     )
   })
-
-  output$subst_group_selection <- renderUI({
-    df <- filtered_data(); req(nrow(df) > 0)
-    groups <- unique(unlist(strsplit(paste(df$SubstGruppe, collapse = ", "), ", ")))
-    tagList(
-      actionLink("select_all_subst", "Markér alle"), " | ",
-      actionLink("deselect_all_subst", "Fjern markering"),
-      checkboxGroupInput("selected_subst_groups", "Vælg substitutionsgrupper:", choices = groups, selected = groups)
+  observeEvent(input$select_all_products, {
+    updateCheckboxGroupInput(
+      session, "selected_products",
+      selected = unique(filtered_data()$Produktnavn)
     )
   })
-
+  observeEvent(input$deselect_all_products, {
+    updateCheckboxGroupInput(
+      session, "selected_products",
+      selected = character(0)
+    )
+  })
+  
+  # 6) Region selection UI + observers (unchanged)  
   output$region_selection <- renderUI({
     df <- filtered_data(); req(nrow(df) > 0)
     regs <- unique(df$Område)
     tagList(
-      actionLink("select_all_regions", "Markér alle"), " | ",
+      actionLink("select_all_regions",   "Markér alle"), " | ",
       actionLink("deselect_all_regions", "Fjern markering"),
-      checkboxGroupInput("selected_regions", "Vælg regioner:", choices = regs, selected = regs)
+      checkboxGroupInput(
+        "selected_regions", "Vælg regioner:",
+        choices = regs, selected = regs
+      )
     )
   })
-
-  # Select/deselect observers
-  observeEvent(input$select_all_products,   updateCheckboxGroupInput(session, "selected_products",   selected = unique(filtered_data()$Produktnavn)))
-  observeEvent(input$deselect_all_products, updateCheckboxGroupInput(session, "selected_products",   selected = character(0)))
-  observeEvent(input$select_all_subst,      updateCheckboxGroupInput(session, "selected_subst_groups", selected = unique(unlist(strsplit(paste(filtered_data()$SubstGruppe, collapse = ", "), ", ")))))
-  observeEvent(input$deselect_all_subst,    updateCheckboxGroupInput(session, "selected_subst_groups", selected = character(0)))
-  observeEvent(input$select_all_regions,    updateCheckboxGroupInput(session, "selected_regions",   selected = unique(filtered_data()$Område)))
-  observeEvent(input$deselect_all_regions,  updateCheckboxGroupInput(session, "selected_regions",   selected = character(0)))
-
-   # Reactive plot with conditional explode for stratification (Option A)
-  plot_reactive <- reactive({
-  # Base filtering by product and region
-  df_base <- filtered_data() %>%
-    filter(
-      Produktnavn %in% input$selected_products,
-      Område      %in% input$selected_regions
+  observeEvent(input$select_all_regions, {
+    updateCheckboxGroupInput(
+      session, "selected_regions",
+      selected = unique(filtered_data()$Område)
     )
-  req(nrow(df_base) > 0)
-
-  # Scale per-100k if selected
-  y_var <- input$y_axis_option
-  if (y_var %in% c(
-    "Regionale udgifter til medicintilskud, kr. pr. indbygger",
-    "Mængdesalgsenhed pr. indbygger"
-  )) {
-    df_base[[y_var]] <- df_base[[y_var]] * 100000
-  }
-
-  strat <- input$stratify_option
-
-  # helper to filter out fully‐deselected products
-  keep_subst <- function(df) {
-    df %>%
+  })
+  observeEvent(input$deselect_all_regions, {
+    updateCheckboxGroupInput(
+      session, "selected_regions",
+      selected = character(0)
+    )
+  })
+  
+  # 7) Reactive plot construction without SubstGruppe
+  plot_reactive <- reactive({
+    df0 <- filtered_data() %>%
       filter(
-        sapply(strsplit(SubstGruppe, ", "), function(x)
-          any(x %in% input$selected_subst_groups)
-        )
+        Produktnavn %in% input$selected_products,
+        Område      %in% input$selected_regions
       )
-  }
-
-  if (strat == "None") {
-    df0 <- df_base %>% keep_subst()
-
-    # de-duplicate per date+product+region, then sum across products
-    summed <- df0 %>%
-      group_by(Dato, Produktnavn, Område) %>%
-      summarize(y = first(.data[[y_var]]), .groups = "drop") %>%
-      group_by(Dato) %>%
-      summarize(value = sum(y, na.rm = TRUE), .groups = "drop")
-
-    p <- ggplot(summed, aes(x = Dato, y = value)) +
-      geom_line(size = 1)
-
-  } else if (strat == "Produktnavn") {
-    df0 <- df_base %>% keep_subst()
-
-    # de-duplicate so each product shows up only once per date+region
-    df_unique <- df0 %>%
-      group_by(Dato, Produktnavn, Område) %>%
-      summarize(y = first(.data[[y_var]]), .groups = "drop")
-
-    summed <- df_unique %>%
-      group_by(Dato, Produktnavn) %>%
-      summarize(value = sum(y, na.rm = TRUE), .groups = "drop")
-
-    p <- ggplot(summed, aes(x = Dato, y = value, color = Produktnavn)) +
-      geom_line(size = 1)
-
-  } else if (strat == "Område") {
-       df0 <- df_base %>% keep_subst()
-
-    # de-duplicate so each product shows up only once per date+region
-    df_unique <- df0 %>%
-      group_by(Dato, Produktnavn, Område) %>%
-      summarize(y = first(.data[[y_var]]), .groups = "drop")
-
-    summed <- df_unique %>%
-      group_by(Dato, Område) %>%
-      summarize(value = sum(y, na.rm = TRUE), .groups = "drop")
-
-    p <- ggplot(summed, aes(x = Dato, y = value, color = Område)) +
-      geom_line(size = 1)
-
-  } else {
-    # SubstGruppe stratification (explode → dedupe → sum per group)
-    df1 <- df_base %>%
-      separate_rows(SubstGruppe, sep = ", ") %>%
-      filter(SubstGruppe %in% input$selected_subst_groups)
-
-    df_unique <- df1 %>%
-      group_by(Dato, Produktnavn, SubstGruppe, Område) %>%
-      summarize(y = first(.data[[y_var]]), .groups = "drop")
-
-    summed <- df_unique %>%
-      group_by(Dato, SubstGruppe) %>%
-      summarize(value = sum(y, na.rm = TRUE), .groups = "drop")
-
-    p <- ggplot(summed, aes(x = Dato, y = value, color = SubstGruppe)) +
-      geom_line(size = 1)
-  }
-
-  # Common styling
-  p +
-    scale_y_continuous(
-      labels = scales::label_number(scale_cut = scales::cut_short_scale()),
-      limits = c(0, NA)
-    ) +
-    labs(
-      title = atc_text(),
-      x     = "Dato",
-      y     = y_axis_labels[[y_var]],
-      color = if (strat != "None") strat else NULL
-    ) +
-    theme_minimal(base_size = 16)
-})
-
+    req(nrow(df0) > 0)
+    
+    # Scale per-capita if needed
+    y_var <- input$y_axis_option
+    if (y_var %in% c(
+      "Regionale udgifter til medicintilskud, kr. pr. indbygger",
+      "Mængdesalgsenhed pr. indbygger"
+    )) {
+      df0[[y_var]] <- df0[[y_var]] * 100000
+    }
+    
+    # Upstream aggregation
+    df_nogroup <- df0 %>%
+      group_by(Dato, Område, Produktnavn) %>%
+      summarize(y0 = sum(.data[[y_var]], na.rm = TRUE), .groups = "drop")
+    
+    strat <- input$stratify_option
+    
+    # Build plot based on stratification
+    if (strat == "None") {
+      summed <- df_nogroup %>%
+        group_by(Dato) %>%
+        summarize(value = sum(y0, na.rm = TRUE), .groups = "drop")
+      p <- ggplot(summed, aes(Dato, value)) + geom_line(size = 1)
+      
+    } else if (strat == "Produktnavn") {
+      summed <- df_nogroup %>%
+        group_by(Dato, Produktnavn) %>%
+        summarize(value = sum(y0, na.rm = TRUE), .groups = "drop")
+      p <- ggplot(summed, aes(Dato, value, color = Produktnavn)) + geom_line(size = 1)
+      
+    } else if (strat == "Område") {
+      summed <- df_nogroup %>%
+        group_by(Dato, Område) %>%
+        summarize(value = sum(y0, na.rm = TRUE), .groups = "drop")
+      p <- ggplot(summed, aes(Dato, value, color = Område)) + geom_line(size = 1)
+      
+    } else {
+      stop("Ugyldig stratificeringsvalg.")
+    }
+    
+    # Common styling
+    p +
+      scale_y_continuous(
+        labels = scales::label_number(scale_cut = scales::cut_short_scale()),
+        limits = c(0, NA)
+      ) +
+      labs(
+        title = atc_text(),
+        x     = "Dato",
+        y     = y_axis_labels[[y_var]],
+        color = if (strat != "None") strat else NULL
+      ) +
+      theme_minimal(base_size = 16)
+  })
+  
+  # 8) Render outputs
   output$line_plot <- renderPlot({ plot_reactive() })
-
   output$download_pdf <- downloadHandler(
     filename = function() paste0("medicinforbrug_plot_", Sys.Date(), ".pdf"),
     content  = function(file) {
@@ -234,16 +210,61 @@ server <- function(input, output, session) {
       dev.off()
     }
   )
-
-  output$summary_table <- renderTable({
-    df <- filtered_data(); req(nrow(df) > 0)
+  
+  # 9a) Produkt‑oversigt: blank when no group
+  output$product_table <- renderTable({
+    df <- filtered_data() %>%
+      filter(
+        Produktnavn %in% input$selected_products,
+        Område      %in% input$selected_regions
+      )
+    req(nrow(df) > 0)
+    
     df %>%
-      group_by(SubstGruppe, Styrke) %>%
+      group_by(Produktnavn) %>%
       summarise(
-        Lægemiddelform               = first(LægemiddelForm),
-        Produktnavne                 = paste(unique(Produktnavn), collapse = ", "),
-        `Gennemsnitlig pris pr. DDD` = mean(`Pris, kr. pr. solgt enhed`, na.rm = TRUE),
-        .groups                     = "drop"
+        `Gennemsnitlig pris over perioden, kr.` =
+          mean(`Pris, kr. pr. solgt enhed`, na.rm = TRUE),
+        `Seneste pris, kr.` =
+          `Pris, kr. pr. solgt enhed`[which.max(Dato)],
+        `Substitutionsgrupper` = {
+          idx <- !is.na(SubstGruppe)
+          if (any(idx)) {
+            paste(
+              unique(
+                paste0(
+                  SubstGruppe[idx], " (",
+                  LægemiddelForm[idx], ", ",
+                  Styrke[idx], ")"
+                )
+              ),
+              collapse = ", "
+            )
+          } else {
+            ""  # blank when no substgroup
+          }
+        },
+        .groups = "drop"
+      )
+  })
+  
+  # 9b) Substitutionsgruppe‑oversigt: rename first column
+  output$group_table <- renderTable({
+    df <- filtered_data() %>%
+      filter(
+        Produktnavn %in% input$selected_products,
+        Område      %in% input$selected_regions
+      )
+    req(nrow(df) > 0)
+    
+    df %>%
+      distinct(SubstGruppe, Produktnavn, LægemiddelForm, Styrke) %>%
+      group_by(Substitutionsgruppe = SubstGruppe) %>%
+      summarise(
+        `Produktnavne der tilhører gruppen` = paste(unique(Produktnavn), collapse = ", "),
+        `Lægemiddelform`                   = paste(unique(LægemiddelForm), collapse = ", "),
+        `Styrke`                           = paste(unique(Styrke), collapse = ", "),
+        .groups = "drop"
       )
   })
 }
