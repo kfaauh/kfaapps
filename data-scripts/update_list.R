@@ -29,6 +29,6 @@ out_dirs <- c(
 for (d in out_dirs) {
   if (!dir.exists(d)) dir.create(d, recursive = TRUE)
   out_file <- file.path(d, "ListeOverGodkendteLaegemidler.csv")
-  write.csv(df, out_file, row.names = FALSE, fileEncoding = "UTF-8")
+  write.csv2(df, out_file, row.names = FALSE, fileEncoding = "UTF-8")
   message("Wrote: ", out_file)
 }
