@@ -91,16 +91,30 @@ as_of_days <- seq(today_cph - days(7), today_cph, by = "day") |>
   (\(x) x[wday(x, week_start = 1) <= 5])() |>
   tail(5)
 
-loc0 <- Sys.getlocale("LC_TIME");
-try(Sys.setlocale("LC_TIME","da_DK.UTF-8"), silent=TRUE)
-wd <- format(as_of_days, "%A")
-wd_cap <- paste0(toupper(substr(wd,1,1)), substr(wd,2,nchar(wd)))
+# -----------------------------------------------------------------------------
+# Danish weekday labels for x-axis (no system locale fiddling)
+# -----------------------------------------------------------------------------
+
+# Get Danish weekday names using lubridate
+wd <- lubridate::wday(
+  as_of_days,
+  label      = TRUE,
+  abbr       = FALSE,
+  week_start = 1,
+  locale     = "da_DK"   # works cross-platform via ICU
+)
+
+wd <- as.character(wd)  # convert ordered factor -> character
+wd_cap <- paste0(toupper(substr(wd, 1, 1)), substr(wd, 2, nchar(wd)))
+
 axis_labs <- setNames(
-  sprintf("<b>%s</b><br><span style='font-size:8pt'><i>%s</i></span>",
-          wd_cap, format(as_of_days, "%d.%m")),
+  sprintf(
+    "<b>%s</b><br><span style='font-size:8pt'><i>%s</i></span>",
+    wd_cap,
+    format(as_of_days, "%d.%m")
+  ),
   as.character(as_of_days)
 )
-try(Sys.setlocale("LC_TIME", loc0), silent=TRUE)
 
 activity_plot_data <- data.lmraad_filtered %>%
   mutate(

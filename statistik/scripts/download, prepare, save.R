@@ -26,6 +26,7 @@
 
 # Simple approach for server
 library(Microsoft365R)
+Sys.setenv(AZURE_AUTH_TYPE = "device_code")
 library(dplyr)
 library(readr)
 library(lubridate)
