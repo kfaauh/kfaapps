@@ -36,13 +36,13 @@ ui <- fluidPage(
         color: #555;
       }
       .links {
-        margin: 1.5em 0;
+        margin: 1.0em 0;
       }
       .link-button {
         display: inline-block;
         margin: 0.5em;
-        padding: 1em 2em;
-        font-size: 1.2em;
+        padding: 0.8em 1.8em;
+        font-size: 1.1em;
         color: white;
         background-color: #0033A0;
         border-radius: 6px;
@@ -60,13 +60,14 @@ ui <- fluidPage(
         color: #555;
       }
       .status-message {
-        margin-top: 1em;
-        padding: 1em;
+        margin-top: 0.5em;
+        padding: 0.6em 0.8em;
         border-radius: 4px;
         font-weight: bold;
         text-align: left;
         display: inline-block;
         max-width: 900px;
+        font-size: 0.9em;      /* smaller status box text */
       }
       .status-success {
         background-color: #d4edda;
@@ -115,44 +116,37 @@ ui <- fluidPage(
       details > summary::-webkit-details-marker {
         display: none;
       }
+
+      .last-sync-text {
+        font-size: 0.9em;
+        color: #444;
+        margin-top: 0.3em;
+      }
     "))
   ),
 
   div(
     class = "content",
+
     # Main title
     div(class = "header", "Statistik over afdelingens aktiviteter"),
 
-    # Data preparation section
-    div(class = "subheader", "Dataforberedelse"),
+    # ---- Aktivitetsstatus (top) ----
+    div(class = "subheader", "Aktivitetsstatus"),
 
-    # NEW: button to generate current activities plot
     div(
       class = "links",
       actionButton(
         "run_plot",
-        "Opdater aktivitetsplot",
+        "Lav aktivitetsplot",
         class = "link-button"
       )
     ),
-
-    # Existing: button to download/prepare data
-    div(
-      class = "links",
-      actionButton(
-        "download_data",
-        "Download Sharepoint data",
-        class = "link-button"
-      )
-    ),
-
-    # User-facing status box
-    uiOutput("status_message"),
 
     # Plot area + download buttons
     div(
       class = "links",
-      plotOutput("activity_plot", height = "500px")
+      plotOutput("activity_plot", height = "650px")  # taller → text larger on screen
     ),
     div(
       class = "links",
@@ -162,6 +156,26 @@ ui <- fluidPage(
         downloadButton("download_plot_svg", "Download plot (SVG)")
       )
     ),
+
+    # ---- Synkroniser data (bottom) ----
+    div(class = "subheader", "Synkroniser data med Sharepoint"),
+
+    div(
+      class = "last-sync-text",
+      textOutput("last_sync", inline = TRUE)
+    ),
+
+    div(
+      class = "links",
+      actionButton(
+        "download_data",
+        "Synkroniser data med Sharepoint",
+        class = "link-button"
+      )
+    ),
+
+    # User-facing status box (smaller, near bottom)
+    uiOutput("status_message"),
 
     # Foldable technical console
     tags$details(
@@ -189,35 +203,79 @@ server <- function(input, output, session) {
   # Reactive to hold the current activity plot (grid grob)
   activity_plot <- reactiveVal(NULL)
 
-  # Small indicator so we can hide/show download buttons
+  # Indicator for plot existence (for showing download buttons)
   output$plot_available <- reactive({
     !is.null(activity_plot())
   })
   outputOptions(output, "plot_available", suspendWhenHidden = FALSE)
 
-  # -------------------------- DOWNLOAD DATA SCRIPT -------------------------- #
+  # -------------------------- LAST SYNC TIME ------------------------------- #
+
+  data_dir <- here("statistik", "Data", "Azure data")
+
+  get_newest_rds_file <- function(directory_path) {
+    rds_files <- list.files(
+      path   = directory_path,
+      pattern = "^azure_.*\\.rds$",  # azure_YYYY-MM-DD.rds
+      full.names = TRUE
+    )
+    if (length(rds_files) == 0) return(NULL)
+    file_info <- file.info(rds_files)
+    rds_files[which.max(file_info$mtime)]
+  }
+
+  last_sync_time <- reactiveVal(NA)
+
+  update_last_sync <- function() {
+    if (!dir.exists(data_dir)) {
+      last_sync_time(NA)
+      return(invisible(NULL))
+    }
+    newest <- get_newest_rds_file(data_dir)
+    if (is.null(newest)) {
+      last_sync_time(NA)
+    } else {
+      last_sync_time(file.info(newest)$mtime)
+    }
+    invisible(NULL)
+  }
+
+  # Initialize on session start
+  update_last_sync()
+
+  output$last_sync <- renderText({
+    t <- last_sync_time()
+    if (is.null(t) || is.na(t)) {
+      "Seneste synkronisering: Ingen filer fundet"
+    } else {
+      paste0(
+        "Seneste synkronisering: ",
+        format(t, "%d-%m-%Y %H:%M")
+      )
+    }
+  })
+
+  # -------------------------- DOWNLOAD DATA SCRIPT ------------------------- #
 
   observeEvent(input$download_data, {
     shinyjs::disable("download_data")
 
-    # Clear previous console and status
+    # Clear technical console
     shinyjs::html("console_output", "")
     script_status(NULL)
 
-    # Short, friendly start line in console
     shinyjs::html(
       id   = "console_output",
       html = "Starter download- og forberedelsesscript...\n\n",
       add  = TRUE
     )
 
-    # Path to your script
     script_path <- file.path(
       here("statistik", "scripts"),
       "download, prepare, save.R"
     )
 
-    # If script does not exist, show an error directly in the UI + console
+    # If script does not exist, show error
     if (!file.exists(script_path)) {
       shinyjs::html(
         id   = "console_output",
@@ -237,27 +295,22 @@ server <- function(input, output, session) {
       return(invisible(NULL))
     }
 
-    # Try to run script and stream messages (technical) to console
     tryCatch(
       {
 
         withCallingHandlers(
           {
-            # High-level technical note
             message("Kører script: ", script_path)
 
-            # Run your script.
-            # IMPORTANT: inside this script, use message(\"...\") for progress updates.
+            # Run your script; use message() inside it for progress updates
             source(script_path, local = TRUE)
           },
           message = function(m) {
-            # Append each message line to the technical console
             shinyjs::html(
               id   = "console_output",
               html = paste0(m$message, "\n"),
               add  = TRUE
             )
-            # Prevent duplicate printing in the real R console
             invokeRestart("muffleMessage")
           }
         )
@@ -265,8 +318,11 @@ server <- function(input, output, session) {
         # If we got here, script finished successfully
         script_status(list(
           type    = "success",
-          message = "Data downloadet til server!"
+          message = "Data synkroniseret"
         ))
+
+        # Update last sync time after successful save
+        update_last_sync()
 
         shinyjs::html(
           id   = "console_output",
@@ -278,8 +334,8 @@ server <- function(input, output, session) {
 
         err_msg <- e$message
 
-        # Default: generic user-friendly text
-        msg_ui <- "Der opstod en fejl under download/forberedelse af data. Se tekniske detaljer eller kontakt support."
+        # Default user-friendly text
+        msg_ui <- "Der opstod en fejl under synkronisering af data. Se tekniske detaljer eller kontakt support."
 
         # If it's the Azure-auth error from your Section 3 code,
         # show your explicit re-auth instructions.
@@ -308,7 +364,6 @@ server <- function(input, output, session) {
           message = msg_ui
         ))
 
-        # Full technical error in console only
         shinyjs::html(
           id   = "console_output",
           html = paste0(
@@ -324,12 +379,12 @@ server <- function(input, output, session) {
     shinyjs::enable("download_data")
   })
 
-  # -------------------------- CURRENT ACTIVITIES PLOT ----------------------- #
+  # -------------------------- CURRENT ACTIVITIES PLOT ---------------------- #
 
   observeEvent(input$run_plot, {
     shinyjs::disable("run_plot")
 
-    # Clear console and status for this run
+    # Clear console & status for this run
     shinyjs::html("console_output", "")
     script_status(NULL)
 
@@ -363,7 +418,6 @@ server <- function(input, output, session) {
       return(invisible(NULL))
     }
 
-    # Run the plot script in its own environment to capture 'combined_grob'
     tryCatch(
       {
         plot_env <- new.env(parent = globalenv())
@@ -372,7 +426,7 @@ server <- function(input, output, session) {
           {
             message("Kører aktivitetsplot-script: ", script_path_plot)
 
-            # This script is assumed to create 'combined_grob'
+            # Script expected to create 'combined_grob'
             source(script_path_plot, local = plot_env)
           },
           message = function(m) {
@@ -389,7 +443,6 @@ server <- function(input, output, session) {
           stop("combined_grob not found efter kørsel af aktivitetsplot-script.")
         }
 
-        # Store the plot grob for rendering + download
         activity_plot(get("combined_grob", envir = plot_env))
 
         script_status(list(
@@ -461,7 +514,7 @@ server <- function(input, output, session) {
     }
   )
 
-  # -------------------------- STATUS BOX RENDERING -------------------------- #
+  # -------------------------- STATUS BOX RENDERING ------------------------- #
 
   output$status_message <- renderUI({
     status <- script_status()
