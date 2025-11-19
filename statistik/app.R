@@ -7,7 +7,6 @@ ui <- fluidPage(
   useShinyjs(),  # Initialize shinyjs
   tags$head(
     tags$style(HTML("
-      /* Your existing CSS styles */
       /* Ensure the page always fills viewport */
       html, body {
         height: 100%;
@@ -76,45 +75,42 @@ ui <- fluidPage(
         color: #721c24;
         border: 1px solid #f5c6cb;
       }
-      /* CONSOLE STYLING - LARGER */
+      /* Console styling */
       .console-output {
         background-color: #2b2b2b;
         color: #f8f8f8;
         font-family: 'Courier New', monospace;
         text-align: left;
-        padding: 20px;
+        padding: 15px;
         margin: 20px auto;
-        border-radius: 6px;
-        min-height: 200px;
-        height: 400px;
+        border-radius: 4px;
+        max-height: 400px;
         overflow-y: auto;
-        width: 90%;
-        border: 2px solid #666;
-        font-size: 14px;
-        white-space: pre-wrap;
+        max-width: 90%;
+        border: 1px solid #555;
       }
     "))
   ),
 
   div(class = "content",
-    # Main title
-    div(class = "header", "Statistik over afdelingens aktiviteter"),
+      # Main title
+      div(class = "header", "Statistik over afdelingens aktiviteter"),
 
-    # Data preparation section
-    div(class = "subheader", "Dataforberedelse"),
-    div(class = "links",
-        actionButton(
-          "download_data",
-          "Download Sharepoint data",
-          class = "link-button"
-        )
-    ),
-    uiOutput("status_message"),
+      # Data preparation section
+      div(class = "subheader", "Dataforberedelse"),
+      div(class = "links",
+          actionButton(
+            "download_data",
+            "Download Sharepoint data",
+            class = "link-button"
+          )
+      ),
+      uiOutput("status_message"),
 
-    # Console output area with styling
-    div(class = "console-output",
-        verbatimTextOutput("console_output")
-    )
+      # Console output area with styling
+      div(class = "console-output",
+          verbatimTextOutput("console_output")
+      )
   ),
 
   # Footer
@@ -125,56 +121,85 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
 
-  # Reactive value to track script execution status
+  # Reactive values to track script execution status and console text
   script_status <- reactiveVal(NULL)
+  console_text  <- reactiveVal("")
 
-  # Initialize console with empty content
+  # Render console text
   output$console_output <- renderPrint({
-    "Click 'Download Sharepoint data' to run the script and see output here."
+    cat(console_text())
   })
 
-  # Observe download data button click - SIMPLE VERSION
+  # Observe download data button click
   observeEvent(input$download_data, {
     # Disable button during execution
     shinyjs::disable("download_data")
 
-    # Show initial message
-    output$console_output <- renderPrint({
-      cat("Starting script execution...\n")
-      cat("Please wait...\n")
-    })
+    # Clear previous console output and status
+    console_text("")
+    script_status(NULL)
 
-    tryCatch({
-      # Get script path
-      script_path <- file.path(here("statistik", "scripts"), "download, prepare, save.R")
+    # Path to script (adjust if needed)
+    script_path <- file.path(here("statistik", "scripts"), "download, prepare, save.R")
 
-      # Simple test output
-      output$console_output <- renderPrint({
-        cat("Script path:", script_path, "\n")
-        cat("File exists:", file.exists(script_path), "\n")
-        cat("--- Starting script execution ---\n")
+    # Capture all console output (stdout + messages) in one go
+    txt <- character()
+    tmp_con <- textConnection("txt", "w", local = TRUE)
 
-        # Try to run the script
-        if(file.exists(script_path)) {
-          source(script_path, echo = TRUE, max.deparse.length = 1000)
-          cat("--- Script completed successfully ---\n")
-        } else {
-          cat("ERROR: Script file not found!\n")
-        }
-      })
+    # Redirect both output and messages
+    sink(tmp_con)
+    sink(tmp_con, type = "message")
 
-      # Set success status
-      script_status(list(type = "success", message = "Data succesfuldt downloadet og forberedt!"))
+    ok <- TRUE
+    err_msg <- NULL
 
-    }, error = function(e) {
-      # Set error status
-      script_status(list(type = "error", message = paste("Fejl under kørsel:", e$message)))
+    # Run the script, echoing code like in the console
+    tryCatch(
+      {
+        source(script_path,
+               echo = TRUE,
+               max.deparse.length = 1000)
+      },
+      error = function(e) {
+        ok <<- FALSE
+        err_msg <<- conditionMessage(e)
+      }
+    )
 
-      # Show error in console
-      output$console_output <- renderPrint({
-        cat("ERROR:", e$message, "\n")
-      })
-    })
+    # Stop redirecting
+    sink(type = "message")
+    sink()
+    close(tmp_con)
+
+    # Prepare console-like text
+    if (ok) {
+      console_text(paste(
+        c(
+          "=== CODE + OUTPUT ===",
+          txt
+        ),
+        collapse = "\n"
+      ))
+      script_status(list(
+        type    = "success",
+        message = "Data succesfuldt downloadet og forberedt!"
+      ))
+    } else {
+      console_text(paste(
+        c(
+          "ERROR:",
+          err_msg,
+          "",
+          "=== PARTIAL CODE + OUTPUT UNTIL ERROR ===",
+          txt
+        ),
+        collapse = "\n"
+      ))
+      script_status(list(
+        type    = "error",
+        message = paste("Fejl under kørsel:", err_msg)
+      ))
+    }
 
     # Re-enable button after execution
     shinyjs::enable("download_data")
