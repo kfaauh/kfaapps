@@ -2,12 +2,12 @@
 library(shiny)
 library(here)
 library(shinyjs)
+library(htmltools)   # for htmlEscape if needed
 
 ui <- fluidPage(
   useShinyjs(),  # Initialize shinyjs
   tags$head(
     tags$style(HTML("
-      /* Your existing CSS styles */
       /* Ensure the page always fills viewport */
       html, body {
         height: 100%;
@@ -76,50 +76,63 @@ ui <- fluidPage(
         color: #721c24;
         border: 1px solid #f5c6cb;
       }
-      /* CONSOLE STYLING - LARGER */
+
+      /* Console styling */
       .console-output {
         background-color: #2b2b2b;
         color: #f8f8f8;
         font-family: 'Courier New', monospace;
         text-align: left;
-        padding: 20px;
+        padding: 15px;
         margin: 20px auto;
-        border-radius: 6px;
-        min-height: 200px;
-        height: 400px;
+        border-radius: 4px;
+
+        /* Make it larger */
+        min-height: 250px;
+        max-height: 65vh;
+        width: 100%;
+        max-width: 1000px;
+
         overflow-y: auto;
-        width: 90%;
-        border: 2px solid #666;
-        font-size: 14px;
+        border: 1px solid #555;
+
+        /* Preserve line breaks and wrap long lines */
         white-space: pre-wrap;
+        word-wrap: break-word;
       }
     "))
   ),
 
-  div(class = "content",
+  div(
+    class = "content",
     # Main title
     div(class = "header", "Statistik over afdelingens aktiviteter"),
 
     # Data preparation section
     div(class = "subheader", "Dataforberedelse"),
-    div(class = "links",
-        actionButton(
-          "download_data",
-          "Download Sharepoint data",
-          class = "link-button"
-        )
+    div(
+      class = "links",
+      actionButton(
+        "download_data",
+        "Download Sharepoint data",
+        class = "link-button"
+      )
     ),
     uiOutput("status_message"),
 
-    # Console output area with styling - CHANGED to htmlOutput
-    div(class = "console-output",
-        htmlOutput("console_output")
+    # Console output area:
+    # use a plain div so shinyjs::html() can write into it directly
+    div(
+      id = "console_output",
+      class = "console-output",
+      ""   # start empty
     )
   ),
 
   # Footer
-  div(class = "footer",
-      "Support: Ole Andersen, oleemil@biomed.au.dk"
+  div(
+    class = "footer",
+    "Support: Ole Andersen, oleemil@biomed.au.dk"
   )
 )
 
@@ -128,57 +141,72 @@ server <- function(input, output, session) {
   # Reactive value to track script execution status
   script_status <- reactiveVal(NULL)
 
-  # Initialize console with empty content
-  output$console_output <- renderUI({
-    HTML("Click 'Download Sharepoint data' to run the script and see output here.")
-  })
-
-  # Observe download data button click - USING withCallingHandlers
   observeEvent(input$download_data, {
     # Disable button during execution
     shinyjs::disable("download_data")
 
-    # Clear the console
+    # Clear previous console and status
     shinyjs::html("console_output", "")
+    script_status(NULL)
+
+    # Inform user that execution started
+    shinyjs::html(
+      id   = "console_output",
+      html = "Starter download- og forberedelsesscript...\n",
+      add  = TRUE
+    )
+
+    script_path <- file.path(here("statistik", "scripts"), "download, prepare, save.R")
 
     tryCatch({
-      # Get script path
-      script_path <- file.path(here("statistik", "scripts"), "download, prepare, save.R")
 
-      # Use withCallingHandlers to capture all output
+      # Stream messages from the script to the 'console_output' div
       withCallingHandlers(
         {
-          # Add starting message
-          shinyjs::html("console_output", "=== Starting script execution ===<br>", add = TRUE)
-          shinyjs::html("console_output", paste("Script path:", script_path, "<br>"), add = TRUE)
-          shinyjs::html("console_output", paste("File exists:", file.exists(script_path), "<br>"), add = TRUE)
-
-          if(file.exists(script_path)) {
-            shinyjs::html("console_output", "--- Running script ---<br>", add = TRUE)
-            source(script_path, echo = TRUE, max.deparse.length = 1000)
-            shinyjs::html("console_output", "--- Script completed successfully ---<br>", add = TRUE)
-          } else {
-            stop("Script file not found")
-          }
+          # Run your script; use message() in this script to send updates here
+          source(script_path, local = TRUE)
         },
         message = function(m) {
-          shinyjs::html(id = "console_output", html = paste0(m$message, "<br>"), add = TRUE)
-        },
-        warning = function(w) {
-          shinyjs::html(id = "console_output", html = paste0("WARNING: ", w$message, "<br>"), add = TRUE)
-        },
-        error = function(e) {
-          shinyjs::html(id = "console_output", html = paste0("ERROR: ", e$message, "<br>"), add = TRUE)
-          stop(e)
+          # Append each message line to the console
+          shinyjs::html(
+            id   = "console_output",
+            html = paste0(m$message, "\n"),
+            add  = TRUE
+          )
+          # Avoid also printing to the real console
+          invokeRestart("muffleMessage")
         }
       )
 
-      # Set success status
-      script_status(list(type = "success", message = "Data succesfuldt downloadet og forberedt!"))
+      # If we got here, script finished successfully
+      script_status(list(
+        type    = "success",
+        message = "Data succesfuldt downloadet og forberedt!"
+      ))
+
+      shinyjs::html(
+        id   = "console_output",
+        html = "\nScript færdigt.\n",
+        add  = TRUE
+      )
 
     }, error = function(e) {
-      # Set error status
-      script_status(list(type = "error", message = paste("Fejl under kørsel:", e$message)))
+
+      # On error, show status and error message in the console
+      script_status(list(
+        type    = "error",
+        message = paste("Fejl under kørsel:", e$message)
+      ))
+
+      shinyjs::html(
+        id   = "console_output",
+        html = paste0(
+          "\nERROR: ",
+          htmltools::htmlEscape(e$message),
+          "\n"
+        ),
+        add  = TRUE
+      )
     })
 
     # Re-enable button after execution
