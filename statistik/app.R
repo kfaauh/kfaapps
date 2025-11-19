@@ -17,30 +17,32 @@ ui <- fluidPage(
         color: #0033A0;          /* Pantone 287 */
         font-family: Arial, sans-serif;
         text-align: center;
-        padding: 60px 20px 40px;
+        padding: 40px 20px 30px;  /* slightly tighter */
         display: flex;
         flex-direction: column;
         min-height: 100vh;
       }
       .content {
         flex: 1;
+        max-width: 1200px;
+        margin: 0 auto;
       }
       .header {
         font-size: 3em;
-        margin-bottom: 0.2em;
+        margin-bottom: 0.3em;
       }
       .subheader {
         font-size: 1.5em;
-        margin-top: 1.5em;
-        margin-bottom: 0.5em;
+        margin-top: 1.2em;
+        margin-bottom: 0.4em;
         color: #555;
       }
       .links {
-        margin: 1.0em 0;
+        margin: 0.8em 0;
       }
       .link-button {
         display: inline-block;
-        margin: 0.5em;
+        margin: 0.3em;
         padding: 0.8em 1.8em;
         font-size: 1.1em;
         color: white;
@@ -55,19 +57,19 @@ ui <- fluidPage(
       }
       .footer {
         margin-top: auto;
-        padding: 20px 0;
+        padding: 15px 0;
         font-size: 0.9em;
         color: #555;
       }
       .status-message {
-        margin-top: 0.5em;
-        padding: 0.6em 0.8em;
+        margin-top: 0.4em;
+        padding: 0.5em 0.8em;
         border-radius: 4px;
         font-weight: bold;
         text-align: left;
         display: inline-block;
         max-width: 900px;
-        font-size: 0.9em;      /* smaller status box text */
+        font-size: 0.9em;
       }
       .status-success {
         background-color: #d4edda;
@@ -86,12 +88,12 @@ ui <- fluidPage(
         color: #f8f8f8;
         font-family: 'Courier New', monospace;
         text-align: left;
-        padding: 15px;
-        margin: 10px auto 20px auto;
+        padding: 12px;
+        margin: 8px auto 15px auto;
         border-radius: 4px;
 
-        min-height: 200px;
-        max-height: 60vh;
+        min-height: 150px;
+        max-height: 50vh;
         width: 100%;
         max-width: 1100px;
 
@@ -103,7 +105,7 @@ ui <- fluidPage(
       }
 
       details {
-        margin-top: 10px;
+        margin-top: 5px;
       }
 
       details > summary {
@@ -122,6 +124,12 @@ ui <- fluidPage(
         color: #444;
         margin-top: 0.3em;
       }
+
+      .section-separator {
+        border-top: 1px solid #cccccc;
+        margin: 16px auto;
+        width: 85%;
+      }
     "))
   ),
 
@@ -130,6 +138,8 @@ ui <- fluidPage(
 
     # Main title
     div(class = "header", "Statistik over afdelingens aktiviteter"),
+
+    div(class = "section-separator"),
 
     # ---- Aktivitetsstatus (top) ----
     div(class = "subheader", "Aktivitetsstatus"),
@@ -146,7 +156,7 @@ ui <- fluidPage(
     # Plot area + download buttons
     div(
       class = "links",
-      plotOutput("activity_plot", height = "650px")  # taller → text larger on screen
+      plotOutput("activity_plot", height = "500px")  # container height
     ),
     div(
       class = "links",
@@ -157,13 +167,10 @@ ui <- fluidPage(
       )
     ),
 
+    div(class = "section-separator"),
+
     # ---- Synkroniser data (bottom) ----
     div(class = "subheader", "Synkroniser data med Sharepoint"),
-
-    div(
-      class = "last-sync-text",
-      textOutput("last_sync", inline = TRUE)
-    ),
 
     div(
       class = "links",
@@ -174,8 +181,18 @@ ui <- fluidPage(
       )
     ),
 
-    # User-facing status box (smaller, near bottom)
-    uiOutput("status_message"),
+    div(
+      class = "last-sync-text",
+      textOutput("last_sync", inline = TRUE)
+    ),
+
+    # User-facing status box (small, near bottom)
+    div(
+      class = "links",
+      uiOutput("status_message")
+    ),
+
+    div(class = "section-separator"),
 
     # Foldable technical console
     tags$details(
@@ -481,13 +498,20 @@ server <- function(input, output, session) {
   })
 
   # Render the activity plot in the UI
-  output$activity_plot <- renderPlot({
-    req(activity_plot())
-    grid::grid.newpage()
-    grid::grid.draw(activity_plot())
-  })
+  # -> use a relatively small device so the browser scales it up
+  #    = visually larger text without touching saved-file theme
+  output$activity_plot <- renderPlot(
+    {
+      req(activity_plot())
+      grid::grid.newpage()
+      grid::grid.draw(activity_plot())
+    },
+    width  = 600,   # pixels on server
+    height = 400,   # pixels on server
+    res    = 96
+  )
 
-  # Download handlers for PNG / SVG
+  # Download handlers for PNG / SVG (8x5 in @ 300dpi unchanged)
   output$download_plot_png <- downloadHandler(
     filename = function() {
       paste0("activity_plot_", Sys.Date(), ".png")
