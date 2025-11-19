@@ -76,20 +76,23 @@ ui <- fluidPage(
         color: #721c24;
         border: 1px solid #f5c6cb;
       }
-      /* ADD THIS FOR CONSOLE STYLING */
-      .console-output {
-        background-color: #2b2b2b;
-        color: #f8f8f8;
-        font-family: 'Courier New', monospace;
-        text-align: left;
-        padding: 15px;
-        margin: 20px auto;
-        border-radius: 4px;
-        max-height: 400px;
-        overflow-y: auto;
-        max-width: 90%;
-        border: 1px solid #555;
-      }
+      /* CONSOLE STYLING */
+.console-output {
+  background-color: #2b2b2b;
+  color: #f8f8f8;
+  font-family: 'Courier New', monospace;
+  text-align: left;
+  padding: 20px;
+  margin: 20px auto;
+  border-radius: 6px;
+  min-height: 200px;
+  max-height: 500px;
+  overflow-y: auto;
+  width: 90%;
+  border: 2px solid #666;
+  font-size: 14px;
+  white-space: pre-wrap;
+}
     "))
   ),
 
@@ -125,33 +128,31 @@ server <- function(input, output, session) {
   # Reactive value to track script execution status
   script_status <- reactiveVal(NULL)
 
- # Observe download data button click
+# Observe download data button click - TEST VERSION
 observeEvent(input$download_data, {
   # Disable button during execution
   shinyjs::disable("download_data")
 
-  # Clear previous console output
-  output$console_output <- renderPrint({ "" })
-
   tryCatch({
-    # Run the data preparation script and capture ALL output
+    # Test with simple output first
     output$console_output <- renderPrint({
-      # Capture messages, warnings, and output
-      result <- capture.output({
-        source(file.path(here("statistik", "scripts"), "download, prepare, save.R"),
-               echo = TRUE, max.deparse.length = 1000)
-      }, type = "output")
+      cat("=== STARTING SCRIPT EXECUTION ===\n")
+      cat("Current time:", format(Sys.time(), "%H:%M:%S"), "\n")
+      cat("Script path:", file.path(here("statistik", "scripts"), "download, prepare, save.R"), "\n")
 
-      # Also capture messages separately
-      messages <- capture.output({
-        source(file.path(here("statistik", "scripts"), "download, prepare, save.R"))
-      }, type = "message")
+      # Check if file exists
+      script_path <- file.path(here("statistik", "scripts"), "download, prepare, save.R")
+      if(file.exists(script_path)) {
+        cat("Script file exists: YES\n")
+        cat("=== RUNNING SCRIPT ===\n")
 
-      # Combine and display all output
-      cat("=== CODE EXECUTION OUTPUT ===\n")
-      cat(result, sep = "\n")
-      cat("\n=== MESSAGES AND WARNINGS ===\n")
-      cat(messages, sep = "\n")
+        # Run the script
+        source(script_path, echo = TRUE, max.deparse.length = 1000)
+
+        cat("=== SCRIPT COMPLETED ===\n")
+      } else {
+        cat("ERROR: Script file not found at:", script_path, "\n")
+      }
     })
 
     # Set success status
@@ -161,7 +162,7 @@ observeEvent(input$download_data, {
     # Set error status
     script_status(list(type = "error", message = paste("Fejl under kørsel:", e$message)))
 
-    # Also show error in console output
+    # Show error in console
     output$console_output <- renderPrint({
       cat("ERROR:", e$message, "\n")
     })
