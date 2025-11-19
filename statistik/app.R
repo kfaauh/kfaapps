@@ -125,6 +125,18 @@ ui <- fluidPage(
 
     # Data preparation section
     div(class = "subheader", "Dataforberedelse"),
+
+    # NEW: button to generate current activities plot
+    div(
+      class = "links",
+      actionButton(
+        "run_plot",
+        "Opdater aktivitetsplot",
+        class = "link-button"
+      )
+    ),
+
+    # Existing: button to download/prepare data
     div(
       class = "links",
       actionButton(
@@ -136,6 +148,20 @@ ui <- fluidPage(
 
     # User-facing status box
     uiOutput("status_message"),
+
+    # Plot area + download buttons
+    div(
+      class = "links",
+      plotOutput("activity_plot", height = "500px")
+    ),
+    div(
+      class = "links",
+      conditionalPanel(
+        condition = "output.plot_available == true",
+        downloadButton("download_plot_png", "Download plot (PNG)"),
+        downloadButton("download_plot_svg", "Download plot (SVG)")
+      )
+    ),
 
     # Foldable technical console
     tags$details(
@@ -157,8 +183,19 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
 
-  # Reactive value to track script execution status
+  # Reactive value to track script execution status (for user-facing box)
   script_status <- reactiveVal(NULL)
+
+  # Reactive to hold the current activity plot (grid grob)
+  activity_plot <- reactiveVal(NULL)
+
+  # Small indicator so we can hide/show download buttons
+  output$plot_available <- reactive({
+    !is.null(activity_plot())
+  })
+  outputOptions(output, "plot_available", suspendWhenHidden = FALSE)
+
+  # -------------------------- DOWNLOAD DATA SCRIPT -------------------------- #
 
   observeEvent(input$download_data, {
     shinyjs::disable("download_data")
@@ -287,7 +324,145 @@ server <- function(input, output, session) {
     shinyjs::enable("download_data")
   })
 
-  # Render status message (user-facing)
+  # -------------------------- CURRENT ACTIVITIES PLOT ----------------------- #
+
+  observeEvent(input$run_plot, {
+    shinyjs::disable("run_plot")
+
+    # Clear console and status for this run
+    shinyjs::html("console_output", "")
+    script_status(NULL)
+
+    shinyjs::html(
+      id   = "console_output",
+      html = "Starter script til aktivitetsplot...\n\n",
+      add  = TRUE
+    )
+
+    script_path_plot <- file.path(
+      here("statistik", "scripts"),
+      "current activities graph.R"
+    )
+
+    if (!file.exists(script_path_plot)) {
+      shinyjs::html(
+        id   = "console_output",
+        html = paste0(
+          "FEJL: Aktivitetsplot-script ikke fundet:\n",
+          script_path_plot, "\n"
+        ),
+        add  = TRUE
+      )
+
+      script_status(list(
+        type    = "error",
+        message = "Scriptet til aktivitetsplot blev ikke fundet. Kontakt support."
+      ))
+
+      shinyjs::enable("run_plot")
+      return(invisible(NULL))
+    }
+
+    # Run the plot script in its own environment to capture 'combined_grob'
+    tryCatch(
+      {
+        plot_env <- new.env(parent = globalenv())
+
+        withCallingHandlers(
+          {
+            message("Kører aktivitetsplot-script: ", script_path_plot)
+
+            # This script is assumed to create 'combined_grob'
+            source(script_path_plot, local = plot_env)
+          },
+          message = function(m) {
+            shinyjs::html(
+              id   = "console_output",
+              html = paste0(m$message, "\n"),
+              add  = TRUE
+            )
+            invokeRestart("muffleMessage")
+          }
+        )
+
+        if (!exists("combined_grob", envir = plot_env, inherits = FALSE)) {
+          stop("combined_grob not found efter kørsel af aktivitetsplot-script.")
+        }
+
+        # Store the plot grob for rendering + download
+        activity_plot(get("combined_grob", envir = plot_env))
+
+        script_status(list(
+          type    = "success",
+          message = "Aktivitetsplot opdateret (data uændret)."
+        ))
+
+        shinyjs::html(
+          id   = "console_output",
+          html = "\nAktivitetsplot-script færdigt.\n",
+          add  = TRUE
+        )
+
+      },
+      error = function(e) {
+        err_msg <- e$message
+
+        script_status(list(
+          type    = "error",
+          message = "Der opstod en fejl under opdatering af aktivitetsplot. Se tekniske detaljer eller kontakt support."
+        ))
+
+        shinyjs::html(
+          id   = "console_output",
+          html = paste0(
+            "\n*** TEKNISK FEJL (aktivitetsplot) ***\n",
+            err_msg,
+            "\n*************************************\n"
+          ),
+          add  = TRUE
+        )
+      }
+    )
+
+    shinyjs::enable("run_plot")
+  })
+
+  # Render the activity plot in the UI
+  output$activity_plot <- renderPlot({
+    req(activity_plot())
+    grid::grid.newpage()
+    grid::grid.draw(activity_plot())
+  })
+
+  # Download handlers for PNG / SVG
+  output$download_plot_png <- downloadHandler(
+    filename = function() {
+      paste0("activity_plot_", Sys.Date(), ".png")
+    },
+    content = function(file) {
+      req(activity_plot())
+      grDevices::png(file, width = 8, height = 5, units = "in", res = 300)
+      grid::grid.newpage()
+      grid::grid.draw(activity_plot())
+      grDevices::dev.off()
+    }
+  )
+
+  output$download_plot_svg <- downloadHandler(
+    filename = function() {
+      paste0("activity_plot_", Sys.Date(), ".svg")
+    },
+    content = function(file) {
+      req(activity_plot())
+      grDevices::svg(file, width = 8, height = 5)
+      grid::grid.newpage()
+      grid::grid.draw(activity_plot())
+      grDevices::dev.off()
+    }
+  )
+
+  # -------------------------- STATUS BOX RENDERING -------------------------- #
+
   output$status_message <- renderUI({
     status <- script_status()
     if (!is.null(status)) {
