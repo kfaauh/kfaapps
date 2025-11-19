@@ -55,12 +55,30 @@ creation_date_string <- format(Sys.Date(), "%d-%m-%y")
 # 3. AZURE DATA LOADING
 # =============================================================================
 
-message("\nLoading data from Azure...")
+ message("\nLoading data from Azure...")
+    # OLD APPROACH THAT WORKS LOCALLY
+# # Load site and document library
+# site_list <- list_sharepoint_sites()
+# site <- site_list[[1]]
+# doc_lib <- site$get_list("Dokumenter")
 
-# Load site and document library
-site_list <- list_sharepoint_sites()
+    # NEW APPROACH THAT SHOULD WORK ON SERVER
+
+# Use device_code auth so it works from Shiny / RStudio Server etc.
+# This will print a URL + code in the Shiny console box.
+# Open the URL in your browser, enter the code, complete login.
+site_list <- list_sharepoint_sites(
+  auth_type = "device_code"
+  # you can also specify tenant explicitly if needed, e.g.:
+  # tenant = "yourtenant.onmicrosoft.com"
+)
+
+# Pick the first site (as before)
 site <- site_list[[1]]
+
+# Get the document library
 doc_lib <- site$get_list("Dokumenter")
+
 
 # Define display names
 cols_to_analyze <- c(
