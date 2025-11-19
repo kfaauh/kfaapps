@@ -2,7 +2,6 @@
 library(shiny)
 library(here)
 library(shinyjs)
-library(htmltools)   # for htmlEscape if needed
 
 ui <- fluidPage(
   useShinyjs(),  # Initialize shinyjs
@@ -87,11 +86,11 @@ ui <- fluidPage(
         margin: 20px auto;
         border-radius: 4px;
 
-        /* Make it larger */
-        min-height: 250px;
-        max-height: 65vh;
+        /* Bigger console box */
+        min-height: 300px;
+        max-height: 70vh;
         width: 100%;
-        max-width: 1000px;
+        max-width: 1100px;
 
         overflow-y: auto;
         border: 1px solid #555;
@@ -121,7 +120,7 @@ ui <- fluidPage(
     uiOutput("status_message"),
 
     # Console output area:
-    # use a plain div so shinyjs::html() can write into it directly
+    # Just a <div> with an id that we will fill via shinyjs::html()
     div(
       id = "console_output",
       class = "console-output",
@@ -141,90 +140,104 @@ server <- function(input, output, session) {
   # Reactive value to track script execution status
   script_status <- reactiveVal(NULL)
 
-  # Initialize console with empty content
-  output$console_output <- renderUI({
-    HTML("Click 'Download Sharepoint data' to run the script and see output here.")
-  })
-
-  # Observe download data button click - DEBUG VERSION
   observeEvent(input$download_data, {
-    # Disable button during execution
     shinyjs::disable("download_data")
 
-    # Clear the console
+    # Clear previous console and status
     shinyjs::html("console_output", "")
+    script_status(NULL)
 
-    tryCatch({
-      # Get script path
-      script_path <- file.path(here("statistik", "scripts"), "download, prepare, save.R")
+    # Always show *something* when button is pressed
+    shinyjs::html(
+      id   = "console_output",
+      html = "Knap trykket – starter download- og forberedelsesscript...\n",
+      add  = TRUE
+    )
 
-      # First, let's test if the script exists and can be read
-      shinyjs::html("console_output", paste("Script path:", script_path, "<br>"), add = TRUE)
-      shinyjs::html("console_output", paste("File exists:", file.exists(script_path), "<br>"), add = TRUE)
+    # Path to your script
+    script_path <- file.path(
+      here("statistik", "scripts"),
+      "download, prepare, save.R"
+    )
 
-      if(file.exists(script_path)) {
-        shinyjs::html("console_output", "File exists! Reading script content...<br>", add = TRUE)
+    # If script does not exist, show an error directly in the console
+    if (!file.exists(script_path)) {
+      shinyjs::html(
+        id   = "console_output",
+        html = paste0(
+          "FEJL: Script ikke fundet:\n",
+          script_path, "\n"
+        ),
+        add  = TRUE
+      )
 
-        # Read the first few lines of the script to verify it's accessible
-        script_content <- readLines(script_path, n = 10)
-        shinyjs::html("console_output", "First 10 lines of script:<br>", add = TRUE)
-        for(line in script_content) {
-          shinyjs::html("console_output", paste(line, "<br>"), add = TRUE)
-        }
+      script_status(list(
+        type    = "error",
+        message = "Scriptfilen blev ikke fundet."
+      ))
 
-        shinyjs::html("console_output", "<br>--- Attempting to run script ---<br>", add = TRUE)
+      shinyjs::enable("download_data")
+      return(invisible(NULL))
+    }
 
-        # Try a simple test first - run a basic R command
-        shinyjs::html("console_output", "Testing basic R command: 2+2<br>", add = TRUE)
-        result <- 2 + 2
-        shinyjs::html("console_output", paste("Result:", result, "<br>"), add = TRUE)
+    # Try to run script and stream messages
+    tryCatch(
+      {
 
-        # Now try to source the script with capture.output
-        shinyjs::html("console_output", "<br>--- Sourcing script with capture.output ---<br>", add = TRUE)
-        captured <- capture.output({
-          source(script_path, echo = TRUE)
-        }, type = "output")
+        withCallingHandlers(
+          {
+            # This message will *always* show in the console
+            message("Kører script: ", script_path)
 
-        if(length(captured) > 0) {
-          shinyjs::html("console_output", paste("Captured", length(captured), "lines of output<br>"), add = TRUE)
-          for(line in captured) {
-            shinyjs::html("console_output", paste(line, "<br>"), add = TRUE)
+            # Run your script.
+            # IMPORTANT: inside this script, use message(\"...\") to send live updates.
+            source(script_path, local = TRUE)
+          },
+          message = function(m) {
+            # Append each message line to the console
+            shinyjs::html(
+              id   = "console_output",
+              html = paste0(m$message, "\n"),
+              add  = TRUE
+            )
+            # Prevent duplicate printing in the real R console
+            invokeRestart("muffleMessage")
           }
-        } else {
-          shinyjs::html("console_output", "No output was captured from the script<br>", add = TRUE)
-        }
+        )
 
-      } else {
-        shinyjs::html("console_output", "ERROR: Script file not found!<br>", add = TRUE)
-        stop("Script file not found")
+        # If we got here, script finished successfully
+        script_status(list(
+          type    = "success",
+          message = "Data succesfuldt downloadet og forberedt!"
+        ))
+
+        shinyjs::html(
+          id   = "console_output",
+          html = "\nScript færdigt.\n",
+          add  = TRUE
+        )
+      },
+      error = function(e) {
+        # On error, show status and error in console
+        script_status(list(
+          type    = "error",
+          message = paste("Fejl under kørsel:", e$message)
+        ))
+
+        shinyjs::html(
+          id   = "console_output",
+          html = paste0(
+            "\nERROR: ",
+            e$message,
+            "\n"
+          ),
+          add  = TRUE
+        )
       }
+    )
 
-      # Set success status
-      script_status(list(type = "success", message = "Script execution completed!"))
-
-    }, error = function(e) {
-      # Set error status
-      script_status(list(type = "error", message = paste("Fejl under kørsel:", e$message)))
-
-      # Show error in console
-      shinyjs::html("console_output", paste("<br>ERROR:", e$message, "<br>"), add = TRUE)
-    })
-
-    # Re-enable button after execution
     shinyjs::enable("download_data")
   })
-
-  # Render status message
-  output$status_message <- renderUI({
-    status <- script_status()
-    if (!is.null(status)) {
-      div(
-        class = paste("status-message", paste0("status-", status$type)),
-        status$message
-      )
-    }
-  })
-}
 
   # Render status message
   output$status_message <- renderUI({

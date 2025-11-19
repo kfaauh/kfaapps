@@ -24,7 +24,7 @@
 # load_pkg("here")
 # load_pkg("tidyr")
 
-print("Start of script")
+message("Start of script")
 
 # Simple approach for server
 library(Microsoft365R)
