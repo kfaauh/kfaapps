@@ -92,8 +92,11 @@ ui <- fluidPage(
           class = "link-button"
         )
     ),
-    uiOutput("status_message")
+    uiOutput("status_message"),
+    # ADD THIS LINE FOR CONSOLE OUTPUT
+verbatimTextOutput("console_output")
   ),
+
 
   # Footer
   div(class = "footer",
