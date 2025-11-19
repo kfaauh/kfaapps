@@ -110,25 +110,32 @@ server <- function(input, output, session) {
   script_status <- reactiveVal(NULL)
 
   # Observe download data button click
-  observeEvent(input$download_data, {
-    # Disable button during execution
-    shinyjs::disable("download_data")
+  # Observe download data button click
+observeEvent(input$download_data, {
+  # Disable button during execution
+  shinyjs::disable("download_data")
 
-    tryCatch({
-      # Run the data preparation script
-      source(file.path(here("statistik", "scripts"), "download, prepare, save.R"))
+  # Clear previous console output
+  output$console_output <- renderPrint({ "" })
 
-      # Set success status
-      script_status(list(type = "success", message = "Data succesfuldt downloadet og forberedt!"))
-
-    }, error = function(e) {
-      # Set error status
-      script_status(list(type = "error", message = paste("Fejl under kørsel:", e$message)))
+  tryCatch({
+    # Run the data preparation script and capture output
+    output$console_output <- renderPrint({
+      source(file.path(here("statistik", "scripts"), "download, prepare, save.R"),
+             echo = TRUE, max.deparse.length = 1000)
     })
 
-    # Re-enable button after execution
-    shinyjs::enable("download_data")
+    # Set success status
+    script_status(list(type = "success", message = "Data succesfuldt downloadet og forberedt!"))
+
+  }, error = function(e) {
+    # Set error status
+    script_status(list(type = "error", message = paste("Fejl under kørsel:", e$message)))
   })
+
+  # Re-enable button after execution
+  shinyjs::enable("download_data")
+})
 
   # Render status message
   output$status_message <- renderUI({
