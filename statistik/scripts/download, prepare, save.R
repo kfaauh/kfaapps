@@ -6,23 +6,32 @@
 # 1. PACKAGE LOADING
 # =============================================================================
 
-# Function to load packages
-load_pkg <- function(pkg) {
-  if(!require(pkg, character.only = TRUE, quietly = TRUE)) {
-    install.packages(pkg, dependencies = TRUE)
-    library(pkg, character.only = TRUE)
-  }
-  message("✓ Loaded: ", pkg)
-}
+# # Function to load packages
+# load_pkg <- function(pkg) {
+#   if(!require(pkg, character.only = TRUE, quietly = TRUE)) {
+#     install.packages(pkg, dependencies = TRUE)
+#     library(pkg, character.only = TRUE)
+#   }
+#   message("✓ Loaded: ", pkg)
+# }
+#
+# # Load required packages
+# load_pkg("Microsoft365R")
+# load_pkg("dplyr")
+# load_pkg("readr")
+# load_pkg("lubridate")
+# load_pkg("readxl")
+# load_pkg("here")
+# load_pkg("tidyr")
 
-# Load required packages
-load_pkg("Microsoft365R")
-load_pkg("dplyr")
-load_pkg("readr")
-load_pkg("lubridate")
-load_pkg("readxl")
-load_pkg("here")
-load_pkg("tidyr")
+# Simple approach for server
+library(Microsoft365R)
+library(dplyr)
+library(readr)
+library(lubridate)
+library(readxl)
+library(here)
+library(tidyr)
 
 
 # =============================================================================
