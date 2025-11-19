@@ -24,8 +24,6 @@
 # load_pkg("here")
 # load_pkg("tidyr")
 
-message("Start of script")
-
 # Simple approach for server
 library(Microsoft365R)
 library(dplyr)

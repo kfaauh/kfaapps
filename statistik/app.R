@@ -64,6 +64,9 @@ ui <- fluidPage(
         padding: 1em;
         border-radius: 4px;
         font-weight: bold;
+        text-align: left;
+        display: inline-block;
+        max-width: 900px;
       }
       .status-success {
         background-color: #d4edda;
@@ -98,10 +101,19 @@ ui <- fluidPage(
         word-wrap: break-word;
       }
 
-      .console-caption {
-        font-size: 0.9em;
-        color: #777;
-        margin-top: 5px;
+      details {
+        margin-top: 10px;
+      }
+
+      details > summary {
+        cursor: pointer;
+        font-weight: bold;
+        color: #0033A0;
+        list-style: none;
+      }
+
+      details > summary::-webkit-details-marker {
+        display: none;
       }
     "))
   ),
@@ -122,24 +134,17 @@ ui <- fluidPage(
       )
     ),
 
-    # Nice, user-facing status box
+    # User-facing status box
     uiOutput("status_message"),
 
-    # Toggle for technical log
-    div(
-      class = "links",
-      actionLink("toggle_console", "Vis/skjul tekniske detaljer")
-    ),
-    div(
-      class = "console-caption",
-      "Tekniske detaljer vises kun for fejlsøgning (kan ignoreres for almindelig brug)."
-    ),
-
-    # Technical console (initially hidden)
-    div(
-      id = "console_output",
-      class = "console-output",
-      ""   # start empty
+    # Foldable technical console
+    tags$details(
+      tags$summary("Tekniske detaljer (klik for at folde ud)"),
+      div(
+        id = "console_output",
+        class = "console-output",
+        ""   # start empty
+      )
     )
   ),
 
@@ -155,14 +160,6 @@ server <- function(input, output, session) {
   # Reactive value to track script execution status
   script_status <- reactiveVal(NULL)
 
-  # Hide the console by default
-  shinyjs::hide("console_output")
-
-  # Toggle visibility of technical console
-  observeEvent(input$toggle_console, {
-    shinyjs::toggle("console_output")
-  })
-
   observeEvent(input$download_data, {
     shinyjs::disable("download_data")
 
@@ -170,7 +167,7 @@ server <- function(input, output, session) {
     shinyjs::html("console_output", "")
     script_status(NULL)
 
-    # User-friendly info in console start
+    # Short, friendly start line in console
     shinyjs::html(
       id   = "console_output",
       html = "Starter download- og forberedelsesscript...\n\n",
@@ -231,7 +228,7 @@ server <- function(input, output, session) {
         # If we got here, script finished successfully
         script_status(list(
           type    = "success",
-          message = "Data er downloadet og forberedt uden fejl."
+          message = "Data downloadet til server!"
         ))
 
         shinyjs::html(
@@ -244,22 +241,35 @@ server <- function(input, output, session) {
 
         err_msg <- e$message
 
-        # Special friendly message if Azure-token mangler/er udløbet
+        # Default: generic user-friendly text
+        msg_ui <- "Der opstod en fejl under download/forberedelse af data. Se tekniske detaljer eller kontakt support."
+
+        # If it's the Azure-auth error from your Section 3 code,
+        # show your explicit re-auth instructions.
         if (grepl("Azure authentication missing or expired", err_msg, fixed = TRUE)) {
-          script_status(list(
-            type    = "error",
-            message = paste(
-              "Azure-login er udløbet eller mangler.",
-              "Kontakt systemansvarlig for at genaktivere forbindelsen til SharePoint."
-            )
-          ))
-        } else {
-          # Generic user-facing error
-          script_status(list(
-            type    = "error",
-            message = "Der opstod en fejl under download/forberedelse af data. Se tekniske detaljer eller kontakt support."
+
+          msg_ui <- HTML(paste0(
+            "Azure skal verificeres:<br>",
+            "1. Login på server fra AU net: ",
+            "<code>ssh -J au309166@ssh.au.dk au309166@kfaapps.uni.au.dk</code><br>",
+            "2. Kopier dette til server terminalen:<br>",
+            "<pre>",
+            "R --vanilla << 'EOF'\n",
+            "library(Microsoft365R)\n\n",
+            "cat(\"\\nStarting Microsoft365R device-code login...\\n\\n\")\n\n",
+            "# One-time (or occasional) device-code login\n",
+            "site_list <- list_sharepoint_sites(auth_type = \"device_code\")\n\n",
+            "cat(\"\\nAuthentication complete. Token cached for future Shiny sessions.\\n\")\n",
+            "q(save = \"no\")\n",
+            "EOF",
+            "</pre>"
           ))
         }
+
+        script_status(list(
+          type    = "error",
+          message = msg_ui
+        ))
 
         # Full technical error in console only
         shinyjs::html(
