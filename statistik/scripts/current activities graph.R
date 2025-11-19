@@ -6,33 +6,47 @@
 # 0. PACKAGE LOADING SECTION
 # =============================================================================
 
-load_pkg <- function(pkg) {
-  if(!require(pkg, character.only = TRUE, quietly = TRUE)) {
-    install.packages(pkg, dependencies = TRUE)
-    library(pkg, character.only = TRUE)
-  }
-  message("✓ Loaded: ", pkg)
-}
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(ggplot2)
+  library(ggtext)
+  library(patchwork)
+  library(here)
+  library(lubridate)
+  library(ggchicklet)
+})
 
-# Load standard CRAN packages
-load_pkg("dplyr")
-load_pkg("tidyr")
-load_pkg("ggplot2")
-load_pkg("ggtext")
-load_pkg("patchwork")
-load_pkg("here")
-load_pkg("lubridate")
+message("✓ Pakker til aktivitetsplot er indlæst")
 
-# Special handling for ggchicklet (GitHub package)
-if (!require("ggchicklet", quietly = TRUE)) {
-  if (!require("remotes", quietly = TRUE)) {
-    install.packages("remotes")
-    library("remotes")
-  }
-  remotes::install_github("hrbrmstr/ggchicklet")
-  library("ggchicklet")
-}
-# message("✓ Loaded: ggchicklet")
+
+# load_pkg <- function(pkg) {
+#   if(!require(pkg, character.only = TRUE, quietly = TRUE)) {
+#     install.packages(pkg, dependencies = TRUE)
+#     library(pkg, character.only = TRUE)
+#   }
+#   message("✓ Loaded: ", pkg)
+# }
+#
+# # Load standard CRAN packages
+# load_pkg("dplyr")
+# load_pkg("tidyr")
+# load_pkg("ggplot2")
+# load_pkg("ggtext")
+# load_pkg("patchwork")
+# load_pkg("here")
+# load_pkg("lubridate")
+#
+# # Special handling for ggchicklet (GitHub package)
+# if (!require("ggchicklet", quietly = TRUE)) {
+#   if (!require("remotes", quietly = TRUE)) {
+#     install.packages("remotes")
+#     library("remotes")
+#   }
+#   remotes::install_github("hrbrmstr/ggchicklet")
+#   library("ggchicklet")
+# }
+# # message("✓ Loaded: ggchicklet")
 
 # =============================================================================
 # 1. Load data

@@ -449,18 +449,17 @@ message("✓ Affiliation data merged successfully")
 message("\nReorganising status values...")
 
 data.lmraad_filtered <- data.lmraad_filtered %>%
-  mutate(
+      mutate(
     Status = case_when(
-      is.na(Status) & `Svartype (*)` == "Ibrugtagningssag" ~ "Modtaget",
+      `Svartype (*)` == "Ibrugtagningssag" & !is.na(`Færdig (*)`)  ~ "Sendt",
+      `Svartype (*)` == "Ibrugtagningssag" & is.na(Status) & is.na(`Færdig (*)`) ~ "Modtaget",
       TRUE                                                 ~ Status
-    )
-  ) %>%
+    )) %>%
   mutate(
     Status = case_when(
       Status == "Modtaget" & !is.na(`Forvagt*`) ~ "Fordelt",
       TRUE                                      ~ Status
-    )
-  )
+    ))
 
 message("✓ Status values reorganised successfully")
 
