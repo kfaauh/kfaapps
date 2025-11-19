@@ -125,32 +125,51 @@ server <- function(input, output, session) {
   # Reactive value to track script execution status
   script_status <- reactiveVal(NULL)
 
-  # Observe download data button click
-  observeEvent(input$download_data, {
-    # Disable button during execution
-    shinyjs::disable("download_data")
+ # Observe download data button click
+observeEvent(input$download_data, {
+  # Disable button during execution
+  shinyjs::disable("download_data")
 
-    # Clear previous console output
-    output$console_output <- renderPrint({ "" })
+  # Clear previous console output
+  output$console_output <- renderPrint({ "" })
 
-    tryCatch({
-      # Run the data preparation script and capture output
-      output$console_output <- renderPrint({
+  tryCatch({
+    # Run the data preparation script and capture ALL output
+    output$console_output <- renderPrint({
+      # Capture messages, warnings, and output
+      result <- capture.output({
         source(file.path(here("statistik", "scripts"), "download, prepare, save.R"),
                echo = TRUE, max.deparse.length = 1000)
-      })
+      }, type = "output")
 
-      # Set success status
-      script_status(list(type = "success", message = "Data succesfuldt downloadet og forberedt!"))
+      # Also capture messages separately
+      messages <- capture.output({
+        source(file.path(here("statistik", "scripts"), "download, prepare, save.R"))
+      }, type = "message")
 
-    }, error = function(e) {
-      # Set error status
-      script_status(list(type = "error", message = paste("Fejl under kørsel:", e$message)))
+      # Combine and display all output
+      cat("=== CODE EXECUTION OUTPUT ===\n")
+      cat(result, sep = "\n")
+      cat("\n=== MESSAGES AND WARNINGS ===\n")
+      cat(messages, sep = "\n")
     })
 
-    # Re-enable button after execution
-    shinyjs::enable("download_data")
+    # Set success status
+    script_status(list(type = "success", message = "Data succesfuldt downloadet og forberedt!"))
+
+  }, error = function(e) {
+    # Set error status
+    script_status(list(type = "error", message = paste("Fejl under kørsel:", e$message)))
+
+    # Also show error in console output
+    output$console_output <- renderPrint({
+      cat("ERROR:", e$message, "\n")
+    })
   })
+
+  # Re-enable button after execution
+  shinyjs::enable("download_data")
+})
 
   # Render status message
   output$status_message <- renderUI({
