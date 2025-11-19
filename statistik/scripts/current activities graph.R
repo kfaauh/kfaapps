@@ -92,19 +92,32 @@ as_of_days <- seq(today_cph - days(7), today_cph, by = "day") |>
   tail(5)
 
 # -----------------------------------------------------------------------------
-# Danish weekday labels for x-axis (no system locale fiddling)
+# Danish weekday labels for x-axis (locale-free)
 # -----------------------------------------------------------------------------
 
-# Get Danish weekday names using lubridate
-wd <- lubridate::wday(
+# English -> Danish weekday lookup
+weekday_da <- c(
+  "Monday"    = "Mandag",
+  "Tuesday"   = "Tirsdag",
+  "Wednesday" = "Onsdag",
+  "Thursday"  = "Torsdag",
+  "Friday"    = "Fredag",
+  "Saturday"  = "Lørdag",
+  "Sunday"    = "Søndag"
+)
+
+# Get weekday names in default (English) and translate
+wd_en <- lubridate::wday(
   as_of_days,
   label      = TRUE,
   abbr       = FALSE,
-  week_start = 1,
-  locale     = "da_DK"   # works cross-platform via ICU
+  week_start = 1
 )
+wd_en <- as.character(wd_en)
 
-wd <- as.character(wd)  # convert ordered factor -> character
+wd <- unname(weekday_da[wd_en])
+
+# Keep your capitalization logic (safe, already capitalized)
 wd_cap <- paste0(toupper(substr(wd, 1, 1)), substr(wd, 2, nchar(wd)))
 
 axis_labs <- setNames(
