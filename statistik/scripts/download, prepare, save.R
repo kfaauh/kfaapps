@@ -55,30 +55,40 @@ creation_date_string <- format(Sys.Date(), "%d-%m-%y")
 # 3. AZURE DATA LOADING
 # =============================================================================
 
- message("\nLoading data from Azure...")
-    # OLD APPROACH THAT WORKS LOCALLY
-# # Load site and document library
-# site_list <- list_sharepoint_sites()
-# site <- site_list[[1]]
-# doc_lib <- site$get_list("Dokumenter")
+message("\nLoading data from Azure...")
 
-    # NEW APPROACH THAT SHOULD WORK ON SERVER
+# Try to use the cached Azure token non-interactively.
+# If this fails (e.g. token expired, never created), we stop with
+# a clear message that explains how to re-authenticate on the server.
+site_list <- tryCatch(
+  {
+    # Use cached credentials (what works locally AND on the server once
+    # we've done the device_code login as 'shiny')
+    list_sharepoint_sites()
+  },
+  error = function(e) {
+    message("✗ Unable to load SharePoint sites from Azure using cached credentials.")
+    message("  Error message: ", e$message)
 
-# Use device_code auth so it works from Shiny / RStudio Server etc.
-# This will print a URL + code in the Shiny console box.
-# Open the URL in your browser, enter the code, complete login.
-site_list <- list_sharepoint_sites(
-  auth_type = "device_code"
-  # you can also specify tenant explicitly if needed, e.g.:
-  # tenant = "yourtenant.onmicrosoft.com"
+    message("\n*** ACTION REQUIRED: Re-authenticate Azure for the Shiny user on the server ***")
+    message("Log in to the server and run the following *as the 'shiny' user*:")
+    message("")
+    message("  R --vanilla << 'EOF'")
+    message("  library(Microsoft365R)")
+    message("  site_list <- list_sharepoint_sites(auth_type = 'device_code')")
+    message("  q(save = 'no')")
+    message("  EOF")
+    message("")
+    message("After successful authentication, try running this script again.")
+
+    # Stop script so Shiny shows a clear failure instead of hanging
+    stop("Azure authentication missing or expired. Please re-authenticate on the server (see messages above).")
+  }
 )
 
-# Pick the first site (as before)
+# If we got here, Azure auth worked via the cache
 site <- site_list[[1]]
-
-# Get the document library
 doc_lib <- site$get_list("Dokumenter")
-
 
 # Define display names
 cols_to_analyze <- c(

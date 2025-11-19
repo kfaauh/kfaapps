@@ -83,21 +83,25 @@ ui <- fluidPage(
         font-family: 'Courier New', monospace;
         text-align: left;
         padding: 15px;
-        margin: 20px auto;
+        margin: 10px auto 20px auto;
         border-radius: 4px;
 
-        /* Bigger console box */
-        min-height: 300px;
-        max-height: 70vh;
+        min-height: 200px;
+        max-height: 60vh;
         width: 100%;
         max-width: 1100px;
 
         overflow-y: auto;
         border: 1px solid #555;
 
-        /* Preserve line breaks and wrap long lines */
         white-space: pre-wrap;
         word-wrap: break-word;
+      }
+
+      .console-caption {
+        font-size: 0.9em;
+        color: #777;
+        margin-top: 5px;
       }
     "))
   ),
@@ -117,9 +121,21 @@ ui <- fluidPage(
         class = "link-button"
       )
     ),
+
+    # Nice, user-facing status box
     uiOutput("status_message"),
 
-    # Console output area: we fill this with shinyjs::html()
+    # Toggle for technical log
+    div(
+      class = "links",
+      actionLink("toggle_console", "Vis/skjul tekniske detaljer")
+    ),
+    div(
+      class = "console-caption",
+      "Tekniske detaljer vises kun for fejlsøgning (kan ignoreres for almindelig brug)."
+    ),
+
+    # Technical console (initially hidden)
     div(
       id = "console_output",
       class = "console-output",
@@ -139,66 +155,13 @@ server <- function(input, output, session) {
   # Reactive value to track script execution status
   script_status <- reactiveVal(NULL)
 
-  # ---- helpers to monkey-patch cat() inside packages -----------------------
+  # Hide the console by default
+  shinyjs::hide("console_output")
 
-  patch_cat_package <- function(pkg) {
-    if (!requireNamespace(pkg, quietly = TRUE)) return(invisible(NULL))
-
-    ns <- asNamespace(pkg)
-
-    # Try to grab the package's cat binding (import from base)
-    orig <- tryCatch(
-      get("cat", envir = ns, inherits = FALSE),
-      error = function(e) NULL
-    )
-    if (is.null(orig)) return(invisible(NULL))
-
-    # Save original under a private name so we can restore it later
-    assign("cat_for_shiny_original", orig, envir = ns)
-
-    # New cat: send output to message(), which we already capture with withCallingHandlers
-    new_cat <- function(..., file = "", sep = " ", fill = FALSE, labels = NULL, append = FALSE) {
-      txt <- paste(..., sep = sep, collapse = "")
-      # cat() doesn't automatically add newline unless you include \n; we just forward as-is
-      message(txt)
-    }
-
-    # Replace the binding (it may be locked because it's imported from base)
-    tryCatch({
-      if (bindingIsLocked("cat", ns)) unlockBinding("cat", ns)
-      assign("cat", new_cat, envir = ns)
-      lockBinding("cat", ns)
-    }, error = function(e) {
-      # If patching fails, just leave things as they are
-      message("Kunne ikke patche cat() i pakken ", pkg, ": ", conditionMessage(e))
-    })
-
-    invisible(NULL)
-  }
-
-  unpatch_cat_package <- function(pkg) {
-    if (!requireNamespace(pkg, quietly = TRUE)) return(invisible(NULL))
-
-    ns <- asNamespace(pkg)
-    if (!exists("cat_for_shiny_original", envir = ns, inherits = FALSE)) {
-      return(invisible(NULL))
-    }
-
-    orig <- get("cat_for_shiny_original", envir = ns, inherits = FALSE)
-
-    tryCatch({
-      if (bindingIsLocked("cat", ns)) unlockBinding("cat", ns)
-      assign("cat", orig, envir = ns)
-      lockBinding("cat", ns)
-      rm("cat_for_shiny_original", envir = ns)
-    }, error = function(e) {
-      message("Kunne ikke reset cat() i pakken ", pkg, ": ", conditionMessage(e))
-    })
-
-    invisible(NULL)
-  }
-
-  # -------------------------------------------------------------------------
+  # Toggle visibility of technical console
+  observeEvent(input$toggle_console, {
+    shinyjs::toggle("console_output")
+  })
 
   observeEvent(input$download_data, {
     shinyjs::disable("download_data")
@@ -207,95 +170,114 @@ server <- function(input, output, session) {
     shinyjs::html("console_output", "")
     script_status(NULL)
 
+    # User-friendly info in console start
+    shinyjs::html(
+      id   = "console_output",
+      html = "Starter download- og forberedelsesscript...\n\n",
+      add  = TRUE
+    )
+
+    # Path to your script
     script_path <- file.path(
       here("statistik", "scripts"),
       "download, prepare, save.R"
     )
 
-    # Always show at least something
-    shinyjs::html(
-      id   = "console_output",
-      html = paste0("Knap trykket – kører script:\n", script_path, "\n\n"),
-      add  = TRUE
-    )
-
+    # If script does not exist, show an error directly in the UI + console
     if (!file.exists(script_path)) {
       shinyjs::html(
         id   = "console_output",
-        html = paste0("FEJL: Script ikke fundet:\n", script_path, "\n"),
+        html = paste0(
+          "FEJL: Script ikke fundet:\n",
+          script_path, "\n"
+        ),
         add  = TRUE
       )
+
       script_status(list(
         type    = "error",
-        message = "Scriptfilen blev ikke fundet."
+        message = "Scriptfilen til data-download blev ikke fundet. Kontakt support."
       ))
+
       shinyjs::enable("download_data")
       return(invisible(NULL))
     }
 
-    # --- PATCH cat() INSIDE AzureAuth & Microsoft365R ----------------------
-    # So that any cat() calls (e.g. device-code URL) become message() calls.
+    # Try to run script and stream messages (technical) to console
+    tryCatch(
+      {
 
-    patch_cat_package("AzureAuth")
-    patch_cat_package("Microsoft365R")
+        withCallingHandlers(
+          {
+            # High-level technical note
+            message("Kører script: ", script_path)
 
-    # Ensure we restore original cat() and re-enable button afterwards
-    on.exit({
-      unpatch_cat_package("AzureAuth")
-      unpatch_cat_package("Microsoft365R")
-      shinyjs::enable("download_data")
-    }, add = TRUE)
+            # Run your script.
+            # IMPORTANT: inside this script, use message(\"...\") for progress updates.
+            source(script_path, local = TRUE)
+          },
+          message = function(m) {
+            # Append each message line to the technical console
+            shinyjs::html(
+              id   = "console_output",
+              html = paste0(m$message, "\n"),
+              add  = TRUE
+            )
+            # Prevent duplicate printing in the real R console
+            invokeRestart("muffleMessage")
+          }
+        )
 
-    # -----------------------------------------------------------------------
+        # If we got here, script finished successfully
+        script_status(list(
+          type    = "success",
+          message = "Data er downloadet og forberedt uden fejl."
+        ))
 
-    tryCatch({
+        shinyjs::html(
+          id   = "console_output",
+          html = "\nScript færdigt.\n",
+          add  = TRUE
+        )
+      },
+      error = function(e) {
 
-      withCallingHandlers(
-        {
-          # This message will always appear in the console
-          message("Starter download- og forberedelsesscript...")
+        err_msg <- e$message
 
-          # Run your script (which does Azure auth etc.)
-          # Any message() AND cat() from AzureAuth/Microsoft365R should now appear here.
-          source(script_path, local = TRUE)
-        },
-        message = function(m) {
-          shinyjs::html(
-            id   = "console_output",
-            html = paste0(m$message, "\n"),
-            add  = TRUE
-          )
-          # Don't also spam the R console
-          invokeRestart("muffleMessage")
+        # Special friendly message if Azure-token mangler/er udløbet
+        if (grepl("Azure authentication missing or expired", err_msg, fixed = TRUE)) {
+          script_status(list(
+            type    = "error",
+            message = paste(
+              "Azure-login er udløbet eller mangler.",
+              "Kontakt systemansvarlig for at genaktivere forbindelsen til SharePoint."
+            )
+          ))
+        } else {
+          # Generic user-facing error
+          script_status(list(
+            type    = "error",
+            message = "Der opstod en fejl under download/forberedelse af data. Se tekniske detaljer eller kontakt support."
+          ))
         }
-      )
 
-      script_status(list(
-        type    = "success",
-        message = "Data succesfuldt downloadet og forberedt!"
-      ))
+        # Full technical error in console only
+        shinyjs::html(
+          id   = "console_output",
+          html = paste0(
+            "\n*** TEKNISK FEJL ***\n",
+            err_msg,
+            "\n********************\n"
+          ),
+          add  = TRUE
+        )
+      }
+    )
 
-      shinyjs::html(
-        id   = "console_output",
-        html = "\nScript færdigt.\n",
-        add  = TRUE
-      )
-
-    }, error = function(e) {
-      script_status(list(
-        type    = "error",
-        message = paste("Fejl under kørsel:", e$message)
-      ))
-
-      shinyjs::html(
-        id   = "console_output",
-        html = paste0("\nERROR: ", e$message, "\n"),
-        add  = TRUE
-      )
-    })
+    shinyjs::enable("download_data")
   })
 
-  # Status box
+  # Render status message (user-facing)
   output$status_message <- renderUI({
     status <- script_status()
     if (!is.null(status)) {
