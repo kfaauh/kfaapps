@@ -76,6 +76,20 @@ ui <- fluidPage(
         color: #721c24;
         border: 1px solid #f5c6cb;
       }
+      /* ADD THIS FOR CONSOLE STYLING */
+      .console-output {
+        background-color: #2b2b2b;
+        color: #f8f8f8;
+        font-family: 'Courier New', monospace;
+        text-align: left;
+        padding: 15px;
+        margin: 20px auto;
+        border-radius: 4px;
+        max-height: 400px;
+        overflow-y: auto;
+        max-width: 90%;
+        border: 1px solid #555;
+      }
     "))
   ),
 
@@ -93,10 +107,12 @@ ui <- fluidPage(
         )
     ),
     uiOutput("status_message"),
-    # ADD THIS LINE FOR CONSOLE OUTPUT
-verbatimTextOutput("console_output")
-  ),
 
+    # Console output area with styling
+    div(class = "console-output",
+        verbatimTextOutput("console_output")
+    )
+  ),
 
   # Footer
   div(class = "footer",
@@ -110,32 +126,31 @@ server <- function(input, output, session) {
   script_status <- reactiveVal(NULL)
 
   # Observe download data button click
-  # Observe download data button click
-observeEvent(input$download_data, {
-  # Disable button during execution
-  shinyjs::disable("download_data")
+  observeEvent(input$download_data, {
+    # Disable button during execution
+    shinyjs::disable("download_data")
 
-  # Clear previous console output
-  output$console_output <- renderPrint({ "" })
+    # Clear previous console output
+    output$console_output <- renderPrint({ "" })
 
-  tryCatch({
-    # Run the data preparation script and capture output
-    output$console_output <- renderPrint({
-      source(file.path(here("statistik", "scripts"), "download, prepare, save.R"),
-             echo = TRUE, max.deparse.length = 1000)
+    tryCatch({
+      # Run the data preparation script and capture output
+      output$console_output <- renderPrint({
+        source(file.path(here("statistik", "scripts"), "download, prepare, save.R"),
+               echo = TRUE, max.deparse.length = 1000)
+      })
+
+      # Set success status
+      script_status(list(type = "success", message = "Data succesfuldt downloadet og forberedt!"))
+
+    }, error = function(e) {
+      # Set error status
+      script_status(list(type = "error", message = paste("Fejl under kørsel:", e$message)))
     })
 
-    # Set success status
-    script_status(list(type = "success", message = "Data succesfuldt downloadet og forberedt!"))
-
-  }, error = function(e) {
-    # Set error status
-    script_status(list(type = "error", message = paste("Fejl under kørsel:", e$message)))
+    # Re-enable button after execution
+    shinyjs::enable("download_data")
   })
-
-  # Re-enable button after execution
-  shinyjs::enable("download_data")
-})
 
   # Render status message
   output$status_message <- renderUI({
