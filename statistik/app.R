@@ -157,7 +157,7 @@ ui <- fluidPage(
       )
     ),
 
-    # Seneste synkronisering (neutral/green depending on last action)
+    # Seneste synkronisering (neutral / green after success)
     div(
       class = "links",
       uiOutput("last_sync")
@@ -257,7 +257,7 @@ server <- function(input, output, session) {
   }
 
   last_sync_time <- reactiveVal(NA)
-  sync_ok <- reactiveVal(FALSE)  # becomes TRUE after a successful sync in this session
+  sync_ok <- reactiveVal(FALSE)  # TRUE after a successful sync in this session
 
   update_last_sync <- function(initial = FALSE) {
     if (!dir.exists(data_dir)) {
@@ -271,7 +271,6 @@ server <- function(input, output, session) {
       if (initial) sync_ok(FALSE)
     } else {
       last_sync_time(file.info(newest)$mtime)
-      # only set sync_ok(TRUE) when called from a successful sync event
       if (initial) sync_ok(FALSE)
     }
     invisible(NULL)
@@ -378,14 +377,14 @@ server <- function(input, output, session) {
             "<code>ssh -J au309166@ssh.au.dk au309166@kfaapps.uni.au.dk</code><br>",
             "2. Kopier dette til server terminalen:<br>",
             "<pre>",
-            \"R --vanilla << 'EOF'\n\",
-            \"library(Microsoft365R)\n\n\",
-            \"cat(\\\"\\\\nStarting Microsoft365R device-code login...\\\\n\\\\n\\\")\n\n\",
-            \"# One-time (or occasional) device-code login\n\",
-            \"site_list <- list_sharepoint_sites(auth_type = \\\"device_code\\\")\n\n\",
-            \"cat(\\\"\\\\nAuthentication complete. Token cached for future Shiny sessions.\\\\n\\\")\n\",
-            \"q(save = \\\"no\\\")\n\",
-            \"EOF\",
+            "R --vanilla << 'EOF'\n",
+            "library(Microsoft365R)\n\n",
+            "cat('\\nStarting Microsoft365R device-code login...\\n\\n')\n\n",
+            "# One-time (or occasional) device-code login\n",
+            "site_list <- list_sharepoint_sites(auth_type = 'device_code')\n\n",
+            "cat('\\nAuthentication complete. Token cached for future Shiny sessions.\\n')\n",
+            "q(save = 'no')\n",
+            "EOF",
             "</pre>"
           ))
         }
@@ -547,7 +546,7 @@ server <- function(input, output, session) {
     status <- script_status()
     if (!is.null(status)) {
       div(
-        class = paste("status-message", paste0("status-", status$type)),
+        class = paste("status-message", "status-error"),
         status$message
       )
     }
