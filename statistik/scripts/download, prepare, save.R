@@ -27,6 +27,13 @@
 # Simple approach for server
 library(Microsoft365R)
 Sys.setenv(AZURE_AUTH_TYPE = "device_code")
+cache_dir <- "/srv/shiny-server/kfaapps/statistik/azure_cache"
+if (!dir.exists(cache_dir)) {
+  dir.create(cache_dir, recursive = TRUE)
+}
+Sys.setenv(AZURE_DATA_DIR = cache_dir)
+
+
 library(dplyr)
 library(readr)
 library(lubridate)
