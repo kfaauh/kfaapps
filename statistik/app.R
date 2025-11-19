@@ -128,34 +128,62 @@ server <- function(input, output, session) {
   # Reactive value to track script execution status
   script_status <- reactiveVal(NULL)
 
-  # Initial console output
-  output$console_output <- renderPrint({
-    "Console output will appear here after running the script."
-  })
-
   # Observe download data button click
   observeEvent(input$download_data, {
     # Disable button during execution
     shinyjs::disable("download_data")
 
+    # Clear previous output
+    output$console_output <- renderPrint({ "" })
+
     tryCatch({
       # Get the script path
       script_path <- file.path(here("statistik", "scripts"), "download, prepare, save.R")
 
-      # Update console with simple test output first
+      # Debug: Print path information
       output$console_output <- renderPrint({
-        cat("Testing console output...\n")
-        cat("If you see this, the console is working!\n")
+        cat("=== DEBUG INFORMATION ===\n")
+        cat("Current working directory:", getwd(), "\n")
         cat("Script path:", script_path, "\n")
         cat("File exists:", file.exists(script_path), "\n")
+        cat("Here() root:", here(), "\n")
+
+        # List files in the scripts directory
+        scripts_dir <- file.path(here("statistik", "scripts"))
+        cat("Scripts directory exists:", dir.exists(scripts_dir), "\n")
+        if(dir.exists(scripts_dir)) {
+          cat("Files in scripts directory:\n")
+          print(list.files(scripts_dir))
+        }
+
+        cat("=== END DEBUG ===\n")
       })
 
-      # Set success status
-      script_status(list(type = "success", message = "Console test completed!"))
+      # Small delay to show debug info
+      Sys.sleep(1)
+
+      # Now try to run the script
+      if(file.exists(script_path)) {
+        output$console_output <- renderPrint({
+          cat("=== RUNNING SCRIPT ===\n")
+          source(script_path, echo = TRUE, max.deparse.length = 1000)
+          cat("=== SCRIPT COMPLETED ===\n")
+        })
+
+        # Set success status
+        script_status(list(type = "success", message = "Data succesfuldt downloadet og forberedt!"))
+      } else {
+        stop("Script file not found: " + script_path)
+      }
 
     }, error = function(e) {
       # Set error status
       script_status(list(type = "error", message = paste("Fejl under kørsel:", e$message)))
+
+      # Show error in console
+      output$console_output <- renderPrint({
+        cat("ERROR:", e$message, "\n")
+      })
     })
 
     # Re-enable button after execution
