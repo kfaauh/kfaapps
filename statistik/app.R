@@ -113,7 +113,7 @@ server <- function(input, output, session) {
 
     tryCatch({
       # Run the data preparation script
-      source(file.path(here("afdeling_statistik", "scripts"), "download, prepare, save.R"))
+      source(file.path(here("statistik", "scripts"), "download, prepare, save.R"))
 
       # Set success status
       script_status(list(type = "success", message = "Data succesfuldt downloadet og forberedt!"))
