@@ -24,6 +24,8 @@
 # load_pkg("here")
 # load_pkg("tidyr")
 
+print("Start of script")
+
 # Simple approach for server
 library(Microsoft365R)
 library(dplyr)
@@ -32,7 +34,6 @@ library(lubridate)
 library(readxl)
 library(here)
 library(tidyr)
-
 
 # =============================================================================
 # 2. SETUP AND UTILITY FUNCTIONS
