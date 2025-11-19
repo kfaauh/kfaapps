@@ -229,11 +229,11 @@ p_backlog <- ggplot() +
     axis.ticks = element_line(colour = "black", linewidth = 0.2),
     plot.title = element_text(size = 16, hjust = 0.5, face = "bold"),
     plot.subtitle = element_text(size = 12, hjust = 0.5, margin = margin(b = 15)),
-    plot.margin = margin(t = 16, r = 0, b = 25, l = 6, unit = "pt")
+    plot.margin = margin(t = 0, r = 0, b = 0, l = 0, unit = "pt")
   )
 
 p_backlog_noleg <- p_backlog + theme(legend.position = "none",
-                                     plot.margin = margin(t = 16, r = 0, b = 25, l = 6, "pt"))
+                                     plot.margin = margin(t = -5, r = 2, b = -10, l = 1, "pt"))
 p_backlog_legend <- ggplot() +
   ggchicklet::geom_chicklet(
     data = legend_df_backlog,
@@ -252,7 +252,7 @@ p_backlog_legend <- ggplot() +
     legend.margin = margin(0, 0, 0, 0),
     legend.spacing.x = unit(0, "pt"),
     legend.spacing.y = unit(0, "pt"),
-    plot.margin = margin(0, -4, 0, 0, "pt")
+    plot.margin = margin(t = 3, r = 0, b = 0, l = 0, "pt")
   )
 
 as_of <- max(as_of_days)
@@ -373,14 +373,14 @@ p_age_bottom <- ggplot() +
     plot.title = element_text(size = 13, hjust = 0.5, face = "bold"),
     plot.subtitle = element_text(size = 9, hjust = 0.5, face = "plain"),
     plot.title.position = "plot",
-    plot.margin = margin(t = 60, r = 6, b = 0, l = 6, "pt")
+    plot.margin = margin(t = -5, r = 0, b = 0, l = 6, "pt")
   )
 
 horizontal_sep <- ggplot() +
   annotate("segment", x = 0, xend = 1, y = 0.5, yend = 0.5,
            colour = "black", linewidth = 0.2) +
   theme_void() +
-  theme(plot.margin = margin(12, 0, 40, 0, "pt"))
+  theme(plot.margin = margin(t = 0, r = 0, b = 5, l = 0, "pt"))
 
 # CHANGED: Modified to get unique "Forvagt*" names instead of counts
 missing_affiliation_cases <- data.lmraad_filtered %>%
@@ -420,7 +420,7 @@ if (length(missing_affiliation_cases) > 0) {
 
 areas <- c(
   area(t = 1, l = 1,  b = 1, r = 17),
-  area(t = 1, l = 18, b = 1, r = 20),
+  area(t = 1, l = 18, b = 1, r = 19),
   area(t = 2, l = 1,  b = 2, r = 18),
   area(t = 3, l = 2,  b = 3, r = 18)
 )
@@ -428,20 +428,18 @@ areas <- c(
 combined <- p_backlog_noleg + p_backlog_legend + horizontal_sep + p_age_bottom +
   plot_layout(
     design = areas,
-    widths = rep(1, 20),
+    widths = c(rep(1, 17), 1, 1),
     heights = c(5, 0.35, 3)
   ) + plot_annotation(
     title = "Igangværende aktiviteter",
     subtitle = "Klinisk Farmakologisk Afdeling",
     theme = theme(
       plot.title = element_text(size = 16, hjust = 0.5, face = "bold"),
-      plot.subtitle = element_text(size = 12, hjust = 0.5),
-      plot.margin = margin(t = 10, r = 0, b = 0, l = 0, "pt")
+      plot.subtitle = element_text(size = 12, hjust = 0.5)
+      #plot.margin = margin(t = 5, r = 0, b = 0, l = 0, "pt")
     ))
 
-combined_grob <- patchwork::patchworkGrob(
-  combined & theme(plot.margin = margin(t = 1, r = 0, b = 0, l = 1, unit = "pt"))
-)
+combined_grob <- patchwork::patchworkGrob(combined)
 
 # =============================================================================
 # 5. SAVE PLOT
