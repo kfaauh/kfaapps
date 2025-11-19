@@ -1,20 +1,19 @@
-# statistik_app.R for statistics page
 library(shiny)
 library(here)
 library(shinyjs)
 
 ui <- fluidPage(
-  useShinyjs(),  # Initialize shinyjs
+  useShinyjs(),
   tags$head(
     tags$style(HTML("
-      /* Ensure the page always fills viewport */
+      /* Layout */
       html, body {
         height: 100%;
         margin: 0;
       }
       body {
         background-color: white;
-        color: #0033A0;          /* Pantone 287 */
+        color: #0033A0;
         font-family: Arial, sans-serif;
         text-align: center;
         padding: 40px 20px 30px;
@@ -61,6 +60,8 @@ ui <- fluidPage(
         font-size: 0.9em;
         color: #555;
       }
+
+      /* Status box (only for errors now) */
       .status-message {
         margin-top: 0.2em;
         padding: 0.4em 0.7em;
@@ -70,11 +71,6 @@ ui <- fluidPage(
         display: inline-block;
         max-width: 900px;
         font-size: 0.9em;
-      }
-      .status-success {
-        background-color: #d4edda;
-        color: #155724;
-        border: 1px solid #c3e6cb;
       }
       .status-error {
         background-color: #f8d7da;
@@ -107,14 +103,12 @@ ui <- fluidPage(
       details {
         margin-top: 5px;
       }
-
       details > summary {
         cursor: pointer;
         font-weight: bold;
         color: #0033A0;
         list-style: none;
       }
-
       details > summary::-webkit-details-marker {
         display: none;
       }
@@ -124,22 +118,25 @@ ui <- fluidPage(
         color: #444;
         margin-top: 0.2em;
       }
+      .last-sync-ok {
+        color: #155724;
+        font-weight: 600;
+      }
 
       .section-separator {
         border-top: 1px solid #cccccc;
         margin: 12px auto;
         width: 85%;
       }
-
       .section-separator-thin {
         border-top: 1px solid #dddddd;
-        margin: 6px auto;
+        margin: 4px auto;
         width: 80%;
       }
 
       .download-links {
-        margin-top: 0.3em;
-        margin-bottom: 0.5em;
+        margin-top: 0.1em;
+        margin-bottom: 0.3em;
       }
     "))
   ),
@@ -150,7 +147,7 @@ ui <- fluidPage(
     # Main title
     div(class = "header", "Statistik over afdelingens aktiviteter"),
 
-    # ---- Synkronisering (NOW AT TOP) ----
+    # ---- Synkronisering (top) ----
     div(
       class = "links",
       actionButton(
@@ -160,11 +157,13 @@ ui <- fluidPage(
       )
     ),
 
+    # Seneste synkronisering (neutral/green depending on last action)
     div(
-      class = "last-sync-text",
-      textOutput("last_sync", inline = TRUE)
+      class = "links",
+      uiOutput("last_sync")
     ),
 
+    # Error messages (if any)
     div(
       class = "links",
       uiOutput("status_message")
@@ -192,7 +191,7 @@ ui <- fluidPage(
       plotOutput("activity_plot", height = "500px")
     ),
 
-    # Horizontal line between plot and download buttons (when plot exists)
+    # Horizontal line between plot and download buttons (only when plot exists)
     conditionalPanel(
       condition = "output.plot_available == true",
       div(class = "section-separator-thin")
@@ -208,7 +207,7 @@ ui <- fluidPage(
       )
     ),
 
-    # Keep separator below download buttons
+    # Separator below download buttons
     div(class = "section-separator"),
 
     # Foldable technical console
@@ -231,20 +230,19 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
 
-  # Reactive value to track script execution status (for user-facing box)
+  # Only used for errors now
   script_status <- reactiveVal(NULL)
 
-  # Reactive to hold the current activity plot (grid grob)
+  # For the activity plot
   activity_plot <- reactiveVal(NULL)
 
-  # Indicator for plot existence (for showing download buttons + separator)
+  # For controlling download buttons & separator
   output$plot_available <- reactive({
     !is.null(activity_plot())
   })
   outputOptions(output, "plot_available", suspendWhenHidden = FALSE)
 
-  # -------------------------- LAST SYNC TIME ------------------------------- #
-
+  # Track last sync time and whether a sync was done in this session
   data_dir <- here("statistik", "Data", "Azure data")
 
   get_newest_rds_file <- function(directory_path) {
@@ -259,27 +257,32 @@ server <- function(input, output, session) {
   }
 
   last_sync_time <- reactiveVal(NA)
+  sync_ok <- reactiveVal(FALSE)  # becomes TRUE after a successful sync in this session
 
-  update_last_sync <- function() {
+  update_last_sync <- function(initial = FALSE) {
     if (!dir.exists(data_dir)) {
       last_sync_time(NA)
+      if (initial) sync_ok(FALSE)
       return(invisible(NULL))
     }
     newest <- get_newest_rds_file(data_dir)
     if (is.null(newest)) {
       last_sync_time(NA)
+      if (initial) sync_ok(FALSE)
     } else {
       last_sync_time(file.info(newest)$mtime)
+      # only set sync_ok(TRUE) when called from a successful sync event
+      if (initial) sync_ok(FALSE)
     }
     invisible(NULL)
   }
 
-  # Initialize on session start
-  update_last_sync()
+  # Initialize from existing files (if any) but not marked as "just synced"
+  update_last_sync(initial = TRUE)
 
-  output$last_sync <- renderText({
+  output$last_sync <- renderUI({
     t <- last_sync_time()
-    if (is.null(t) || is.na(t)) {
+    text <- if (is.null(t) || is.na(t)) {
       "Seneste synkronisering: Ingen filer fundet"
     } else {
       paste0(
@@ -287,6 +290,11 @@ server <- function(input, output, session) {
         format(t, "%d-%m-%Y %H:%M")
       )
     }
+    cls <- "last-sync-text"
+    if (isTRUE(sync_ok())) {
+      cls <- paste(cls, "last-sync-ok")
+    }
+    div(class = cls, text)
   })
 
   # -------------------------- DOWNLOAD DATA SCRIPT ------------------------- #
@@ -294,9 +302,10 @@ server <- function(input, output, session) {
   observeEvent(input$download_data, {
     shinyjs::disable("download_data")
 
-    # Clear technical console
+    # Clear technical console and error status
     shinyjs::html("console_output", "")
     script_status(NULL)
+    sync_ok(FALSE)
 
     shinyjs::html(
       id   = "console_output",
@@ -309,7 +318,6 @@ server <- function(input, output, session) {
       "download, prepare, save.R"
     )
 
-    # If script does not exist, show error
     if (!file.exists(script_path)) {
       shinyjs::html(
         id   = "console_output",
@@ -331,12 +339,9 @@ server <- function(input, output, session) {
 
     tryCatch(
       {
-
         withCallingHandlers(
           {
             message("Kører script: ", script_path)
-
-            # Run your script; use message() inside it for progress updates
             source(script_path, local = TRUE)
           },
           message = function(m) {
@@ -349,14 +354,9 @@ server <- function(input, output, session) {
           }
         )
 
-        # If we got here, script finished successfully
-        script_status(list(
-          type    = "success",
-          message = "Data synkroniseret"
-        ))
-
-        # Update last sync time after successful save
-        update_last_sync()
+        # On success: update last sync + mark as ok (no extra success text box)
+        update_last_sync(initial = FALSE)
+        sync_ok(TRUE)
 
         shinyjs::html(
           id   = "console_output",
@@ -367,28 +367,25 @@ server <- function(input, output, session) {
       error = function(e) {
 
         err_msg <- e$message
+        sync_ok(FALSE)
 
-        # Default user-friendly text
         msg_ui <- "Der opstod en fejl under synkronisering af data. Se tekniske detaljer eller kontakt support."
 
-        # If it's the Azure-auth error from your Section 3 code,
-        # show your explicit re-auth instructions.
         if (grepl("Azure authentication missing or expired", err_msg, fixed = TRUE)) {
-
           msg_ui <- HTML(paste0(
             "Azure skal verificeres:<br>",
             "1. Login på server fra AU net: ",
             "<code>ssh -J au309166@ssh.au.dk au309166@kfaapps.uni.au.dk</code><br>",
             "2. Kopier dette til server terminalen:<br>",
             "<pre>",
-            "R --vanilla << 'EOF'\n",
-            "library(Microsoft365R)\n\n",
-            "cat(\"\\nStarting Microsoft365R device-code login...\\n\\n\")\n\n",
-            "# One-time (or occasional) device-code login\n",
-            "site_list <- list_sharepoint_sites(auth_type = \"device_code\")\n\n",
-            "cat(\"\\nAuthentication complete. Token cached for future Shiny sessions.\\n\")\n",
-            "q(save = \"no\")\n",
-            "EOF",
+            \"R --vanilla << 'EOF'\n\",
+            \"library(Microsoft365R)\n\n\",
+            \"cat(\\\"\\\\nStarting Microsoft365R device-code login...\\\\n\\\\n\\\")\n\n\",
+            \"# One-time (or occasional) device-code login\n\",
+            \"site_list <- list_sharepoint_sites(auth_type = \\\"device_code\\\")\n\n\",
+            \"cat(\\\"\\\\nAuthentication complete. Token cached for future Shiny sessions.\\\\n\\\")\n\",
+            \"q(save = \\\"no\\\")\n\",
+            \"EOF\",
             "</pre>"
           ))
         }
@@ -418,9 +415,8 @@ server <- function(input, output, session) {
   observeEvent(input$run_plot, {
     shinyjs::disable("run_plot")
 
-    # Clear console & status for this run
+    # Only clear console; keep sync status & errors from sync untouched
     shinyjs::html("console_output", "")
-    script_status(NULL)
 
     shinyjs::html(
       id   = "console_output",
@@ -459,8 +455,6 @@ server <- function(input, output, session) {
         withCallingHandlers(
           {
             message("Kører aktivitetsplot-script: ", script_path_plot)
-
-            # Script expected to create 'combined_grob'
             source(script_path_plot, local = plot_env)
           },
           message = function(m) {
@@ -478,11 +472,6 @@ server <- function(input, output, session) {
         }
 
         activity_plot(get("combined_grob", envir = plot_env))
-
-        script_status(list(
-          type    = "success",
-          message = "Aktivitetsplot opdateret (data uændret)."
-        ))
 
         shinyjs::html(
           id   = "console_output",
@@ -514,20 +503,19 @@ server <- function(input, output, session) {
     shinyjs::enable("run_plot")
   })
 
-  # Render the activity plot in the UI
-  # Smaller device → browser upscales → larger text on page
+  # Plot in app: use 600x400 device (good size), container 500px
   output$activity_plot <- renderPlot(
     {
       req(activity_plot())
       grid::grid.newpage()
       grid::grid.draw(activity_plot())
     },
-    width  = 450,
-    height = 300,
+    width  = 600,
+    height = 400,
     res    = 96
   )
 
-  # Download handlers for PNG / SVG (8x5 in @ 300dpi unchanged)
+  # Downloads: keep 8x5 in at 300dpi
   output$download_plot_png <- downloadHandler(
     filename = function() {
       paste0("activity_plot_", Sys.Date(), ".png")
@@ -554,8 +542,7 @@ server <- function(input, output, session) {
     }
   )
 
-  # -------------------------- STATUS BOX RENDERING ------------------------- #
-
+  # Error status box (only errors)
   output$status_message <- renderUI({
     status <- script_status()
     if (!is.null(status)) {
