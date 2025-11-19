@@ -141,12 +141,12 @@ ui <- fluidPage(
 
       .plot-container {
         margin-top: 0.4em;
-        margin-bottom: 0.1em; /* very small space under plot */
+        margin-bottom: 0; /* no space under plot */
       }
 
       .download-links {
-        margin-top: 0.1em;
-        margin-bottom: 0.2em;  /* tight under buttons */
+        margin-top: 0;     /* no space above buttons */
+        margin-bottom: 0.2em;
       }
     "))
   ),
@@ -193,34 +193,24 @@ ui <- fluidPage(
       )
     ),
 
-    div(class = "section-separator-thin"),
-
-    # Plot area
-    div(
-      class = "links plot-container",
-      plotOutput("activity_plot", height = "500px")
-    ),
-
-    # Horizontal line between plot and download buttons (only when plot exists)
+    # Plot + download section (only when plot exists)
     conditionalPanel(
       condition = "output.plot_available == true",
-      div(class = "section-separator-thin")
-    ),
-
-    # Download buttons
-    div(
-      class = "links download-links",
-      conditionalPanel(
-        condition = "output.plot_available == true",
+      div(class = "section-separator-thin"),
+      div(
+        class = "links plot-container",
+        plotOutput("activity_plot", height = "500px")
+      ),
+      div(
+        class = "links download-links",
         downloadButton("download_plot_png", "Download plot (PNG)"),
         downloadButton("download_plot_svg", "Download plot (SVG)")
-      )
+      ),
+      div(class = "section-separator")
     ),
 
-    # Separator below download buttons
-    div(class = "section-separator"),
-
-    # Foldable technical console
+    # Foldable technical console (immediately follows the Aktivitetsstatus section
+    # when no plot exists)
     tags$details(
       tags$summary("Tekniske detaljer (klik for at folde ud)"),
       div(
@@ -246,7 +236,7 @@ server <- function(input, output, session) {
   # For the activity plot
   activity_plot <- reactiveVal(NULL)
 
-  # For controlling download buttons & separator
+  # For controlling download buttons & plot section
   output$plot_available <- reactive({
     !is.null(activity_plot())
   })
@@ -539,7 +529,7 @@ server <- function(input, output, session) {
   )
 
   output$download_plot_svg <- downloadHandler(
-   filename = function() {
+    filename = function() {
       paste0("activity_plot_", Sys.Date(), ".svg")
     },
     content = function(file) {
