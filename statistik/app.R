@@ -1,20 +1,13 @@
 # statistik_app.R for statistics page
-load_pkg <- function(pkg) {
-  if(!require(pkg, character.only = TRUE, quietly = TRUE)) {
-    install.packages(pkg, dependencies = TRUE)
-    library(pkg, character.only = TRUE)
-  }
-  message("✓ Loaded: ", pkg)
-}
-
-load_pkg("shiny")
-load_pkg("here")
-load_pkg("shinyjs")
+library(shiny)
+library(here)
+library(shinyjs)
 
 ui <- fluidPage(
-  useShinyjs(),  # Add this line to initialize shinyjs
+  useShinyjs(),  # Initialize shinyjs
   tags$head(
     tags$style(HTML("
+      /* Your existing CSS styles */
       /* Ensure the page always fills viewport */
       html, body {
         height: 100%;
@@ -116,7 +109,7 @@ server <- function(input, output, session) {
   # Observe download data button click
   observeEvent(input$download_data, {
     # Disable button during execution
-    shinyjs::disable("download_data")  # Fixed this line
+    shinyjs::disable("download_data")
 
     tryCatch({
       # Run the data preparation script

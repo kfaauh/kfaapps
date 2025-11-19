@@ -181,8 +181,8 @@ get_newest_excel_file <- function(directory_path) {
 }
 
 # Main file loading logic
-main_folder <- here("afdeling_statistik", "data", "KFE KFA")
-original_folder <- here("afdeling_statistik", "data", "KFE KFA", "Original")
+main_folder <- here("statistik", "data", "KFE KFA")
+original_folder <- here("statistik", "data", "KFE KFA", "Original")
 
 # Try to get newest file from main folder
 newest_file <- get_newest_excel_file(main_folder)
@@ -437,7 +437,7 @@ message("✓ Status values reorganised successfully")
 message("\nSaving prepared data...")
 
 # Set up output directory using project root: Data/Azure data
-output_dir <- here("afdeling_statistik", "Data", "Azure data")
+output_dir <- here("statistik", "Data", "Azure data")
 ensure_directory(output_dir)
 
 message("Output directory: ", output_dir)

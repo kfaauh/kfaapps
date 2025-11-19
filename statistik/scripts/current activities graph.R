@@ -38,7 +38,7 @@ if (!require("ggchicklet", quietly = TRUE)) {
 # 1. Load data
 # =============================================================================
 # Use script designed to load data
-source(file.path(here("afdeling_statistik", "scripts"), "load downloaded data.R"))
+source(file.path(here("statistik", "scripts"), "load downloaded data.R"))
 
 # =============================================================================
 # 2. DATA CHECK
@@ -435,7 +435,7 @@ combined_grob <- patchwork::patchworkGrob(
 
 message("Saving plot...")
 
-plots_dir <- here("afdeling_statistik", "output", "current activities")
+plots_dir <- here("statistik", "output", "current activities")
 ensure_directory <- function(dir_path) {
   if(!dir.exists(dir_path)) {
     dir.create(dir_path, recursive = TRUE)
