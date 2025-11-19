@@ -117,9 +117,14 @@ ui <- fluidPage(
         font-size: 0.9em;
         color: #444;
         margin-top: 0.2em;
+        display: inline-block;
+        padding: 0.2em 0.5em;
+        border-radius: 4px;
       }
       .last-sync-ok {
+        background-color: #d4edda;
         color: #155724;
+        border: 1px solid #c3e6cb;
         font-weight: 600;
       }
 
@@ -130,13 +135,18 @@ ui <- fluidPage(
       }
       .section-separator-thin {
         border-top: 1px solid #dddddd;
-        margin: 4px auto;
+        margin: 2px auto;
         width: 80%;
+      }
+
+      .plot-container {
+        margin-top: 0.4em;
+        margin-bottom: 0.1em; /* very small space under plot */
       }
 
       .download-links {
         margin-top: 0.1em;
-        margin-bottom: 0.3em;
+        margin-bottom: 0.2em;  /* tight under buttons */
       }
     "))
   ),
@@ -187,7 +197,7 @@ ui <- fluidPage(
 
     # Plot area
     div(
-      class = "links",
+      class = "links plot-container",
       plotOutput("activity_plot", height = "500px")
     ),
 
@@ -353,7 +363,7 @@ server <- function(input, output, session) {
           }
         )
 
-        # On success: update last sync + mark as ok (no extra success text box)
+        # On success: update last sync + mark as ok
         update_last_sync(initial = FALSE)
         sync_ok(TRUE)
 
@@ -502,7 +512,7 @@ server <- function(input, output, session) {
     shinyjs::enable("run_plot")
   })
 
-  # Plot in app: use 600x400 device (good size), container 500px
+  # Plot in app: 600x400 device, container 500px
   output$activity_plot <- renderPlot(
     {
       req(activity_plot())
@@ -514,7 +524,7 @@ server <- function(input, output, session) {
     res    = 96
   )
 
-  # Downloads: keep 8x5 in at 300dpi
+  # Downloads: 8x5 in at 300dpi
   output$download_plot_png <- downloadHandler(
     filename = function() {
       paste0("activity_plot_", Sys.Date(), ".png")
@@ -529,7 +539,7 @@ server <- function(input, output, session) {
   )
 
   output$download_plot_svg <- downloadHandler(
-    filename = function() {
+   filename = function() {
       paste0("activity_plot_", Sys.Date(), ".svg")
     },
     content = function(file) {
