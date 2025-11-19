@@ -17,7 +17,7 @@ ui <- fluidPage(
         color: #0033A0;          /* Pantone 287 */
         font-family: Arial, sans-serif;
         text-align: center;
-        padding: 40px 20px 30px;  /* slightly tighter */
+        padding: 40px 20px 30px;
         display: flex;
         flex-direction: column;
         min-height: 100vh;
@@ -33,12 +33,12 @@ ui <- fluidPage(
       }
       .subheader {
         font-size: 1.5em;
-        margin-top: 1.2em;
+        margin-top: 1.0em;
         margin-bottom: 0.4em;
         color: #555;
       }
       .links {
-        margin: 0.8em 0;
+        margin: 0.6em 0;
       }
       .link-button {
         display: inline-block;
@@ -62,8 +62,8 @@ ui <- fluidPage(
         color: #555;
       }
       .status-message {
-        margin-top: 0.4em;
-        padding: 0.5em 0.8em;
+        margin-top: 0.2em;
+        padding: 0.4em 0.7em;
         border-radius: 4px;
         font-weight: bold;
         text-align: left;
@@ -122,13 +122,24 @@ ui <- fluidPage(
       .last-sync-text {
         font-size: 0.9em;
         color: #444;
-        margin-top: 0.3em;
+        margin-top: 0.2em;
       }
 
       .section-separator {
         border-top: 1px solid #cccccc;
-        margin: 16px auto;
+        margin: 12px auto;
         width: 85%;
+      }
+
+      .section-separator-thin {
+        border-top: 1px solid #dddddd;
+        margin: 6px auto;
+        width: 80%;
+      }
+
+      .download-links {
+        margin-top: 0.3em;
+        margin-bottom: 0.5em;
       }
     "))
   ),
@@ -139,39 +150,7 @@ ui <- fluidPage(
     # Main title
     div(class = "header", "Statistik over afdelingens aktiviteter"),
 
-    div(class = "section-separator"),
-
-    # ---- Aktivitetsstatus (top) ----
-    div(class = "subheader", "Aktivitetsstatus"),
-
-    div(
-      class = "links",
-      actionButton(
-        "run_plot",
-        "Lav aktivitetsplot",
-        class = "link-button"
-      )
-    ),
-
-    # Plot area + download buttons
-    div(
-      class = "links",
-      plotOutput("activity_plot", height = "500px")  # container height
-    ),
-    div(
-      class = "links",
-      conditionalPanel(
-        condition = "output.plot_available == true",
-        downloadButton("download_plot_png", "Download plot (PNG)"),
-        downloadButton("download_plot_svg", "Download plot (SVG)")
-      )
-    ),
-
-    div(class = "section-separator"),
-
-    # ---- Synkroniser data (bottom) ----
-    div(class = "subheader", "Synkroniser data med Sharepoint"),
-
+    # ---- Synkronisering (NOW AT TOP) ----
     div(
       class = "links",
       actionButton(
@@ -186,12 +165,50 @@ ui <- fluidPage(
       textOutput("last_sync", inline = TRUE)
     ),
 
-    # User-facing status box (small, near bottom)
     div(
       class = "links",
       uiOutput("status_message")
     ),
 
+    div(class = "section-separator"),
+
+    # ---- Aktivitetsstatus ----
+    div(class = "subheader", "Aktivitetsstatus"),
+
+    div(
+      class = "links",
+      actionButton(
+        "run_plot",
+        "Aktivitetsstatus",
+        class = "link-button"
+      )
+    ),
+
+    div(class = "section-separator-thin"),
+
+    # Plot area
+    div(
+      class = "links",
+      plotOutput("activity_plot", height = "500px")
+    ),
+
+    # Horizontal line between plot and download buttons (when plot exists)
+    conditionalPanel(
+      condition = "output.plot_available == true",
+      div(class = "section-separator-thin")
+    ),
+
+    # Download buttons
+    div(
+      class = "links download-links",
+      conditionalPanel(
+        condition = "output.plot_available == true",
+        downloadButton("download_plot_png", "Download plot (PNG)"),
+        downloadButton("download_plot_svg", "Download plot (SVG)")
+      )
+    ),
+
+    # Keep separator below download buttons
     div(class = "section-separator"),
 
     # Foldable technical console
@@ -220,7 +237,7 @@ server <- function(input, output, session) {
   # Reactive to hold the current activity plot (grid grob)
   activity_plot <- reactiveVal(NULL)
 
-  # Indicator for plot existence (for showing download buttons)
+  # Indicator for plot existence (for showing download buttons + separator)
   output$plot_available <- reactive({
     !is.null(activity_plot())
   })
@@ -498,16 +515,15 @@ server <- function(input, output, session) {
   })
 
   # Render the activity plot in the UI
-  # -> use a relatively small device so the browser scales it up
-  #    = visually larger text without touching saved-file theme
+  # Smaller device → browser upscales → larger text on page
   output$activity_plot <- renderPlot(
     {
       req(activity_plot())
       grid::grid.newpage()
       grid::grid.draw(activity_plot())
     },
-    width  = 600,   # pixels on server
-    height = 400,   # pixels on server
+    width  = 450,
+    height = 300,
     res    = 96
   )
 
