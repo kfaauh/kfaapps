@@ -63,7 +63,7 @@ site_list <- tryCatch(
   {
     # Use cached credentials (what works locally AND on the server once
     # we've done the device_code login as 'shiny')
-    list_sharepoint_sites()
+    list_sharepoint_sites(auth_type = "device_code")
   },
   error = function(e) {
     message("✗ Unable to load SharePoint sites from Azure using cached credentials.")
