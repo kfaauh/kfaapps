@@ -176,9 +176,15 @@ ui <- fluidPage(
       .kfe-kfa-title {
         font-weight: bold;
         color: #0033A0;
-        margin-bottom: 2px;
+        margin-bottom: 0px;
         font-size: 1.1em;
       }
+           .kfe-kfa-subtitle {
+       font-size: 0.8em;
+       color: #000000;
+       margin-top: 0px;
+       margin-bottom: 3px;
+     }
       .kfe-kfa-buttons {
         display: flex;
         justify-content: center;
@@ -279,10 +285,9 @@ ui <- fluidPage(
       )
     ),
 
-    # Plot + download section (only when plot exists)
+        # Plot + download section (only when plot exists)
     conditionalPanel(
       condition = "output.plot_available == true",
-      div(class = "section-separator-thin"),
       div(
         class = "plot-container",
         plotOutput("activity_plot", inline = TRUE)  # Added inline = TRUE
@@ -297,10 +302,11 @@ ui <- fluidPage(
     # Always show horizontal line above KFE/KFA section
     div(class = "section-separator"),
 
-    # ---- KFE/KFA tilhørsforhold ----
+      # ---- KFE/KFA tilhørsforhold ----
     div(
       class = "kfe-kfa-section",
       div(class = "kfe-kfa-title", "Opdater tilhørsforhold til KFE og KFA"),
+      div(class = "kfe-kfa-subtitle", "Nyeste Excel anvendes i scripts"),
       # Dropdown section above buttons
       uiOutput("download_dropdown_ui"),
       div(
@@ -313,7 +319,7 @@ ui <- fluidPage(
                     buttonLabel = "Upload")
         ),
         actionButton("upload_excel", "Upload", class = "small-button"),
-        downloadButton("download_original", "Download original Excel", class = "small-button")
+        downloadButton("download_original", "Download Original", class = "small-button")
       )
     ),
 
@@ -443,7 +449,7 @@ server <- function(input, output, session) {
                     choices = files,
                     width = '170px',
                     selectize = TRUE),
-        downloadButton("download_selected", "Download", class = "small-download-button")
+        downloadButton("download_selected", "Download valgt", class = "small-download-button")
       )
     )
   })
