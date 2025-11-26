@@ -606,8 +606,8 @@ server <- function(input, output, session) {
         if (grepl("Azure authentication missing or expired", err_msg, fixed = TRUE)) {
           msg_ui <- HTML(paste0(
             "Azure skal verificeres:<br>",
-            "1. Login på server fra AU net: ",
-            "<code>ssh -J au309166@ssh.au.dk au309166@kfaapps.uni.au.dk</code><br>",
+            "1. Login på server fra AU net (indsæt AUID med Azure adgang som au123456): ",
+            "<code>ssh -J AUID@ssh.au.dk AUID@kfaapps.uni.au.dk</code><br>",
             "2. Kopier dette til server terminalen:<br>",
             "<pre>",
             "R --vanilla << 'EOF'\n",
