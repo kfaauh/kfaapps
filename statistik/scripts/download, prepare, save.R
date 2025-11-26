@@ -225,8 +225,8 @@ get_newest_excel_file <- function(directory_path) {
 }
 
 # Main file loading logic
-main_folder <- here("statistik", "data", "KFE KFA")
-original_folder <- here("statistik", "data", "KFE KFA", "Original")
+main_folder <- here("statistik", "data", "tilknytning, KFE_KFA")
+original_folder <- here("statistik", "data", "tilknytning, KFE_KFA", "Original")
 
 # Try to get newest file from main folder
 newest_file <- get_newest_excel_file(main_folder)

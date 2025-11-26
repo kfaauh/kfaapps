@@ -139,14 +139,100 @@ ui <- fluidPage(
         width: 80%;
       }
 
+      /* === Plot + download tight spacing === */
       .plot-container {
-        margin-top: 0.4em;
-        margin-bottom: 0; /* no space under plot */
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      .plot-container .shiny-plot-output,
+      .plot-container .shiny-plot-output > div,
+      .plot-container .shiny-plot-output > svg {
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+      }
+      .download-links {
+        margin: 0 !important;
+        padding: 0 !important;
       }
 
-      .download-links {
-        margin-top: 0;     /* no space above buttons */
-        margin-bottom: 0.2em;
+      /* Small button styling */
+      .small-button {
+        padding: 0.35em 0.8em !important;
+        font-size: 0.8em !important;
+        margin: 0.05em !important;
+      }
+
+      .small-download-button {
+        padding: 0.3em 0.7em !important;
+        font-size: 0.75em !important;
+        margin: 0.05em !important;
+      }
+
+      /* KFE/KFA section styling: very tight vertical spacing */
+      .kfe-kfa-section {
+        margin: 4px 0 6px;
+      }
+      .kfe-kfa-title {
+        font-weight: bold;
+        color: #0033A0;
+        margin-bottom: 2px;
+        font-size: 1.1em;
+      }
+      .kfe-kfa-buttons {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 4px;
+        flex-wrap: wrap;
+        margin-top: 1px;
+        margin-bottom: 1px;
+      }
+
+      /* Dropdown container: dropdown + Download on same line, minimal spacing */
+      .dropdown-container {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        margin-bottom: 1px;
+        margin-top: 1px;
+      }
+
+  /* Remove extra margin from selectInput wrapper inside dropdown */
+  .dropdown-container .shiny-input-container {
+    margin-bottom: 0 !important;
+  }
+
+      /* Make selectize dropdown ~170px wide and keep text on one line */
+      .dropdown-container .selectize-control {
+        font-size: 0.6em;
+        min-width: 170px;
+        max-width: 500px;
+      }
+
+  .dropdown-container .selectize-input {
+    padding: 2px 6px;
+    min-height: 26px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Remove vertical margins from the Download button so it lines up */
+  .dropdown-container .btn {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+  }
+
+
+      .dropdown-select {
+        font-size: 0.7em !important;
+        width: 180px !important;
+        margin-bottom: 5px;
+        padding: 2px 5px !important;
+        height: 28px !important;
       }
     "))
   ),
@@ -198,19 +284,43 @@ ui <- fluidPage(
       condition = "output.plot_available == true",
       div(class = "section-separator-thin"),
       div(
-        class = "links plot-container",
-        plotOutput("activity_plot", height = "500px")
+        class = "plot-container",
+        plotOutput("activity_plot", inline = TRUE)  # Added inline = TRUE
       ),
       div(
-        class = "links download-links",
-        downloadButton("download_plot_png", "Download plot (PNG)"),
-        downloadButton("download_plot_svg", "Download plot (SVG)")
-      ),
-      div(class = "section-separator")
+        class = "download-links",
+        downloadButton("download_plot_png", "Download PNG", class = "small-button"),
+        downloadButton("download_plot_svg", "Download SVG", class = "small-button")
+      )
     ),
 
-    # Foldable technical console (immediately follows the Aktivitetsstatus section
-    # when no plot exists)
+    # Always show horizontal line above KFE/KFA section
+    div(class = "section-separator"),
+
+    # ---- KFE/KFA tilhørsforhold ----
+    div(
+      class = "kfe-kfa-section",
+      div(class = "kfe-kfa-title", "Opdater tilhørsforhold til KFE og KFA"),
+      # Dropdown section above buttons
+      uiOutput("download_dropdown_ui"),
+      div(
+        class = "kfe-kfa-buttons",
+        # Hidden file input for upload
+        tags$div(
+          style = "display: none;",
+          fileInput("excel_file", NULL,
+                    accept = c(".xlsx", ".xls"),
+                    buttonLabel = "Upload")
+        ),
+        actionButton("upload_excel", "Upload", class = "small-button"),
+        downloadButton("download_original", "Download original Excel", class = "small-button")
+      )
+    ),
+
+    # Horizontal line above technical details
+    div(class = "section-separator"),
+
+    # Foldable technical console
     tags$details(
       tags$summary("Tekniske detaljer (klik for at folde ud)"),
       div(
@@ -295,6 +405,129 @@ server <- function(input, output, session) {
     }
     div(class = cls, text)
   })
+
+  # -------------------------- KFE/KFA TILHØRSFORHOLD FUNCTIONS ------------------------- #
+
+  # Define folders
+  main_folder <- here("statistik", "data", "tilknytning, KFE_KFA")
+  original_folder <- here("statistik", "data", "tilknytning, KFE_KFA", "Original")
+
+  # Ensure folders exist
+  observe({
+    if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
+    if (!dir.exists(original_folder)) dir.create(original_folder, recursive = TRUE)
+  })
+
+  # Get list of Excel files in main folder
+  get_excel_files <- reactive({
+    files <- list.files(main_folder, pattern = "\\.xlsx$", full.names = FALSE)
+    if (length(files) == 0) return(NULL)
+
+    # Sort by modification time (newest first)
+    file_info <- file.info(file.path(main_folder, files))
+    files_ordered <- files[order(file_info$mtime, decreasing = TRUE)]
+    return(files_ordered)
+  })
+
+  # Render dropdown for downloading Excel files
+  output$download_dropdown_ui <- renderUI({
+    files <- get_excel_files()
+    if (is.null(files)) {
+      return(NULL)
+    }
+
+    tagList(
+      div(
+        class = "dropdown-container",
+        selectInput("excel_files", NULL,
+                    choices = files,
+                    width = '170px',
+                    selectize = TRUE),
+        downloadButton("download_selected", "Download", class = "small-download-button")
+      )
+    )
+  })
+
+  # Handle file upload - trigger the hidden file input
+  observeEvent(input$upload_excel, {
+    shinyjs::click("excel_file")
+  })
+
+  # Handle the actual file upload
+  observeEvent(input$excel_file, {
+    req(input$excel_file)
+
+    # Validate file type
+    if (!grepl("\\.xlsx?$", input$excel_file$name, ignore.case = TRUE)) {
+      script_status(list(
+        type = "error",
+        message = "Kun Excel-filer (.xlsx, .xls) er tilladte."
+      ))
+      return()
+    }
+
+    tryCatch({
+      # Generate filename with timestamp
+      timestamp <- format(Sys.time(), "%Y-%m-%d %H.%M")
+      new_filename <- paste0("Tilhørsforhold (", timestamp, ").xlsx")
+      new_filepath <- file.path(main_folder, new_filename)
+
+      # Copy uploaded file
+      file.copy(input$excel_file$datapath, new_filepath)
+
+      # Clean up old files if more than 10
+      files <- list.files(main_folder, pattern = "\\.xlsx$", full.names = TRUE)
+      if (length(files) > 10) {
+        file_info <- file.info(files)
+        files_ordered <- files[order(file_info$mtime)]
+        # Remove oldest files beyond limit
+        files_to_remove <- files_ordered[1:(length(files) - 10)]
+        file.remove(files_to_remove)
+      }
+
+      # Success message
+      script_status(list(
+        type = "message",
+        message = paste("Filen er uploadet succesfuldt:", new_filename)
+      ))
+
+    }, error = function(e) {
+      script_status(list(
+        type = "error",
+        message = paste("Fejl under upload:", e$message)
+      ))
+    })
+  })
+
+  # Download selected Excel file
+  output$download_selected <- downloadHandler(
+    filename = function() {
+      req(input$excel_files)
+      input$excel_files
+    },
+    content = function(file) {
+      req(input$excel_files)
+      file_path <- file.path(main_folder, input$excel_files)
+      file.copy(file_path, file)
+    }
+  )
+
+  # Download original Excel file
+  output$download_original <- downloadHandler(
+    filename = function() {
+      original_files <- list.files(original_folder, pattern = "\\.xlsx$")
+      if (length(original_files) > 0) {
+        return(original_files[1])
+      }
+      return("Original.xlsx")
+    },
+    content = function(file) {
+      original_files <- list.files(original_folder, pattern = "\\.xlsx$", full.names = TRUE)
+      if (length(original_files) > 0) {
+        file.copy(original_files[1], file)
+      }
+    }
+  )
 
   # -------------------------- DOWNLOAD DATA SCRIPT ------------------------- #
 
@@ -510,7 +743,7 @@ server <- function(input, output, session) {
       grid::grid.draw(activity_plot())
     },
     width  = 600,
-    height = 400,
+    height = 500,
     res    = 96
   )
 
@@ -546,7 +779,7 @@ server <- function(input, output, session) {
     status <- script_status()
     if (!is.null(status)) {
       div(
-        class = paste("status-message", "status-error"),
+        class = paste("status-message", if(status$type == "error") "status-error" else "status-ok"),
         status$message
       )
     }
