@@ -162,7 +162,7 @@ backlog_1_42_bySvar <- activity_plot_data %>%
       as_of == max(as_of_days),
       is.na(FaerdigDate),
       is.na(FaerdigDate) | (FaerdigDate >= as_of & AdjustedDate < as_of)),
-      ) %>%
+  ) %>%
   mutate(age = as.integer(as_of - AdjustedDate)) %>%
   filter(
     if_else(
@@ -366,24 +366,24 @@ p_age_bottom <- ggplot() +
                      breaks = seq_along(y_levels),
                      labels = y_levels,
                      expand = c(0, 0)) +
-    scale_x_continuous(
-        breaks  = c(0, 7, 14, 21, 23),
-        labels  = c("0", "7", "14", "21", "21+"),
-        limits  = c(0, 23),
-        minor_breaks = setdiff(0:23, c(0, 7, 14, 21, 23)),
-        expand  = c(0.02, 0)
-    ) +
-    guides(
-        x = guide_axis(minor.ticks = TRUE)
-    ) +
-    labs(x = "Tid siden modtaget (dage)",
+  scale_x_continuous(
+    breaks  = c(0, 7, 14, 21, 23),
+    labels  = c("0", "7", "14", "21", "21+"),
+    limits  = c(0, 23),
+    minor_breaks = setdiff(0:23, c(0, 7, 14, 21, 23)),
+    expand  = c(0.02, 0)
+  ) +
+  guides(
+    x = guide_axis(minor.ticks = TRUE)
+  ) +
+  labs(x = "Tid siden modtaget (dage)",
        y = NULL,
        title = paste0("Liggetid fordelt på svartype per d. ", format(max(as_of_days), "%d.%m"))) +
-    coord_cartesian(clip = "off") +
+  coord_cartesian(clip = "off") +
   theme_classic() +
   theme(
     panel.grid = element_blank(),
-         axis.ticks.length.x = unit(0.1, "cm"),
+    axis.ticks.length.x = unit(0.1, "cm"),
     legend.position = c(0.98, 0.98),
     legend.justification = c(1, 1),
     legend.background = element_rect(fill = scales::alpha("white", 0.25),
@@ -409,8 +409,17 @@ horizontal_sep <- ggplot() +
   theme_void() +
   theme(plot.margin = margin(t = 0, r = 0, b = 5, l = 0, "pt"))
 
-# CHANGED: Modified to get unique "Forvagt*" names instead of counts
-missing_affiliation_cases <- data.lmraad_filtered %>%
+# =============================================================================
+# 4b. SUBTITLE: MISSING / CONFLICTING AFFILIATIONS
+# =============================================================================
+# Now covers:
+#   - is.na(KFE_KFA)
+#   - is.na(Forvagt_affiliation)
+#   - is.na(Bagvagt_affiliation)
+# and conflicting:
+#   - Forvagt_affiliation != Bagvagt_affiliation
+
+affiliation_issues <- data.lmraad_filtered %>%
   mutate(
     AdjustedDate = as_date(AdjustedDate),
     FaerdigDate = as_date(`Færdig (*)`)
@@ -418,27 +427,76 @@ missing_affiliation_cases <- data.lmraad_filtered %>%
   filter(
     AdjustedDate <= max(as_of_days),
     (is.na(FaerdigDate) | FaerdigDate >= max(as_of_days)),
-    is.na(KFE_KFA),
     `Svartype (*)` %in% c("Almindeligt svar", "Kortsvar"),
-    as.integer(max(as_of_days) - AdjustedDate) <= 42,
-    as.integer(max(as_of_days) - AdjustedDate) >= 0
+    dplyr::between(as.integer(max(as_of_days) - AdjustedDate), 0, 42)
   ) %>%
-  # Extract the unique "Forvagt*" names
+  mutate(
+    missing_kfe_kfa        = is.na(KFE_KFA),
+    missing_forvagt_affil  = is.na(Forvagt_affiliation),
+    missing_bagvagt_affil  = is.na(Bagvagt_affiliation),
+    conflicting_affil      = !is.na(Forvagt_affiliation) &
+                             !is.na(Bagvagt_affiliation) &
+                             Forvagt_affiliation != Bagvagt_affiliation
+  )
+
+# ----- Missing affiliation names (Forvagt + Bagvagt) -----
+missing_forvagt_names <- affiliation_issues %>%
+  filter(missing_kfe_kfa | missing_forvagt_affil) %>%
   distinct(`Forvagt*`) %>%
   filter(!is.na(`Forvagt*`)) %>%
   pull(`Forvagt*`)
 
-# Create the subtitle text
-if (length(missing_affiliation_cases) > 0) {
-  # Limit the number of names shown to avoid overly long text
-  if (length(missing_affiliation_cases) > 5) {
-    names_text <- paste0(paste(missing_affiliation_cases[1:5], collapse = ", "), ", ...")
+missing_bagvagt_names <- affiliation_issues %>%
+  filter(missing_kfe_kfa | missing_bagvagt_affil) %>%
+  distinct(`Bagvagt*`) %>%
+  filter(!is.na(`Bagvagt*`)) %>%
+  pull(`Bagvagt*`)
+
+missing_names <- unique(c(missing_forvagt_names, missing_bagvagt_names))
+
+subtitle_parts <- character(0)
+
+if (length(missing_names) > 0) {
+  if (length(missing_names) > 5) {
+    missing_names_text <- paste0(paste(missing_names[1:5], collapse = ", "), ", ...")
   } else {
-    names_text <- paste(missing_affiliation_cases, collapse = ", ")
+    missing_names_text <- paste(missing_names, collapse = ", ")
   }
 
-  subtitle_text <- paste0("Manglende KFE/KFA tilhørsforhold:\n",
-                         "| ", names_text, " |", " Opdater tilhørsforhold")
+  missing_text <- paste0(
+    "Manglende KFE/KFA tilhørsforhold:\n",
+    "| ", missing_names_text, " | Opdater tilhørsforhold"
+  )
+
+  subtitle_parts <- c(subtitle_parts, missing_text)
+}
+
+# ----- Conflicting affiliations (Forvagt_affiliation != Bagvagt_affiliation) -----
+conflicting_pairs <- affiliation_issues %>%
+  filter(conflicting_affil) %>%
+  distinct(`Forvagt*`, `Bagvagt*`) %>%
+  filter(!is.na(`Forvagt*`), !is.na(`Bagvagt*`))
+
+if (nrow(conflicting_pairs) > 0) {
+  pair_labels <- paste(conflicting_pairs$`Forvagt*`, "&", conflicting_pairs$`Bagvagt*`)
+
+  if (length(pair_labels) > 5) {
+    pair_text <- paste0(paste(pair_labels[1:5], collapse = ", "), ", ...")
+  } else {
+    pair_text <- paste(pair_labels, collapse = ", ")
+  }
+
+  conflict_text <- paste0(
+    "Modstridende tilhørsforhold:\n",
+    "| ", pair_text, " | Opdater tilhørsforhold"
+  )
+
+  subtitle_parts <- c(subtitle_parts, conflict_text)
+}
+
+# ----- Apply subtitle (if any issues) -----
+if (length(subtitle_parts) > 0) {
+  subtitle_text <- paste(subtitle_parts, collapse = "\n\n")
 
   p_age_bottom <- p_age_bottom +
     labs(subtitle = subtitle_text) +

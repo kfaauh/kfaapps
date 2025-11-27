@@ -319,7 +319,7 @@ ui <- fluidPage(
                     buttonLabel = "Upload")
         ),
         actionButton("upload_excel", "Upload", class = "small-button"),
-        downloadButton("download_original", "Download Original", class = "small-button")
+        downloadButton("download_original", "Download original", class = "small-button")
       )
     ),
 
