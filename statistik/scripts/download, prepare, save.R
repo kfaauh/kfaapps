@@ -40,6 +40,8 @@ library(lubridate)
 library(readxl)
 library(here)
 library(tidyr)
+library(bizdays)   # NEW
+library(timeDate)  # NEW
 
 # =============================================================================
 # 2. SETUP AND UTILITY FUNCTIONS
@@ -281,6 +283,65 @@ eng_to_dk <- c(
   "Sunday"    = "Søndag"
 )
 
+# Danish holidays ("helligdage") helper
+dk_helligdage <- function(years) {
+  years <- unique(years)
+
+  # Easter Sunday per year
+  easter <- as.Date(timeDate::Easter(years))
+
+  c(
+    # Fixed-date public holidays
+    as.Date(paste0(years, "-01-01")),  # New Year's Day
+    as.Date(paste0(years, "-12-25")),  # Christmas Day
+    as.Date(paste0(years, "-12-26")),  # 2nd Christmas Day
+
+    # Often treated as non-working days (adjust as needed)
+    as.Date(paste0(years, "-06-05")),  # Constitution Day (Grundlovsdag)
+    as.Date(paste0(years, "-12-24")),  # Christmas Eve
+    as.Date(paste0(years, "-12-31")),  # New Year's Eve
+
+    # Moveable feasts relative to Easter Sunday
+    easter - 3,   # Maundy Thursday
+    easter - 2,   # Good Friday
+    easter + 1,   # Easter Monday
+    easter + 39,  # Ascension Day
+    easter + 50   # Whit Monday
+  )
+}
+
+# Use min/max year from your data, plus a buffer into the future
+all_dates <- c(
+  data.lmraad$`Modtaget (*)`,
+  data.medicingennemgang$`Modtaget (*)`,
+  data.ibrugtagning$`Modtaget (*)`,
+  Sys.Date()  # ensure at least current year is included
+)
+
+min_year <- min(lubridate::year(all_dates), na.rm = TRUE)
+max_year <- max(lubridate::year(all_dates), na.rm = TRUE) + 5  # e.g. 5 years into the future
+
+years_range <- min_year:max_year
+dk_hols <- dk_helligdage(years_range)
+
+# Calendar: only weekends as non-working (Mon–Fri counted)
+bizdays::create.calendar(
+  name        = "DK_weekends_only",
+  weekdays    = c("saturday", "sunday"),
+  holidays    = c(),
+  adjust.from = bizdays::adjust.next,
+  adjust.to   = bizdays::adjust.previous
+)
+
+# Calendar: weekends + Danish holidays as non-working
+bizdays::create.calendar(
+  name        = "DK_helligdage",
+  weekdays    = c("saturday", "sunday"),
+  holidays    = dk_hols,
+  adjust.from = bizdays::adjust.next,
+  adjust.to   = bizdays::adjust.previous
+)
+
 # Define the function
 transform_data <- function(data) {
 
@@ -318,9 +379,9 @@ transform_data <- function(data) {
       Month     = month(`Modtaget (*)`),
       MonthDate = floor_date(`Modtaget (*)`, unit = "month"),
       `Svartype (*)` = case_when(
-      `Svartype (*)` %in% c("Medicingennemgang SDCA", "SDCA MGG MADS") ~ "Medicingennemgang",
-      TRUE ~ `Svartype (*)`
-    ),
+        `Svartype (*)` %in% c("Medicingennemgang SDCA", "SDCA MGG MADS") ~ "Medicingennemgang",
+        TRUE ~ `Svartype (*)`
+      ),
 
       # 2) Replace missing values
       `Svartype (*)` = replace_na(`Svartype (*)`, "Andre"),
@@ -328,7 +389,7 @@ transform_data <- function(data) {
 
       # 3) English weekday to be adjusted
       ugedag_modtaget = weekdays(as.Date(`Modtaget (*)`)),
-      ugedag_svaret = weekdays(as.Date(`Færdig (*)`))
+      ugedag_svaret   = weekdays(as.Date(`Færdig (*)`))
     ) %>%
     # 4) Adjust weekend days to Monday of the following week
     mutate(
@@ -338,13 +399,29 @@ transform_data <- function(data) {
         TRUE ~ as.Date(`Modtaget (*)`)
       ),
       ugedag_modtaget = weekdays(AdjustedDate), # Weekdays based on adjusted date
-      WeekNumber = isoweek(AdjustedDate),
-      svartid = as.Date(`Færdig (*)`) - AdjustedDate
+      WeekNumber      = isoweek(AdjustedDate),
+
+      # Raw calendar-day difference (renamed from 'svartid')
+      svartid.raw = as.Date(`Færdig (*)`) - AdjustedDate,
+
+      # Only weekdays (Mon–Fri), weekends removed
+      svartid.NoWeekend = bizdays::bizdays(
+        AdjustedDate,
+        as.Date(`Færdig (*)`),
+        cal = "DK_weekends_only"
+      ),
+
+      # Weekdays excluding both weekends and Danish holidays
+      svartid.NoWeekendNoHolidays = bizdays::bizdays(
+        AdjustedDate,
+        as.Date(`Færdig (*)`),
+        cal = "DK_helligdage"
+      )
     ) %>%
     # 5) Convert English day names to Danish (and remove names attribute)
     mutate(
       ugedag_modtaget = unname(eng_to_dk[ugedag_modtaget]),
-      ugedag_svaret = unname(eng_to_dk[ugedag_svaret]),
+      ugedag_svaret   = unname(eng_to_dk[ugedag_svaret]),
 
       # 6) Define sektor
       sektor = case_when(
@@ -363,15 +440,15 @@ transform_data <- function(data) {
         TRUE ~ "Andre"
       ),
 
-      # 8) NEW: Add svar_kategori and ensure proper date formats
+      # 8) Add svar_kategori and ensure proper date formats
       AdjustedDate = as_date(AdjustedDate),
       FaerdigDate  = as_date(`Færdig (*)`),
       svar_kategori = case_when(
-        `Svartype (*)` == "Medicingennemgang" ~ "Medicingennemgang",
-        `Svartype (*)` == "Ibrugtagningssag"  ~ "Ibrugtagningssag",
-        `Svartype (*)` == "Kortsvar"  ~ "Kortsvar",
-        `Svartype (*)` == "Generel forespørgsel"  ~ "Generel forespørgsel",
-        `Svartype (*)` == "Almindeligt svar"  ~ "Almindeligt svar",
+        `Svartype (*)` == "Medicingennemgang"      ~ "Medicingennemgang",
+        `Svartype (*)` == "Ibrugtagningssag"       ~ "Ibrugtagningssag",
+        `Svartype (*)` == "Kortsvar"               ~ "Kortsvar",
+        `Svartype (*)` == "Generel forespørgsel"   ~ "Generel forespørgsel",
+        `Svartype (*)` == "Almindeligt svar"       ~ "Almindeligt svar",
         TRUE ~ NA_character_
       )
     )
@@ -457,7 +534,7 @@ message("✓ Affiliation data merged successfully")
 message("\nReorganising status values...")
 
 data.lmraad_filtered <- data.lmraad_filtered %>%
-      mutate(
+  mutate(
     Status = case_when(
       `Svartype (*)` == "Ibrugtagningssag" & !is.na(`Færdig (*)`)  ~ "Sendt",
       `Svartype (*)` == "Ibrugtagningssag" & is.na(Status) & is.na(`Færdig (*)`) ~ "Modtaget",
