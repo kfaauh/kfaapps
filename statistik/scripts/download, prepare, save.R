@@ -6,24 +6,6 @@
 # 1. PACKAGE LOADING
 # =============================================================================
 
-# # Function to load packages
-# load_pkg <- function(pkg) {
-#   if(!require(pkg, character.only = TRUE, quietly = TRUE)) {
-#     install.packages(pkg, dependencies = TRUE)
-#     library(pkg, character.only = TRUE)
-#   }
-#   message("✓ Loaded: ", pkg)
-# }
-#
-# # Load required packages
-# load_pkg("Microsoft365R")
-# load_pkg("dplyr")
-# load_pkg("readr")
-# load_pkg("lubridate")
-# load_pkg("readxl")
-# load_pkg("here")
-# load_pkg("tidyr")
-
 # Simple approach for server
 library(Microsoft365R)
 Sys.setenv(AZURE_AUTH_TYPE = "device_code")
@@ -33,15 +15,14 @@ if (!dir.exists(cache_dir)) {
 }
 Sys.setenv(AZURE_DATA_DIR = cache_dir)
 
-
 library(dplyr)
 library(readr)
 library(lubridate)
 library(readxl)
 library(here)
 library(tidyr)
-library(bizdays)   # NEW
-library(timeDate)  # NEW
+library(bizdays)
+library(timeDate)
 
 # =============================================================================
 # 2. SETUP AND UTILITY FUNCTIONS
@@ -58,20 +39,15 @@ ensure_directory <- function(dir_path) {
 # Get today's date for file naming
 creation_date_string <- format(Sys.Date(), "%d-%m-%y")
 
-
 # =============================================================================
 # 3. AZURE DATA LOADING
 # =============================================================================
 
 message("\nLoading data from Azure...")
 
-# Try to use the cached Azure token non-interactively.
-# If this fails (e.g. token expired, never created), we stop with
-# a clear message that explains how to re-authenticate on the server.
+# Try to use the cached Azure token non-interactively
 site_list <- tryCatch(
   {
-    # Use cached credentials (what works locally AND on the server once
-    # we've done the device_code login as 'shiny')
     list_sharepoint_sites(auth_type = "device_code")
   },
   error = function(e) {
@@ -89,7 +65,6 @@ site_list <- tryCatch(
     message("")
     message("After successful authentication, try running this script again.")
 
-    # Stop script so Shiny shows a clear failure instead of hanging
     stop("Azure authentication missing or expired. Please re-authenticate on the server (see messages above).")
   }
 )
@@ -97,6 +72,175 @@ site_list <- tryCatch(
 # If we got here, Azure auth worked via the cache
 site <- site_list[[1]]
 doc_lib <- site$get_list("Dokumenter")
+
+# =============================================================================
+# 3a. LOAD BIVIRKNINGSINDERETNING DATA
+# =============================================================================
+
+message("\nLoading data from Bivirkningsindberetning list...")
+
+# Get the Side Effect Reporting List data
+biv_list <- site$get_list("Bivirkningsindberetning")
+
+# Define columns needed from the side effect list
+biv_cols <- c(
+  "Lægemiddel (ATC)",
+  "Primære Bivirkning",
+  "Øvrige bivirkninger",
+  "Matrikel",
+  "Afdeling",
+  "Alvorsgrad",
+  "Oprettet",
+  "Oprettet af"
+)
+
+biv_colinfo <- biv_list$get_column_info()
+biv_needed <- subset(biv_colinfo, displayName %in% biv_cols)
+biv_internal_names <- biv_needed$name
+
+# Add id and Created columns - note lowercase "id" based on your str() output
+biv_internal_names <- c("id", biv_internal_names, "Created")
+
+# Get data from SharePoint
+biv_items_raw <- biv_list$list_items(select = biv_internal_names, n = Inf)
+biv_items_df <- biv_items_raw
+
+# Standardize column names: rename "id" to "Id" for consistency
+if("id" %in% names(biv_items_df)) {
+  names(biv_items_df)[names(biv_items_df) == "id"] <- "Id"
+  message("✓ Renamed 'id' column to 'Id'")
+}
+
+# Rename other columns to display names - safely handle missing columns
+for(i in 1:nrow(biv_needed)) {
+  col_name <- biv_needed$name[i]
+  display_name <- biv_needed$displayName[i]
+
+  if(col_name %in% names(biv_items_df)) {
+    names(biv_items_df)[names(biv_items_df) == col_name] <- display_name
+  } else {
+    message("Warning: Column '", col_name, "' not found in biv_items_df")
+  }
+}
+
+message("✓ Bivirkningsindberetning data loaded: ", nrow(biv_items_df), " records")
+
+# =============================================================================
+# 3b. TRANSFORM BIVIRKNINGSINDERETNING DATA
+# =============================================================================
+
+message("Transforming Bivirkningsindberetning data...")
+
+# Rename Oprettet to Modtaget (*) and format as date
+biv_items_df <- biv_items_df %>%
+  rename("Modtaget (*)" = Oprettet) %>%
+  mutate(
+    # Convert Modtaget (*) to date format
+    "Modtaget (*)" = as_date(with_tz(
+      ymd_hms(`Modtaget (*)`, tz = "UTC"),
+      "Europe/Copenhagen"
+    ))
+  )
+
+# Create AdjustedDate and Færdig (*) columns
+biv_items_df <- biv_items_df %>%
+  mutate(
+    AdjustedDate = `Modtaget (*)`,
+    "Færdig (*)" = as.Date(NA)  # Set to NA instead of same date
+  )
+
+# Add other required columns with NA values to match structure
+biv_items_df <- biv_items_df %>%
+  mutate(
+    "Svartype (*)" = "Bivirkningsindberetning",
+    Status = NA_character_,  # Set to NA instead of "Indberettet"
+    "Speciale (*)" = NA_character_,
+    "Hospital (*)" = NA_character_,
+    "Region (*)" = NA_character_,
+    "Forvagt*" = NA_character_,
+    "Bagvagt*" = NA_character_,
+    "Forvagt_x002a_" = NA_character_,
+    "Bagvagt_x002a_" = NA_character_,
+    Speciale = NA_character_,
+    FileRef = NA_character_
+  )
+
+# Calculate derived date columns
+biv_items_df <- biv_items_df %>%
+  mutate(
+    Year = year(AdjustedDate),
+    Month = month(AdjustedDate),
+    MonthDate = floor_date(AdjustedDate, unit = "month"),
+    WeekNumber = isoweek(AdjustedDate),
+
+    # Set these columns to NA as requested
+    ugedag_modtaget = NA_character_,
+    ugedag_svaret = NA_character_,
+
+    # Add other structural columns
+    sektor = "Hospital",  # Assuming side effects are from hospital settings
+    specialeCorrected = NA_character_,  # Set to NA instead of "Andre"
+    svar_kategori = "Bivirkningsindberetning",
+    FaerdigDate = as.Date(NA)  # Set to NA
+  )
+
+# Calculate age column but set to NA as requested
+biv_items_df <- biv_items_df %>%
+  mutate(
+    age_adjusted = NA_integer_  # Set to NA instead of calculating
+  )
+
+# Debug: Show column names before selecting
+message("Columns in biv_items_df: ", paste(names(biv_items_df), collapse = ", "))
+
+# Reorder columns to match similar structure - using any_of() for safety
+biv_items_df <- biv_items_df %>%
+  select(
+    any_of("Id"),
+    any_of("Svartype (*)"),
+    any_of("Forvagt*"),
+    any_of("Bagvagt*"),
+    any_of("Modtaget (*)"),
+    any_of("Færdig (*)"),
+    any_of("Speciale (*)"),
+    any_of("Speciale"),
+    any_of("Hospital (*)"),
+    any_of("Region (*)"),
+    any_of("Status"),
+    any_of("Forvagt_x002a_"),
+    any_of("Bagvagt_x002a_"),
+    any_of("Year"),
+    any_of("Month"),
+    any_of("MonthDate"),
+    any_of("ugedag_modtaget"),
+    any_of("ugedag_svaret"),
+    any_of("AdjustedDate"),
+    any_of("WeekNumber"),
+    any_of("sektor"),
+    any_of("specialeCorrected"),
+    any_of("svar_kategori"),
+    any_of("FaerdigDate"),
+    any_of("age_adjusted"),
+    any_of("Lægemiddel (ATC)"),
+    any_of("Primære Bivirkning"),
+    any_of("Øvrige bivirkninger"),
+    any_of("Matrikel"),
+    any_of("Afdeling"),
+    any_of("Alvorsgrad"),
+    any_of("Oprettet af"),
+    any_of("FileRef")
+  )
+
+# Rename to final variable name
+data.bivirkninger <- biv_items_df
+
+message("✓ Bivirkningsindberetning data transformed: ", nrow(data.bivirkninger), " records")
+
+# =============================================================================
+# 3c. LOAD ORIGINAL LÆGEMIDDELRÅDGIVNING DATA
+# =============================================================================
+
+message("\nLoading original Lægemiddelrådgivning data...")
 
 # Define display names
 cols_to_analyze <- c(
@@ -115,19 +259,62 @@ cols_to_analyze <- c(
   "Bagvagt_x002a_"
 )
 
-# Map display names to internal names, fixing "ID" mismatch
+# Map display names to internal names
 colinfo <- doc_lib$get_column_info()
-needed_info <- subset(colinfo, displayName %in% cols_to_analyze)
-needed_info$name[needed_info$name == "ID"] <- "id"
 
-# Retrieve selected columns
-internal_names <- c(needed_info$name, "FileRef")
+# Debug: Show available columns
+message("Available columns in document library:")
+print(colinfo[, c("name", "displayName")])
+
+needed_info <- subset(colinfo, displayName %in% cols_to_analyze)
+
+# Handle ID column - based on your str() output, it's lowercase "id"
+if("ID" %in% needed_info$name) {
+  needed_info$name[needed_info$name == "ID"] <- "Id"
+  message("✓ Standardized 'ID' to 'Id' in column mapping")
+} else if("id" %in% needed_info$name) {
+  needed_info$name[needed_info$name == "id"] <- "Id"
+  message("✓ Standardized 'id' to 'Id' in column mapping")
+}
+
+# Retrieve selected columns - use only the names that exist
+internal_names <- needed_info$name
+message("Requesting columns: ", paste(internal_names, collapse = ", "))
+
+# Add FileRef column
+internal_names <- c(internal_names, "FileRef")
+
 all_items <- doc_lib$list_items(select = internal_names, n = Inf)
 
-# Rename internal names to display names
+# Rename internal names to display names - use safe loop
 items_df <- all_items
-match_idx <- match(needed_info$name, names(items_df))
-names(items_df)[match_idx] <- needed_info$displayName
+
+# Debug: Show what columns we actually got
+message("Actual columns retrieved: ", paste(names(items_df), collapse = ", "))
+
+# Rename columns using a safe loop
+for(i in 1:nrow(needed_info)) {
+  col_name <- needed_info$name[i]
+  display_name <- needed_info$displayName[i]
+
+  if(col_name %in% names(items_df)) {
+    names(items_df)[names(items_df) == col_name] <- display_name
+  } else {
+    message("Warning: Column '", col_name, "' not found in items_df")
+  }
+}
+
+# Ensure Id column exists with correct case
+if("id" %in% names(items_df)) {
+  names(items_df)[names(items_df) == "id"] <- "Id"
+  message("✓ Standardized 'id' to 'Id' in main data")
+} else if("ID" %in% names(items_df)) {
+  names(items_df)[names(items_df) == "ID"] <- "Id"
+  message("✓ Standardized 'ID' to 'Id' in main data")
+}
+
+# Debug: Show final column names
+message("Final columns in items_df: ", paste(names(items_df), collapse = ", "))
 
 # Filter for each folder
 data.lmraad <- subset(
@@ -136,10 +323,12 @@ data.lmraad <- subset(
 )
 
 # Remove rows where all specified columns are NA
+# Use any_of() to handle missing columns safely
 data.lmraad <- data.lmraad %>%
   filter(
     rowSums(
-      is.na(select(., `Svartype (*)`, `Forvagt*`, `Bagvagt*`, `Modtaget (*)`, `Færdig (*)`, `Speciale (*)`, `Hospital (*)`, `Region (*)`))
+      is.na(select(., any_of(c("Svartype (*)", "Forvagt*", "Bagvagt*", "Modtaget (*)",
+                               "Færdig (*)", "Speciale (*)", "Hospital (*)", "Region (*)"))))
     ) < 8  # 8 is the number of columns being checked
   )
 
@@ -157,20 +346,23 @@ data.ibrugtagning <- subset(
   items_df,
   startsWith(FileRef, "/sites/Lgemiddelrdgivning/Delte dokumenter/Ibrugtagningssag/")
 )
-# Exclude document enteries by removing rows with NA hospital
+# Exclude document entries by removing rows with NA hospital
 data.ibrugtagning <- data.ibrugtagning[!is.na(data.ibrugtagning$`Hospital (*)`),]
 
-# Ensure
+# Ensure medicingennemgang type
 data.medicingennemgang$`Svartype (*)` <- "Medicingennemgang"
 
+# Date formatting function
 format_dates <- function(data) {
+  if(!"Modtaget (*)" %in% names(data)) {
+    return(data)  # Skip if column doesn't exist
+  }
+
   data %>%
     mutate(
       `Modtaget (*)` = if_else(
         is.na(`Modtaget (*)`),
-        # if missing, stay missing (as a Date)
         as.Date(NA),
-        # else parse, shift to CEST, then drop the time
         as_date(
           with_tz(
             ymd_hms(`Modtaget (*)`, tz = "UTC"),
@@ -196,8 +388,7 @@ data.lmraad <- format_dates(data.lmraad)
 data.medicingennemgang <- format_dates(data.medicingennemgang)
 data.ibrugtagning <- format_dates(data.ibrugtagning)
 
-message("✓ Azure data loaded successfully")
-
+message("✓ Original Azure data loaded successfully")
 
 # =============================================================================
 # 4. EXCEL FILE LOADING
@@ -210,7 +401,7 @@ get_newest_excel_file <- function(directory_path) {
   # Get all Excel files in the directory
   excel_files <- list.files(
     path = directory_path,
-    pattern = "\\.xlsx?$",  # Matches .xlsx and .xls files
+    pattern = "\\.xlsx?$",
     full.names = TRUE
   )
 
@@ -265,7 +456,6 @@ KFE_KFA_affiliation.long <- KFE_KFA_affiliation %>%
 
 message("✓ Excel affiliation data loaded successfully")
 
-
 # =============================================================================
 # 5. DATA PREPARATION
 # =============================================================================
@@ -296,8 +486,8 @@ dk_helligdage <- function(years) {
     as.Date(paste0(years, "-12-25")),  # Christmas Day
     as.Date(paste0(years, "-12-26")),  # 2nd Christmas Day
 
-    # Often treated as non-working days (adjust as needed)
-    as.Date(paste0(years, "-06-05")),  # Constitution Day (Grundlovsdag)
+    # Often treated as non-working days
+    as.Date(paste0(years, "-06-05")),  # Constitution Day
     as.Date(paste0(years, "-12-24")),  # Christmas Eve
     as.Date(paste0(years, "-12-31")),  # New Year's Eve
 
@@ -315,16 +505,17 @@ all_dates <- c(
   data.lmraad$`Modtaget (*)`,
   data.medicingennemgang$`Modtaget (*)`,
   data.ibrugtagning$`Modtaget (*)`,
-  Sys.Date()  # ensure at least current year is included
+  data.bivirkninger$`Modtaget (*)`,
+  Sys.Date()
 )
 
 min_year <- min(lubridate::year(all_dates), na.rm = TRUE)
-max_year <- max(lubridate::year(all_dates), na.rm = TRUE) + 5  # e.g. 5 years into the future
+max_year <- max(lubridate::year(all_dates), na.rm = TRUE) + 5
 
 years_range <- min_year:max_year
 dk_hols <- dk_helligdage(years_range)
 
-# Calendar: only weekends as non-working (Mon–Fri counted)
+# Calendar: only weekends as non-working
 bizdays::create.calendar(
   name        = "DK_weekends_only",
   weekdays    = c("saturday", "sunday"),
@@ -342,39 +533,58 @@ bizdays::create.calendar(
   adjust.to   = bizdays::adjust.previous
 )
 
-# Define the function
+# Define the transformation function
 transform_data <- function(data) {
+  # Check if Id column exists
+  if(!"Id" %in% names(data)) {
+    message("Warning: Id column not found in data. Available columns: ",
+            paste(names(data), collapse = ", "))
+    # Try to create Id column if it doesn't exist
+    if("ID" %in% names(data)) {
+      data <- data %>% rename(Id = ID)
+      message("Renamed ID to Id")
+    } else if("id" %in% names(data)) {
+      data <- data %>% rename(Id = id)
+      message("Renamed id to Id")
+    } else {
+      stop("No Id column found and cannot create one")
+    }
+  }
 
-  # Merge `Speciale` into `Speciale (*)` and set `Speciale (*)` to NA when `Speciale` is not NA
-  data <- data %>%
-    mutate(
-      `Speciale (*)` = if_else(
-        !is.na(Speciale),  # If `Speciale` is not NA
-        NA_character_,     # Set `Speciale (*)` to NA
-        `Speciale (*)`     # Otherwise, keep `Speciale (*)` as is
-      ),
-      `Speciale (*)` = coalesce(`Speciale (*)`, Speciale)  # Merge `Speciale` into `Speciale (*)`
-    )
-
-  # Update `Modtaget (*)` where previous and next values are the same and not NA
-  data <- data %>%
-    mutate(Id = as.numeric(Id)) %>%
-    arrange(Id) %>%  # Ensure data is sorted by Id
-    mutate(
-      prev_modtaget = lag(`Modtaget (*)`),  # Previous row's Modtaget (*)
-      next_modtaget = lead(`Modtaget (*)`),  # Next row's Modtaget (*)
-      `Modtaget (*)` = if_else(
-         is.na(`Modtaget (*)`) & !is.na(prev_modtaget) & !is.na(next_modtaget) & prev_modtaget == next_modtaget,
-        prev_modtaget,
-        `Modtaget (*)`
+  # Merge Speciale into Speciale (*)
+  if("Speciale" %in% names(data) && "Speciale (*)" %in% names(data)) {
+    data <- data %>%
+      mutate(
+        `Speciale (*)` = if_else(
+          !is.na(Speciale),
+          NA_character_,
+          `Speciale (*)`
+        ),
+        `Speciale (*)` = coalesce(`Speciale (*)`, Speciale)
       )
-    ) %>%
-    select(-prev_modtaget, -next_modtaget)
+  }
+
+  # Update Modtaget (*) where previous and next values are the same
+  if("Modtaget (*)" %in% names(data)) {
+    data <- data %>%
+      mutate(Id = as.numeric(Id)) %>%
+      arrange(Id) %>%
+      mutate(
+        prev_modtaget = lag(`Modtaget (*)`),
+        next_modtaget = lead(`Modtaget (*)`),
+        `Modtaget (*)` = if_else(
+          is.na(`Modtaget (*)`) & !is.na(prev_modtaget) & !is.na(next_modtaget) & prev_modtaget == next_modtaget,
+          prev_modtaget,
+          `Modtaget (*)`
+        )
+      ) %>%
+      select(-any_of(c("prev_modtaget", "next_modtaget")))
+  }
 
   # Additional transformations
   data <- data %>%
     mutate(
-      # 1) Basic columns
+      # Basic columns
       Year      = year(`Modtaget (*)`),
       Month     = month(`Modtaget (*)`),
       MonthDate = floor_date(`Modtaget (*)`, unit = "month"),
@@ -383,25 +593,25 @@ transform_data <- function(data) {
         TRUE ~ `Svartype (*)`
       ),
 
-      # 2) Replace missing values
+      # Replace missing values
       `Svartype (*)` = replace_na(`Svartype (*)`, "Andre"),
       `Region (*)`   = replace_na(`Region (*)`, "Andre"),
 
-      # 3) English weekday to be adjusted
+      # English weekday to be adjusted
       ugedag_modtaget = weekdays(as.Date(`Modtaget (*)`)),
       ugedag_svaret   = weekdays(as.Date(`Færdig (*)`))
     ) %>%
-    # 4) Adjust weekend days to Monday of the following week
+    # Adjust weekend days to Monday of the following week
     mutate(
       AdjustedDate = case_when(
         ugedag_modtaget == "Saturday" ~ as.Date(`Modtaget (*)`) + days(2),
         ugedag_modtaget == "Sunday"   ~ as.Date(`Modtaget (*)`) + days(1),
         TRUE ~ as.Date(`Modtaget (*)`)
       ),
-      ugedag_modtaget = weekdays(AdjustedDate), # Weekdays based on adjusted date
+      ugedag_modtaget = weekdays(AdjustedDate),
       WeekNumber      = isoweek(AdjustedDate),
 
-      # Raw calendar-day difference (renamed from 'svartid')
+      # Raw calendar-day difference
       svartid.raw = as.Date(`Færdig (*)`) - AdjustedDate,
 
       # Only weekdays (Mon–Fri), weekends removed
@@ -418,12 +628,12 @@ transform_data <- function(data) {
         cal = "DK_helligdage"
       )
     ) %>%
-    # 5) Convert English day names to Danish (and remove names attribute)
+    # Convert English day names to Danish
     mutate(
       ugedag_modtaget = unname(eng_to_dk[ugedag_modtaget]),
       ugedag_svaret   = unname(eng_to_dk[ugedag_svaret]),
 
-      # 6) Define sektor
+      # Define sektor
       sektor = case_when(
         `Speciale (*)` == "Almen medicin" ~ "Almen praksis",
         is.na(`Hospital (*)`) ~ "Almen praksis",
@@ -431,7 +641,7 @@ transform_data <- function(data) {
         TRUE ~ "Hospital"
       ),
 
-      # 7) Define corrected specialties
+      # Define corrected specialties
       specialeCorrected = case_when(
         `Speciale (*)` == "Almen medicin" ~ "Almen praksis",
         is.na(`Hospital (*)`) ~ "Almen praksis",
@@ -440,7 +650,7 @@ transform_data <- function(data) {
         TRUE ~ "Andre"
       ),
 
-      # 8) Add svar_kategori and ensure proper date formats
+      # Add svar_kategori and ensure proper date formats
       AdjustedDate = as_date(AdjustedDate),
       FaerdigDate  = as_date(`Færdig (*)`),
       svar_kategori = case_when(
@@ -449,6 +659,7 @@ transform_data <- function(data) {
         `Svartype (*)` == "Kortsvar"               ~ "Kortsvar",
         `Svartype (*)` == "Generel forespørgsel"   ~ "Generel forespørgsel",
         `Svartype (*)` == "Almindeligt svar"       ~ "Almindeligt svar",
+        `Svartype (*)` == "Bivirkningsindberetning" ~ "Bivirkningsindberetning",
         TRUE ~ NA_character_
       )
     )
@@ -462,31 +673,26 @@ data.medicingennemgang <- transform_data(data.medicingennemgang)
 data.ibrugtagning <- transform_data(data.ibrugtagning)
 data.ibrugtagning$`Svartype (*)` <- "Ibrugtagningssag"
 
-# Make data frame with all contacts
+# Combine all contacts
 data.lmraad_filtered <- rbind(data.lmraad, data.medicingennemgang, data.ibrugtagning)
-
-# Define current year/month if needed later
-CurrentYear <- year(Sys.Date())
-CurrentMonth <- month(Sys.Date())
 
 # Today's date
 today_cph <- today(tzone = "Europe/Copenhagen")
 
-# Add age col to state the age
+# Add age column
 data.lmraad_filtered <- data.lmraad_filtered %>%
   mutate(
-    # integer days since AdjustedDate
     age_adjusted = as.integer(today_cph - AdjustedDate)
   )
 
-# Remove and reorder cols
+# Remove and reorder columns - use any_of() to handle missing columns safely
 data.lmraad_filtered <- data.lmraad_filtered %>%
   select(
-    Id,
+    any_of("Id"),
     everything(),
-    -`@odata.etag`
+    -any_of("@odata.etag")
   ) %>%
-  relocate(FileRef, .after = last_col())
+  relocate(any_of("FileRef"), .after = last_col())
 
 # Record min and max dates used
 start_date <- min(data.lmraad_filtered$`Modtaget (*)`, na.rm = TRUE)
@@ -495,27 +701,22 @@ start_date_string <- format(as.Date(start_date), "%d-%m-%Y")
 
 message("✓ Data transformation completed")
 
-
 # =============================================================================
 # 6. AFFILIATION MERGING
 # =============================================================================
 
 message("\nMerging affiliation data...")
 
-# This is the cleanest and most readable approach
+# Merge affiliation data
 data.lmraad_filtered <- data.lmraad_filtered %>%
-  # First try to match Forvagt
   left_join(KFE_KFA_affiliation.long %>%
               select(navn, afdeling) %>%
               rename(Forvagt_affiliation = afdeling),
             by = c("Forvagt*" = "navn")) %>%
-  # Then try to match Bagvagt
   left_join(KFE_KFA_affiliation.long %>%
               select(navn, afdeling) %>%
               rename(Bagvagt_affiliation = afdeling),
             by = c("Bagvagt*" = "navn")) %>%
-
-   # Apply the priority logic
   mutate(
     KFE_KFA = case_when(
       !is.na(Forvagt_affiliation) ~ Forvagt_affiliation,
@@ -525,7 +726,6 @@ data.lmraad_filtered <- data.lmraad_filtered %>%
   )
 
 message("✓ Affiliation data merged successfully")
-
 
 # =============================================================================
 # 7. REORGANISE STATUS
@@ -538,25 +738,24 @@ data.lmraad_filtered <- data.lmraad_filtered %>%
     Status = case_when(
       `Svartype (*)` == "Ibrugtagningssag" & !is.na(`Færdig (*)`)  ~ "Sendt",
       `Svartype (*)` == "Ibrugtagningssag" & is.na(Status) & is.na(`Færdig (*)`) ~ "Modtaget",
-      TRUE                                                 ~ Status
+      TRUE ~ Status
     )) %>%
   mutate(
     Status = case_when(
       Status == "Modtaget" & !is.na(`Forvagt*`) ~ "Fordelt",
-      TRUE                                      ~ Status
+      TRUE ~ Status
     ))
 
 message("✓ Status values reorganised successfully")
-
 
 # =============================================================================
 # 8. DATA SAVING AND FILE CLEANING
 # =============================================================================
 
-# 8.a DATA SAVING
+# 8.a DATA SAVING - MAIN DATA
 message("\nSaving prepared data...")
 
-# Set up output directory using project root: Data/Azure data
+# Set up output directory
 output_dir <- here("statistik", "Data", "Azure data")
 ensure_directory(output_dir)
 
@@ -575,31 +774,45 @@ if (file.exists(file_path)) {
 
 # Save main dataset as RDS
 saveRDS(data.lmraad_filtered, file_path)
-message("✓ Saved: ", file_name)
+message("✓ Saved main data: ", file_name)
 
-# 8.b FILE CLEANING
-message("\nCleaning up old files...")
+# 8.b DATA SAVING - BIVIRKNINGER DATA
+message("\nSaving Bivirkningsindberetning data...")
+
+# Create bivirkninger subdirectory
+biv_dir <- here("statistik", "Data", "Azure data", "bivirkninger")
+ensure_directory(biv_dir)
+
+message("Bivirkninger directory: ", biv_dir)
+
+# Generate bivirkninger filename
+biv_file_name <- paste0("azure.bivirkninger_", today_date, ".rds")
+biv_file_path <- here(biv_dir, biv_file_name)
+
+# Remove existing bivirkninger file for today if it exists
+if (file.exists(biv_file_path)) {
+  file.remove(biv_file_path)
+  message("✓ Replaced existing bivirkninger file for today")
+}
+
+# Save bivirkninger dataset as RDS
+saveRDS(data.bivirkninger, biv_file_path)
+message("✓ Saved bivirkninger data: ", biv_file_name)
+
+# 8.c FILE CLEANING - MAIN DATA
+message("\nCleaning up old main data files...")
 
 # Clean up old files - keep only latest 5
 cleanup_old_files <- function(directory, pattern = "azure_.*\\.rds", keep_count = 5) {
-  # Get all azure rds files
   files <- list.files(directory, pattern = pattern, full.names = TRUE)
 
   if (length(files) > keep_count) {
-    # Get file info and sort by modification time (newest first)
     file_info <- file.info(files)
     file_info$file <- files
-
-    # Sort by modification time (newest first)
     sorted_files <- file_info[order(file_info$mtime, decreasing = TRUE), ]
-
-    # Files to keep (newest ones)
     files_to_keep <- sorted_files$file[1:keep_count]
-
-    # Files to delete (oldest ones)
     files_to_delete <- setdiff(sorted_files$file, files_to_keep)
 
-    # Delete oldest files
     if (length(files_to_delete) > 0) {
       file.remove(files_to_delete)
       message("✓ Cleaned up ", length(files_to_delete), " old file(s)")
@@ -607,16 +820,46 @@ cleanup_old_files <- function(directory, pattern = "azure_.*\\.rds", keep_count 
   }
 }
 
-# Run cleanup
+# Run cleanup for main data
 cleanup_old_files(output_dir)
+
+# 8.d FILE CLEANING - BIVIRKNINGER DATA
+message("\nCleaning up old bivirkninger files...")
+
+# Cleanup function for bivirkninger files
+cleanup_bivirkninger_files <- function(directory, pattern = "azure\\.bivirkninger_.*\\.rds", keep_count = 5) {
+  files <- list.files(directory, pattern = pattern, full.names = TRUE)
+
+  if (length(files) > keep_count) {
+    file_info <- file.info(files)
+    file_info$file <- files
+    sorted_files <- file_info[order(file_info$mtime, decreasing = TRUE), ]
+    files_to_keep <- sorted_files$file[1:keep_count]
+    files_to_delete <- setdiff(sorted_files$file, files_to_keep)
+
+    if (length(files_to_delete) > 0) {
+      file.remove(files_to_delete)
+      message("✓ Cleaned up ", length(files_to_delete), " old bivirkninger file(s)")
+    }
+  }
+}
+
+# Run cleanup for bivirkninger data
+cleanup_bivirkninger_files(biv_dir)
 
 # Summary
 current_files <- list.files(output_dir, pattern = "azure_.*\\.rds")
-message("\nCurrent files in directory (", length(current_files), "):")
+current_biv_files <- list.files(biv_dir, pattern = "azure\\.bivirkninger_.*\\.rds")
+
+message("\nCurrent files in main directory (", length(current_files), "):")
 for (file in current_files) {
   message("  - ", file)
 }
 
+message("\nCurrent files in bivirkninger directory (", length(current_biv_files), "):")
+for (file in current_biv_files) {
+  message("  - ", file)
+}
 
 # =============================================================================
 # 9. COMPLETION SUMMARY
@@ -626,9 +869,16 @@ message("\n", rep("=", 50))
 message("DATA PREPARATION COMPLETED SUCCESSFULLY!")
 message(rep("=", 50))
 message("Main dataset: ", nrow(data.lmraad_filtered), " rows")
+message("Bivirkninger dataset: ", nrow(data.bivirkninger), " rows")
 message("Creation date: ", creation_date_string)
-message("Data range: ", start_date, " to ", end_date)
-message("Output location: ", normalizePath(output_dir))
+message("Data range (main): ", start_date, " to ", end_date)
+message("Data range (bivirkninger): ",
+        min(data.bivirkninger$`Modtaget (*)`, na.rm = TRUE), " to ",
+        max(data.bivirkninger$`Modtaget (*)`, na.rm = TRUE))
+message("Output locations:")
+message("  - Main data: ", normalizePath(output_dir))
+message("  - Bivirkninger data: ", normalizePath(biv_dir))
 message("Files created:")
-message("  - prepared_data.rds (main dataset)")
+message("  - ", file_name, " (main dataset)")
+message("  - ", biv_file_name, " (bivirkninger dataset)")
 message(rep("=", 50))
