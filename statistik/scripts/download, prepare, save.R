@@ -7,13 +7,19 @@
 # =============================================================================
 
 # Simple approach for server
+# Simple approach for server
 library(Microsoft365R)
+library(AzureAuth)  # new: used to inspect cached tokens
+
 Sys.setenv(AZURE_AUTH_TYPE = "device_code")
+
 cache_dir <- "/srv/shiny-server/kfaapps/statistik/azure_cache"
 if (!dir.exists(cache_dir)) {
   dir.create(cache_dir, recursive = TRUE)
 }
-Sys.setenv(AZURE_DATA_DIR = cache_dir)
+
+# AzureAuth looks at R_AZURE_DATA_DIR (not AZURE_DATA_DIR) for the cache directory
+Sys.setenv(R_AZURE_DATA_DIR = cache_dir)
 
 library(dplyr)
 library(readr)
@@ -23,6 +29,8 @@ library(here)
 library(tidyr)
 library(bizdays)
 library(timeDate)
+
+
 
 # =============================================================================
 # 2. SETUP AND UTILITY FUNCTIONS
@@ -43,9 +51,39 @@ creation_date_string <- format(Sys.Date(), "%d-%m-%y")
 # 3. AZURE DATA LOADING
 # =============================================================================
 
+azure_token_available <- function() {
+  # Returns TRUE if there is at least one cached Azure token in the current data dir
+  toks <- tryCatch(AzureAuth::list_azure_tokens(), error = function(e) NULL)
+  if (is.null(toks) || length(toks) == 0) {
+    return(FALSE)
+  }
+  TRUE
+}
+
+
 message("\nLoading data from Azure...")
 
-# Try to use the cached Azure token non-interactively
+# Do NOT start a new device_code flow inside Shiny.
+# If there is no cached token, fail fast with an explicit message.
+if (!azure_token_available()) {
+  message("✗ Unable to load SharePoint sites from Azure using cached credentials.")
+
+  message("\n*** ACTION REQUIRED: Re-authenticate Azure for the Shiny user on the server ***")
+  message("Log in to the server and run the following *as the 'shiny' user*:")
+  message("")
+  message("  R --vanilla << 'EOF'")
+  message("  library(Microsoft365R)")
+  message("  site_list <- list_sharepoint_sites(auth_type = 'device_code')")
+  message("  q(save = 'no')")
+  message("  EOF")
+  message("")
+  message("After successful authentication, try running this script again.")
+
+  stop("Azure authentication missing or expired. Please re-authenticate on the server (see messages above).")
+}
+
+# If we get here, there is at least one cached token.
+# Let Microsoft365R reuse it. If this still errors, show the same instructions.
 site_list <- tryCatch(
   {
     list_sharepoint_sites(auth_type = "device_code")
