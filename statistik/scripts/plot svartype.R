@@ -12,7 +12,7 @@ showStackCount <- F
 showTotalCount <- T
 
 # Toggle for time granularity: "Uge", "Måned", or "Kvartal"
-timeGranularity <- "Måned"
+timeGranularity <- "Kvartal"
 
 # Toggle for showing trendline
 showTrendlineToggle <- F
@@ -37,10 +37,10 @@ regionToggle <- "Begge"
 # "Medicingennemgang", "Ibrugtagningssag",
 # "Klinisk rådgivning" (Almindeligt svar + Kortsvar + Generel forespørgsel),
 # "Almindeligt svar", "Kortsvar", "Generel forespørgsel"
-svartypeFilterToggle <- "Alle"
+svartypeFilterToggle <- "Klinisk rådgivning"
 
 # Set the common start and end dates here (used for all granularities)
-start_year  <- 2024L
+start_year  <- 2022L
 start_month <- 1L
 start_day   <- 1L
 end_year    <- 2025L
@@ -92,15 +92,26 @@ effective_groupSvarToggle <- groupSvarToggle && identical(svartypeFilterToggle, 
 
 # Palette + levels
 vibrant_palette <- c(
-  "Almindeligt svar"      = "#082a54",
-  "Kortsvar"              = "#e02b35",
-  "Generel forespørgsel"  = "#59a89c",
-  "Psykiatrikonference"   = "#a559aa",
-  "Medicingennemgang"     = "#f0c571",
-  "Andre"                 = "#808080",
+  # Klinisk rådgivning
+  "Almindeligt svar"      = "#082A54",
+  "Kortsvar"              = "#E02B35",
+  "Generel forespørgsel"  = "#59A89C",
+  "Klinisk forespørgsel"  = "#0083B8",  # grouped category
+
+  # Andre typer
+  "Medicingennemgang"     = "#F0C571",
   "Ibrugtagningssag"      = "#2E8B57",
-  "Klinisk forespørgsel"  = "#0083B8"
+  "Psykiatrikonference"   = "#A559AA",
+  "Andre"                 = "#808080",
+
+  # Hvis du bruger bivirkningsdata som egen kategori
+  "Bivirkningsindberetning" = "#C96A2B"
 )
+
+# Sikkerhed: tjek at alle farver er unikke
+if (any(duplicated(unname(vibrant_palette)))) {
+  stop("vibrant_palette contains duplicated colours – adjust hex codes so all categories are unique.")
+}
 
 # Handle grouping toggle and psykiatrikonf_AndreToggle
 if (effective_groupSvarToggle) {
@@ -451,6 +462,46 @@ period_data <- period_grid %>%
   distinct(period_label, .keep_all = TRUE) %>%
   arrange(period_index)
 
+# Number of periods (x-values)
+n_periods <- length(period_levels)
+
+# Build x-axis label map with at most 50 non-empty labels
+if (n_periods <= 50L) {
+  # Show all labels
+  x_labels_map <- setNames(period_data$period_display, period_data$period_label)
+} else {
+  # Show at most 50 labels: first and then every 'step'-th
+  step <- ceiling(n_periods / 50L)
+  show_idx <- seq(1L, n_periods, by = step)
+
+  lbl_vec <- rep("", n_periods)
+  lbl_vec[show_idx] <- period_data$period_display[show_idx]
+
+  x_labels_map <- setNames(lbl_vec, period_data$period_label)
+}
+
+# Tick marks: only show x-ticks when we have more than 50 periods
+axis_ticks_x <- if (n_periods > 50L) {
+  element_line(colour = "black", linewidth = 0.2)
+} else {
+  element_blank()
+}
+
+# Bar corner rounding: fewer periods -> more rounding, more periods -> less
+# Define radius bounds (in pt)
+min_radius_pts <- 0.5   # smallest rounding
+max_radius_pts <- 5.0   # largest rounding
+
+# Compute raw radius as a function of number of periods
+raw_radius_pts <- 5 - n_periods / 20
+
+# Clamp raw radius between min_radius_pts and max_radius_pts
+bar_radius_pts <- max(
+  min_radius_pts,
+  min(max_radius_pts, raw_radius_pts)
+)
+
+bar_radius <- grid::unit(bar_radius_pts, "pt")
 # Calculate year positions and labels with gaps between years
 year_data <- period_data %>%
   group_by(year_adj) %>%
@@ -519,6 +570,18 @@ y_lower <- -y_top5 * 0.12
 y_upper <- y_top5 * 1.02
 
 p <- ggplot() +
+  # Invisible chicklet layer to ensure all legend entries (even when some categories have no data)
+ggchicklet::geom_chicklet(
+  data = legend_df,
+  aes(x = period_label, y = n, fill = svar_kategori),
+  width  = 0.85,
+  radius = bar_radius,
+  alpha  = 0,
+  colour = NA,
+  size   = 0.5,
+  inherit.aes = FALSE,
+  show.legend  = TRUE
+) +
   # Year background rectangles in main chart area (central panel)
   geom_rect(
     data  = year_data,
@@ -562,15 +625,15 @@ p <- ggplot() +
     linewidth  = 0.8
   ) +
   # Main bars
-  ggchicklet::geom_chicklet(
-    data    = bars_df,
-    aes(x = period_label, y = n, fill = svar_kategori),
-    width   = 0.85,
-    radius  = grid::unit(2, "pt"),
-    colour  = "white",
-    size    = 0.5,
-    position = position_stack(reverse = TRUE)
-  ) +
+ggchicklet::geom_chicklet(
+  data    = bars_df,
+  aes(x = period_label, y = n, fill = svar_kategori),
+  width   = 0.85,
+  radius  = bar_radius,
+  colour  = "white",
+  size    = 0.5,
+  position = position_stack(reverse = TRUE)
+) +
   # Stack numbers if enabled
   (if (showStackCount) {
     geom_text(
@@ -610,13 +673,13 @@ p <- ggplot() +
     label.padding = grid::unit(2, "pt"),
     linewidth = 0                    # no extra border from geom_label
   ) +
-  scale_fill_manual(
-    values = vibrant_palette,
-    limits = svar_levels_legend,
-    breaks = svar_levels_legend,
-    drop   = FALSE,
-    name   = "Type aktivitet"
-  ) +
+scale_fill_manual(
+  values = vibrant_palette[svar_levels_legend],
+  limits = svar_levels_legend,
+  breaks = svar_levels_legend,
+  drop   = FALSE,
+  name   = "Type aktivitet"
+) +
   guides(fill = guide_legend(override.aes = list(alpha = 1))) +
   # IMPORTANT: no y-limits here, so we can safely draw outside and
   # use coord_cartesian to zoom without killing the grey band.
@@ -626,11 +689,11 @@ p <- ggplot() +
     expand       = c(0, 0)
   ) +
   # Show *all* periods (weeks / months / quarters), even if total = 0
-  scale_x_discrete(
-    limits = period_levels,
-    drop   = FALSE,
-    labels = setNames(period_data$period_display, period_data$period_label)
-  ) +
+scale_x_discrete(
+  limits = period_levels,
+  drop   = FALSE,
+  labels = x_labels_map
+) +
   labs(
     x        = x_title,
     y        = "Forespørgsler",
@@ -670,7 +733,7 @@ p <- ggplot() +
 
     axis.ticks.length = unit(2, "pt"),
     axis.line.x       = element_blank(),
-    axis.ticks.x      = element_blank(),
+    axis.ticks.x      = axis_ticks_x,
     axis.ticks        = element_line(colour = "black", linewidth = 0.2),
 
     plot.title    = element_text(size = 16, hjust = 0.5, face = "bold"),
