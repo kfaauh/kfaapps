@@ -1,6 +1,8 @@
 library(shiny)
 library(here)
 library(shinyjs)
+library(lubridate)
+library(grid)
 
 ui <- fluidPage(
   useShinyjs(),
@@ -37,7 +39,7 @@ ui <- fluidPage(
         color: #555;
       }
       .links {
-        margin: 0.6em 0;
+        margin: 0.3em 0;
       }
       .link-button {
         display: inline-block;
@@ -130,12 +132,12 @@ ui <- fluidPage(
 
       .section-separator {
         border-top: 1px solid #cccccc;
-        margin: 12px auto;
+        margin: 8px auto;
         width: 85%;
       }
       .section-separator-thin {
         border-top: 1px solid #dddddd;
-        margin: 2px auto;
+        margin: 4px auto 6px auto;
         width: 80%;
       }
 
@@ -152,7 +154,7 @@ ui <- fluidPage(
         border: none !important;
       }
       .download-links {
-        margin: 0 !important;
+        margin: -70px 0 0 0 !important;  /* further pull download buttons up */
         padding: 0 !important;
       }
 
@@ -179,12 +181,12 @@ ui <- fluidPage(
         margin-bottom: 0px;
         font-size: 1.1em;
       }
-           .kfe-kfa-subtitle {
-       font-size: 0.8em;
-       color: #000000;
-       margin-top: 0px;
-       margin-bottom: 3px;
-     }
+      .kfe-kfa-subtitle {
+        font-size: 0.8em;
+        color: #000000;
+        margin-top: 0px;
+        margin-bottom: 3px;
+      }
       .kfe-kfa-buttons {
         display: flex;
         justify-content: center;
@@ -206,32 +208,28 @@ ui <- fluidPage(
         margin-top: 1px;
       }
 
-  /* Remove extra margin from selectInput wrapper inside dropdown */
-  .dropdown-container .shiny-input-container {
-    margin-bottom: 0 !important;
-  }
+      .dropdown-container .shiny-input-container {
+        margin-bottom: 0 !important;
+      }
 
-      /* Make selectize dropdown ~170px wide and keep text on one line */
       .dropdown-container .selectize-control {
         font-size: 0.6em;
         min-width: 170px;
         max-width: 500px;
       }
 
-  .dropdown-container .selectize-input {
-    padding: 2px 6px;
-    min-height: 26px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
+      .dropdown-container .selectize-input {
+        padding: 2px 6px;
+        min-height: 26px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
 
-  /* Remove vertical margins from the Download button so it lines up */
-  .dropdown-container .btn {
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-  }
-
+      .dropdown-container .btn {
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+      }
 
       .dropdown-select {
         font-size: 0.7em !important;
@@ -240,13 +238,59 @@ ui <- fluidPage(
         padding: 2px 5px !important;
         height: 28px !important;
       }
+
+      /* Controls row for 'Tidligere aktiviteter' */
+      .controls-row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 4px;
+      }
+      .controls-row .shiny-input-container {
+        margin-bottom: 0.1em;
+      }
+      .controls-row label {
+        font-size: 0.9em;
+      }
+
+      /* Tighter row for third line of checkboxes */
+      .controls-row-tight {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 0px;            /* no gap from flexbox */
+        margin-top: -4px;    /* pull row up slightly */
+        margin-bottom: 0;
+      }
+
+      /* Each checkbox block */
+      .controls-row-tight .cb-wrap {
+        display: inline-block;
+        margin: 0 -30px;     /* negative margin to bring blocks closer */
+        padding: 0;
+      }
+
+      /* Inside each checkbox: box vs text */
+      .controls-row-tight .checkbox label {
+        display: flex;
+        align-items: center;  /* vertical centering vs checkbox */
+        gap: 3px;             /* distance between checkbox square and its text */
+        margin-bottom: 0;
+      }
+
+      /* Keep vertical spacing tight */
+      .controls-row-tight .shiny-input-container {
+        margin-top: 0;
+        margin-bottom: 0;
+      }
     "))
   ),
 
   div(
     class = "content",
 
-    # Main title
     div(class = "header", "Statistik over afdelingens aktiviteter"),
 
     # ---- Synkronisering (top) ----
@@ -259,13 +303,11 @@ ui <- fluidPage(
       )
     ),
 
-    # Seneste synkronisering (neutral / green after success)
     div(
       class = "links",
       uiOutput("last_sync")
     ),
 
-    # Error messages (if any)
     div(
       class = "links",
       uiOutput("status_message")
@@ -273,7 +315,7 @@ ui <- fluidPage(
 
     div(class = "section-separator"),
 
-    # ---- Aktivitetsstatus ----
+    # ---- Aktivitetsstatus (eksisterende) ----
     div(class = "subheader", "Aktivitetsstatus"),
 
     div(
@@ -285,12 +327,11 @@ ui <- fluidPage(
       )
     ),
 
-        # Plot + download section (only when plot exists)
     conditionalPanel(
       condition = "output.plot_available == true",
       div(
         class = "plot-container",
-        plotOutput("activity_plot", inline = TRUE)  # Added inline = TRUE
+        plotOutput("activity_plot", inline = TRUE)
       ),
       div(
         class = "download-links",
@@ -299,19 +340,147 @@ ui <- fluidPage(
       )
     ),
 
-    # Always show horizontal line above KFE/KFA section
     div(class = "section-separator"),
 
-      # ---- KFE/KFA tilhørsforhold ----
+    # ---- Tidligere aktiviteter (tidligere 'Antal aktiviteter over tid') ----
+    div(class = "subheader", "Tidligere aktiviteter"),
+
+    div(
+      class = "links",
+      actionButton(
+        "run_svartype_plot",
+        "Plot aktiviteter",
+        class = "link-button"
+      )
+    ),
+
+    # Line 1: Fra, Til, Tidsopløsning, Vis antal
+    div(
+      class = "controls-row",
+      dateInput(
+        "from_date",
+        label = "Fra",
+        value = floor_date(Sys.Date(), "month") %m-% years(1),  # first of month, one year back
+        format = "dd-mm-yyyy",
+        width = "120px"
+      ),
+      dateInput(
+        "to_date",
+        label = "Til",
+        value = floor_date(Sys.Date(), "month"),                # first of current month
+        format = "dd-mm-yyyy",
+        width = "120px"
+      ),
+      selectInput(
+        "timeGranularity",
+        label = "Tidsopløsning",
+        choices = c("Uge", "Måned", "Kvartal"),
+        selected = "Måned",
+        width = "120px"
+      ),
+      selectInput(
+        "countMode",
+        label = "Vis antal",
+        choices = c("Ingen", "Samlet", "Opdelt"),
+        selected = "Samlet",
+        width = "140px"
+      )
+    ),
+
+    # Line 2: Svartype, Speciale, Region
+    div(
+      class = "controls-row",
+      selectInput(
+        "svartypeFilterToggle",
+        label = "Svartype",
+        choices = c(
+          "Alle",
+          "Klinisk rådgivning",
+          "Almindeligt svar",
+          "Kortsvar",
+          "Generel forespørgsel",
+          "Medicingennemgang",
+          "Ibrugtagningssag"
+        ),
+        selected = "Alle",
+        width = "190px"
+      ),
+      selectInput(
+        "specialeToggle",
+        label = "Speciale",
+        choices = "Alle",     # updated in server when data is known
+        selected = "Alle",
+        width = "220px"
+      ),
+      selectInput(
+        "regionToggle",
+        label = "Region (rekvirent)",
+        choices = c("Begge", "Nordjylland", "Midtjylland"),
+        selected = "Begge",
+        width = "180px"
+      )
+    ),
+
+    # Line 3: Grupper..., Vis Psykiatrikonference og Andre, Trendlinje, Antal i legend
+    div(
+      class = "controls-row-tight",
+      div(
+        class = "cb-wrap",
+        checkboxInput(
+          "groupSvarToggle",
+          label = HTML("Grupper kliniske henvendelser<br>(alm., kort, generel)"),
+          value = FALSE
+        )
+      ),
+      div(
+        class = "cb-wrap",
+        checkboxInput(
+          "psykiatrikonf_AndreToggle",
+          label = "Vis Psykiatrikonference og Andre",
+          value = FALSE
+        )
+      ),
+      div(
+        class = "cb-wrap",
+        checkboxInput(
+          "showTrendlineToggle",
+          label = "Trendlinje",
+          value = FALSE
+        )
+      ),
+      div(
+        class = "cb-wrap",
+        checkboxInput(
+          "showCountInLegend",
+          label = "Antal i legend",
+          value = FALSE
+        )
+      )
+    ),
+
+    conditionalPanel(
+      condition = "output.svartype_plot_available == true",
+      div(class = "section-separator-thin"),
+      div(
+        class = "plot-container",
+        plotOutput("svartype_plot", inline = TRUE),
+        div(
+          class = "download-links",
+          downloadButton("download_svartype_png", "Download PNG", class = "small-button"),
+          downloadButton("download_svartype_svg", "Download SVG", class = "small-button")
+        )
+      ),
+      div(class = "section-separator")   # horizontal line below buttons, above KFE/KFA
+    ),
+
+    # ---- KFE/KFA tilhørsforhold ----
     div(
       class = "kfe-kfa-section",
       div(class = "kfe-kfa-title", "Opdater tilhørsforhold til KFE og KFA"),
       div(class = "kfe-kfa-subtitle", "Nyeste Excel anvendes i scripts"),
-      # Dropdown section above buttons
       uiOutput("download_dropdown_ui"),
       div(
         class = "kfe-kfa-buttons",
-        # Hidden file input for upload
         tags$div(
           style = "display: none;",
           fileInput("excel_file", NULL,
@@ -323,21 +492,18 @@ ui <- fluidPage(
       )
     ),
 
-    # Horizontal line above technical details
     div(class = "section-separator"),
 
-    # Foldable technical console
     tags$details(
       tags$summary("Tekniske detaljer (klik for at folde ud)"),
       div(
         id = "console_output",
         class = "console-output",
-        ""   # start empty
+        ""
       )
     )
   ),
 
-  # Footer
   div(
     class = "footer",
     "Support: Ole Andersen, oleemil@biomed.au.dk"
@@ -346,25 +512,29 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
 
-  # Only used for errors now
   script_status <- reactiveVal(NULL)
 
-  # For the activity plot
-  activity_plot <- reactiveVal(NULL)
+  activity_plot      <- reactiveVal(NULL)
+  svartype_plot_obj  <- reactiveVal(NULL)
 
-  # For controlling download buttons & plot section
   output$plot_available <- reactive({
     !is.null(activity_plot())
   })
   outputOptions(output, "plot_available", suspendWhenHidden = FALSE)
 
-  # Track last sync time and whether a sync was done in this session
+  output$svartype_plot_available <- reactive({
+    !is.null(svartype_plot_obj())
+  })
+  outputOptions(output, "svartype_plot_available", suspendWhenHidden = FALSE)
+
+  # -------------------------- LAST SYNC -------------------------- #
+
   data_dir <- here("statistik", "Data", "Azure data")
 
   get_newest_rds_file <- function(directory_path) {
     rds_files <- list.files(
       path   = directory_path,
-      pattern = "^azure_.*\\.rds$",  # azure_YYYY-MM-DD.rds
+      pattern = "^azure_.*\\.rds$",
       full.names = TRUE
     )
     if (length(rds_files) == 0) return(NULL)
@@ -373,7 +543,7 @@ server <- function(input, output, session) {
   }
 
   last_sync_time <- reactiveVal(NA)
-  sync_ok <- reactiveVal(FALSE)  # TRUE after a successful sync in this session
+  sync_ok        <- reactiveVal(FALSE)
 
   update_last_sync <- function(initial = FALSE) {
     if (!dir.exists(data_dir)) {
@@ -392,7 +562,6 @@ server <- function(input, output, session) {
     invisible(NULL)
   }
 
-  # Initialize from existing files (if any) but not marked as "just synced"
   update_last_sync(initial = TRUE)
 
   output$last_sync <- renderUI({
@@ -412,58 +581,47 @@ server <- function(input, output, session) {
     div(class = cls, text)
   })
 
-  # -------------------------- KFE/KFA TILHØRSFORHOLD FUNCTIONS ------------------------- #
+  # -------------------------- KFE/KFA TILHØRSFORHOLD -------------------------- #
 
-  # Define folders
-  main_folder <- here("statistik", "data", "tilknytning, KFE_KFA")
+  main_folder     <- here("statistik", "data", "tilknytning, KFE_KFA")
   original_folder <- here("statistik", "data", "tilknytning, KFE_KFA", "Original")
 
-  # Ensure folders exist
   observe({
     if (!dir.exists(main_folder)) dir.create(main_folder, recursive = TRUE)
     if (!dir.exists(original_folder)) dir.create(original_folder, recursive = TRUE)
   })
 
-  # Get list of Excel files in main folder
   get_excel_files <- reactive({
     files <- list.files(main_folder, pattern = "\\.xlsx$", full.names = FALSE)
     if (length(files) == 0) return(NULL)
-
-    # Sort by modification time (newest first)
-    file_info <- file.info(file.path(main_folder, files))
+    file_info     <- file.info(file.path(main_folder, files))
     files_ordered <- files[order(file_info$mtime, decreasing = TRUE)]
-    return(files_ordered)
+    files_ordered
   })
 
-  # Render dropdown for downloading Excel files
   output$download_dropdown_ui <- renderUI({
     files <- get_excel_files()
-    if (is.null(files)) {
-      return(NULL)
-    }
+    if (is.null(files)) return(NULL)
 
     tagList(
       div(
         class = "dropdown-container",
         selectInput("excel_files", NULL,
                     choices = files,
-                    width = '170px',
+                    width = "170px",
                     selectize = TRUE),
         downloadButton("download_selected", "Download valgt", class = "small-download-button")
       )
     )
   })
 
-  # Handle file upload - trigger the hidden file input
   observeEvent(input$upload_excel, {
     shinyjs::click("excel_file")
   })
 
-  # Handle the actual file upload
   observeEvent(input$excel_file, {
     req(input$excel_file)
 
-    # Validate file type
     if (!grepl("\\.xlsx?$", input$excel_file$name, ignore.case = TRUE)) {
       script_status(list(
         type = "error",
@@ -473,39 +631,33 @@ server <- function(input, output, session) {
     }
 
     tryCatch({
-      # Generate filename with timestamp
-      timestamp <- format(Sys.time(), "%Y-%m-%d %H.%M")
+      timestamp    <- format(Sys.time(), "%Y-%m-%d %H.%M")
       new_filename <- paste0("Tilhørsforhold (", timestamp, ").xlsx")
       new_filepath <- file.path(main_folder, new_filename)
 
-      # Copy uploaded file
       file.copy(input$excel_file$datapath, new_filepath)
 
-      # Clean up old files if more than 10
       files <- list.files(main_folder, pattern = "\\.xlsx$", full.names = TRUE)
       if (length(files) > 10) {
-        file_info <- file.info(files)
+        file_info     <- file.info(files)
         files_ordered <- files[order(file_info$mtime)]
-        # Remove oldest files beyond limit
         files_to_remove <- files_ordered[1:(length(files) - 10)]
         file.remove(files_to_remove)
       }
 
-      # Success message
       script_status(list(
-        type = "message",
+        type    = "message",
         message = paste("Filen er uploadet succesfuldt:", new_filename)
       ))
 
     }, error = function(e) {
       script_status(list(
-        type = "error",
+        type    = "error",
         message = paste("Fejl under upload:", e$message)
       ))
     })
   })
 
-  # Download selected Excel file
   output$download_selected <- downloadHandler(
     filename = function() {
       req(input$excel_files)
@@ -518,14 +670,11 @@ server <- function(input, output, session) {
     }
   )
 
-  # Download original Excel file
   output$download_original <- downloadHandler(
     filename = function() {
       original_files <- list.files(original_folder, pattern = "\\.xlsx$")
-      if (length(original_files) > 0) {
-        return(original_files[1])
-      }
-      return("Original.xlsx")
+      if (length(original_files) > 0) return(original_files[1])
+      "Original.xlsx"
     },
     content = function(file) {
       original_files <- list.files(original_folder, pattern = "\\.xlsx$", full.names = TRUE)
@@ -540,7 +689,6 @@ server <- function(input, output, session) {
   observeEvent(input$download_data, {
     shinyjs::disable("download_data")
 
-    # Clear technical console and error status
     shinyjs::html("console_output", "")
     script_status(NULL)
     sync_ok(FALSE)
@@ -559,10 +707,7 @@ server <- function(input, output, session) {
     if (!file.exists(script_path)) {
       shinyjs::html(
         id   = "console_output",
-        html = paste0(
-          "FEJL: Script ikke fundet:\n",
-          script_path, "\n"
-        ),
+        html = paste0("FEJL: Script ikke fundet:\n", script_path, "\n"),
         add  = TRUE
       )
 
@@ -592,7 +737,6 @@ server <- function(input, output, session) {
           }
         )
 
-        # On success: update last sync + mark as ok
         update_last_sync(initial = FALSE)
         sync_ok(TRUE)
 
@@ -603,7 +747,6 @@ server <- function(input, output, session) {
         )
       },
       error = function(e) {
-
         err_msg <- e$message
         sync_ok(FALSE)
 
@@ -653,9 +796,7 @@ server <- function(input, output, session) {
   observeEvent(input$run_plot, {
     shinyjs::disable("run_plot")
 
-    # Only clear console; keep sync status & errors from sync untouched
     shinyjs::html("console_output", "")
-
     shinyjs::html(
       id   = "console_output",
       html = "Starter script til aktivitetsplot...\n\n",
@@ -741,7 +882,6 @@ server <- function(input, output, session) {
     shinyjs::enable("run_plot")
   })
 
-  # Plot in app: 600x400 device, container 500px
   output$activity_plot <- renderPlot(
     {
       req(activity_plot())
@@ -753,7 +893,6 @@ server <- function(input, output, session) {
     res    = 96
   )
 
-  # Downloads: 8x5 in at 300dpi
   output$download_plot_png <- downloadHandler(
     filename = function() {
       paste0("activity_plot_", Sys.Date(), ".png")
@@ -780,12 +919,194 @@ server <- function(input, output, session) {
     }
   )
 
-  # Error status box (only errors)
+  # ------------------- LOAD DATA FOR SPECIALTY DROPDOWN -------------------- #
+
+  observe({
+    # Try to load the latest azure_*.rds just to get specialties for the dropdown
+    newest <- get_newest_rds_file(data_dir)
+    if (is.null(newest)) return()
+
+    df <- tryCatch(
+      readRDS(newest),
+      error = function(e) NULL
+    )
+    if (is.null(df)) return()
+    if (!"specialeCorrected" %in% names(df)) return()
+
+    specs <- sort(unique(na.omit(df$specialeCorrected)))
+
+    # Ensure "Hospital" is available as a virtual "speciale" that triggers sektor filtering
+    if (!"Hospital" %in% specs) {
+      specs <- c(specs, "Hospital")
+      specs <- sort(specs)
+    }
+
+    updateSelectInput(
+      session,
+      "specialeToggle",
+      choices = c("Alle", specs),
+      selected = "Alle"
+    )
+  })
+
+  # -------------------------- SVARTYPE PLOT (Tidligere aktiviteter) -------------------------- #
+
+  observeEvent(input$run_svartype_plot, {
+    shinyjs::disable("run_svartype_plot")
+
+    shinyjs::html(
+      id   = "console_output",
+      html = "Starter script til 'Tidligere aktiviteter'...\n\n",
+      add  = TRUE
+    )
+
+    script_path_plot <- file.path(
+      here("statistik", "scripts"),
+      "plot svartype.R"
+    )
+
+    if (!file.exists(script_path_plot)) {
+      shinyjs::html(
+        id   = "console_output",
+        html = paste0(
+          "FEJL: 'plot svartype' script ikke fundet:\n",
+          script_path_plot, "\n"
+        ),
+        add  = TRUE
+      )
+
+      script_status(list(
+        type    = "error",
+        message = "Scriptet 'plot svartype.R' blev ikke fundet. Kontakt support."
+      ))
+
+      shinyjs::enable("run_svartype_plot")
+      return(invisible(NULL))
+    }
+
+    tryCatch(
+      {
+        plot_env <- new.env(parent = globalenv())
+
+        # Map new UI inputs to old script toggles
+        plot_env$showStackCount  <- (input$countMode == "Opdelt")
+        plot_env$showTotalCount  <- (input$countMode == "Samlet")
+        plot_env$timeGranularity <- input$timeGranularity
+        plot_env$showTrendlineToggle   <- isTRUE(input$showTrendlineToggle)
+        plot_env$groupSvarToggle       <- isTRUE(input$groupSvarToggle)
+        plot_env$psykiatrikonf_AndreToggle <- isTRUE(input$psykiatrikonf_AndreToggle)
+        plot_env$sektorToggle          <- "Alle"  # no sektor dropdown in UI anymore
+        plot_env$specialeToggle        <- input$specialeToggle
+        plot_env$regionToggle          <- input$regionToggle
+        plot_env$svartypeFilterToggle  <- input$svartypeFilterToggle
+        plot_env$showCountInLegend     <- isTRUE(input$showCountInLegend)  # <-- NEW
+
+        # Map dates to start_*/end_* as before
+        from <- as.Date(input$from_date)
+        to   <- as.Date(input$to_date)
+
+        plot_env$start_year  <- as.integer(format(from, "%Y"))
+        plot_env$start_month <- as.integer(format(from, "%m"))
+        plot_env$start_day   <- as.integer(format(from, "%d"))
+        plot_env$end_year    <- as.integer(format(to, "%Y"))
+        plot_env$end_month   <- as.integer(format(to, "%m"))
+        plot_env$end_day     <- as.integer(format(to, "%d"))
+
+        withCallingHandlers(
+          {
+            message("Kører 'plot svartype.R': ", script_path_plot)
+            source(script_path_plot, local = plot_env)
+          },
+          message = function(m) {
+            shinyjs::html(
+              id   = "console_output",
+              html = paste0(m$message, "\n"),
+              add  = TRUE
+            )
+            invokeRestart("muffleMessage")
+          }
+        )
+
+        if (!exists("p", envir = plot_env, inherits = FALSE)) {
+          stop("Plot-objekt 'p' ikke fundet efter kørsel af 'plot svartype.R'.")
+        }
+
+        svartype_plot_obj(get("p", envir = plot_env))
+
+        shinyjs::html(
+          id   = "console_output",
+          html = "\n'Tidligere aktiviteter' plot-script færdigt.\n",
+          add  = TRUE
+        )
+
+      },
+      error = function(e) {
+        err_msg <- e$message
+
+        script_status(list(
+          type    = "error",
+          message = "Der opstod en fejl under opdatering af 'Tidligere aktiviteter'. Se tekniske detaljer eller kontakt support."
+        ))
+
+        shinyjs::html(
+          id   = "console_output",
+          html = paste0(
+            "\n*** TEKNISK FEJL (svartype-plot) ***\n",
+            err_msg,
+            "\n****************************************\n"
+          ),
+          add  = TRUE
+        )
+      }
+    )
+
+    shinyjs::enable("run_svartype_plot")
+  })
+
+  output$svartype_plot <- renderPlot(
+    {
+      req(svartype_plot_obj())
+      grid::grid.newpage()
+      grid::grid.draw(svartype_plot_obj())
+    },
+    width  = 960,   # wider in app
+    height = 650,   # taller to match original ggsave height = 6.5
+    res    = 96
+  )
+
+  output$download_svartype_png <- downloadHandler(
+    filename = function() {
+      paste0("svartype_plot_", Sys.Date(), ".png")
+    },
+    content = function(file) {
+      req(svartype_plot_obj())
+      grDevices::png(file, width = 10, height = 6.5, units = "in", res = 300)
+      grid::grid.newpage()
+      grid::grid.draw(svartype_plot_obj())
+      grDevices::dev.off()
+    }
+  )
+
+  output$download_svartype_svg <- downloadHandler(
+    filename = function() {
+      paste0("svartype_plot_", Sys.Date(), ".svg")
+    },
+    content = function(file) {
+      req(svartype_plot_obj())
+      grDevices::svg(file, width = 10, height = 6.5)
+      grid::grid.newpage()
+      grid::grid.draw(svartype_plot_obj())
+      grDevices::dev.off()
+    }
+  )
+
+  # -------------------------- STATUS MESSAGE -------------------------- #
+
   output$status_message <- renderUI({
     status <- script_status()
     if (!is.null(status)) {
       div(
-        class = paste("status-message", if(status$type == "error") "status-error" else "status-ok"),
+        class = paste("status-message", if (status$type == "error") "status-error" else "status-ok"),
         status$message
       )
     }
