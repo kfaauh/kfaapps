@@ -135,6 +135,17 @@ ui <- fluidPage(
         margin: 8px auto;
         width: 85%;
       }
+
+      /* Dedicated separator just above KFE/KFA section */
+      .section-separator-above-kfe {
+        border-top: 1px solid #cccccc;
+        width: 85%;
+        margin: 8px auto 2px auto;  /* adjust 8 for more/less vertical space */
+        position: relative;
+        z-index: 2;
+        clear: both;
+      }
+
       .section-separator-thin {
         border-top: 1px solid #dddddd;
         margin: 4px auto 6px auto;
@@ -153,8 +164,14 @@ ui <- fluidPage(
         padding: 0 !important;
         border: none !important;
       }
-      .download-links {
-        margin: -70px 0 0 0 !important;  /* further pull download buttons up */
+
+      /* Separate download button spacing for the two plots */
+      .download-links-activity {
+        margin: -0px 0 0 0 !important;  /* tight under Aktivitetsstatus plot */
+        padding: 0 !important;
+      }
+      .download-links-svartype {
+        margin: -130px 0 0 0 !important;   /* less tight under Tidligere aktiviteter plot */
         padding: 0 !important;
       }
 
@@ -245,7 +262,7 @@ ui <- fluidPage(
         flex-wrap: wrap;
         justify-content: center;
         gap: 10px;
-        margin-bottom: 4px;
+        margin-bottom: 10px;
       }
       .controls-row .shiny-input-container {
         margin-bottom: 0.1em;
@@ -254,37 +271,70 @@ ui <- fluidPage(
         font-size: 0.9em;
       }
 
-      /* Tighter row for third line of checkboxes */
-      .controls-row-tight {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        align-items: center;
-        gap: 0px;            /* no gap from flexbox */
-        margin-top: -4px;    /* pull row up slightly */
-        margin-bottom: 0;
-      }
+/* Tighter row for third line of checkboxes - FIXED with even spacing */
+.controls-row-tight {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-top: 0px;
+  margin-bottom: 0px;
+  width: 100%;
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+}
 
-      /* Each checkbox block */
-      .controls-row-tight .cb-wrap {
-        display: inline-block;
-        margin: 0 -30px;     /* negative margin to bring blocks closer */
-        padding: 0;
-      }
+/* Each checkbox block */
+.controls-row-tight .shiny-input-container {
+  margin: 0;
+  padding: 0;
+  white-space: normal;
+  flex: 1;
+  text-align: center;
+  min-width: 0; /* Allow shrinking if needed */
+}
 
-      /* Inside each checkbox: box vs text */
-      .controls-row-tight .checkbox label {
-        display: flex;
-        align-items: center;  /* vertical centering vs checkbox */
-        gap: 3px;             /* distance between checkbox square and its text */
-        margin-bottom: 0;
-      }
+/* Style the checkbox container */
+.controls-row-tight .shiny-input-container .checkbox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  height: 100%;
+}
 
-      /* Keep vertical spacing tight */
-      .controls-row-tight .shiny-input-container {
-        margin-top: 0;
-        margin-bottom: 0;
-      }
+/* Tighter row for third line of checkboxes */
+.controls-row-tight {
+  display: flex;
+  flex-wrap: wrap;          /* allows wrapping to next line on narrow window */
+  justify-content: center;  /* center the whole group */
+  gap: 2px 0px;            /* row-gap, column-gap - adjust 24 for more/less horizontal spacing */
+  margin-top: -4px;
+  margin-bottom: 0;
+  width: 100%;
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Wrapper for each checkbox + label text */
+.cb-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  font-size: 0.9em;
+  line-height: 1;
+  flex: 0 0 auto;      /* do not stretch */
+  margin: 0 -50px;       /* small space between neighbours */
+}
+
+/* Tighten spacing around the checkbox input itself */
+.cb-wrap .shiny-input-container {
+  margin: -10px 0 0 0;
+  padding: 0;
+}
     "))
   ),
 
@@ -313,7 +363,8 @@ ui <- fluidPage(
       uiOutput("status_message")
     ),
 
-    div(class = "section-separator"),
+        # Always: line above KFE/KFA, regardless of plot
+        div(class = "section-separator"),
 
     # ---- Aktivitetsstatus (eksisterende) ----
     div(class = "subheader", "Aktivitetsstatus"),
@@ -334,7 +385,7 @@ ui <- fluidPage(
         plotOutput("activity_plot", inline = TRUE)
       ),
       div(
-        class = "download-links",
+        class = "download-links-activity",  # Changed to specific class
         downloadButton("download_plot_png", "Download PNG", class = "small-button"),
         downloadButton("download_plot_svg", "Download SVG", class = "small-button")
       )
@@ -360,17 +411,17 @@ ui <- fluidPage(
       dateInput(
         "from_date",
         label = "Fra",
-        value = floor_date(Sys.Date(), "month") %m-% years(1),  # first of month, one year back
+        value = floor_date(Sys.Date(), "month") %m-% years(1),  # first day of month, one year back
         format = "dd-mm-yyyy",
         width = "120px"
       ),
-      dateInput(
-        "to_date",
-        label = "Til",
-        value = floor_date(Sys.Date(), "month"),                # first of current month
-        format = "dd-mm-yyyy",
-        width = "120px"
-      ),
+dateInput(
+  "to_date",
+  label = "Til",
+  value = floor_date(Sys.Date(), "month") - days(1),  # Last day of previous month
+  format = "dd-mm-yyyy",
+  width = "120px"
+),
       selectInput(
         "timeGranularity",
         label = "Tidsopløsning",
@@ -407,7 +458,7 @@ ui <- fluidPage(
       ),
       selectInput(
         "specialeToggle",
-        label = "Speciale",
+        label = "Speciale og sektor",
         choices = "Alle",     # updated in server when data is known
         selected = "Alle",
         width = "220px"
@@ -421,42 +472,46 @@ ui <- fluidPage(
       )
     ),
 
-    # Line 3: Grupper..., Vis Psykiatrikonference og Andre, Trendlinje, Antal i legend
-    div(
-      class = "controls-row-tight",
-      div(
-        class = "cb-wrap",
-        checkboxInput(
-          "groupSvarToggle",
-          label = HTML("Grupper kliniske henvendelser<br>(alm., kort, generel)"),
-          value = FALSE
-        )
-      ),
-      div(
-        class = "cb-wrap",
-        checkboxInput(
-          "psykiatrikonf_AndreToggle",
-          label = "Vis Psykiatrikonference og Andre",
-          value = FALSE
-        )
-      ),
-      div(
-        class = "cb-wrap",
-        checkboxInput(
-          "showTrendlineToggle",
-          label = "Trendlinje",
-          value = FALSE
-        )
-      ),
-      div(
-        class = "cb-wrap",
-        checkboxInput(
-          "showCountInLegend",
-          label = "Antal i legend",
-          value = FALSE
-        )
-      )
-    ),
+# Line 3: Grupper..., Vis Psykiatrikonference og Andre, Trendlinje, Vis samlet antal
+div(
+  class = "controls-row-tight",
+  div(
+    class = "cb-wrap",
+    div(HTML("Gruppér kliniske henvendelser<br>(alm., kort, generel)")),
+    checkboxInput(
+      "groupSvarToggle",
+      label = NULL,
+      value = FALSE
+    )
+  ),
+  div(
+    class = "cb-wrap",
+    div("Vis Psykiatrikonference og Andre"),
+    checkboxInput(
+      "psykiatrikonf_AndreToggle",
+      label = NULL,
+      value = FALSE
+    )
+  ),
+  div(
+    class = "cb-wrap",
+    div("Trendlinje"),
+    checkboxInput(
+      "showTrendlineToggle",
+      label = NULL,
+      value = FALSE
+    )
+  ),
+  div(
+    class = "cb-wrap",
+    div("Vis samlet antal"),
+    checkboxInput(
+      "showCountInLegend",
+      label = NULL,
+      value = FALSE
+    )
+  )
+),
 
     conditionalPanel(
       condition = "output.svartype_plot_available == true",
@@ -465,13 +520,15 @@ ui <- fluidPage(
         class = "plot-container",
         plotOutput("svartype_plot", inline = TRUE),
         div(
-          class = "download-links",
+          class = "download-links-svartype",  # Changed to specific class
           downloadButton("download_svartype_png", "Download PNG", class = "small-button"),
           downloadButton("download_svartype_svg", "Download SVG", class = "small-button")
         )
-      ),
-      div(class = "section-separator")   # horizontal line below buttons, above KFE/KFA
+      )
     ),
+
+    # Always: line above KFE/KFA, regardless of plot
+        div(class = "section-separator-above-kfe"),
 
     # ---- KFE/KFA tilhørsforhold ----
     div(
@@ -922,32 +979,36 @@ server <- function(input, output, session) {
   # ------------------- LOAD DATA FOR SPECIALTY DROPDOWN -------------------- #
 
   observe({
-    # Try to load the latest azure_*.rds just to get specialties for the dropdown
-    newest <- get_newest_rds_file(data_dir)
-    if (is.null(newest)) return()
+  newest <- get_newest_rds_file(data_dir)
+  if (is.null(newest)) return()
 
-    df <- tryCatch(
-      readRDS(newest),
-      error = function(e) NULL
-    )
-    if (is.null(df)) return()
-    if (!"specialeCorrected" %in% names(df)) return()
+  df <- tryCatch(
+    readRDS(newest),
+    error = function(e) NULL
+  )
+  if (is.null(df)) return()
+  if (!"specialeCorrected" %in% names(df)) return()
 
-    specs <- sort(unique(na.omit(df$specialeCorrected)))
+  specs <- sort(unique(na.omit(df$specialeCorrected)))
 
-    # Ensure "Hospital" is available as a virtual "speciale" that triggers sektor filtering
-    if (!"Hospital" %in% specs) {
-      specs <- c(specs, "Hospital")
-      specs <- sort(specs)
-    }
+  # Ensure "Hospital" is available as a virtual "speciale" that triggers sektor filtering
+  if (!"Hospital" %in% specs) {
+    specs <- c(specs, "Hospital")
+  }
 
-    updateSelectInput(
-      session,
-      "specialeToggle",
-      choices = c("Alle", specs),
-      selected = "Alle"
-    )
-  })
+  # Order: Hospital, Almen praksis, then the rest alphabetically
+  priority <- c("Hospital", "Almen praksis")
+  priority_in_specs <- priority[priority %in% specs]
+  rest <- setdiff(specs, priority_in_specs)
+  specs_ordered <- c(priority_in_specs, sort(rest))
+
+  updateSelectInput(
+    session,
+    "specialeToggle",
+    choices = c("Alle", specs_ordered),
+    selected = "Alle"
+  )
+})
 
   # -------------------------- SVARTYPE PLOT (Tidligere aktiviteter) -------------------------- #
 
@@ -999,7 +1060,7 @@ server <- function(input, output, session) {
         plot_env$specialeToggle        <- input$specialeToggle
         plot_env$regionToggle          <- input$regionToggle
         plot_env$svartypeFilterToggle  <- input$svartypeFilterToggle
-        plot_env$showCountInLegend     <- isTRUE(input$showCountInLegend)  # <-- NEW
+        plot_env$showCountInLegend     <- isTRUE(input$showCountInLegend)
 
         # Map dates to start_*/end_* as before
         from <- as.Date(input$from_date)
@@ -1069,7 +1130,7 @@ server <- function(input, output, session) {
       grid::grid.newpage()
       grid::grid.draw(svartype_plot_obj())
     },
-    width  = 960,   # wider in app
+    width  = 800,   # wider in app
     height = 650,   # taller to match original ggsave height = 6.5
     res    = 96
   )
