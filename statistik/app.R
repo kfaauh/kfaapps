@@ -809,24 +809,25 @@ server <- function(input, output, session) {
 
         msg_ui <- "Der opstod en fejl under synkronisering af data. Se tekniske detaljer eller kontakt support."
 
-        if (grepl("Azure authentication missing or expired", err_msg, fixed = TRUE)) {
-          msg_ui <- HTML(paste0(
-            "Azure skal verificeres:<br>",
-            "1. Login på server fra AU net (indsæt AUID med Azure adgang som au123456): ",
-            "<code>ssh -J AUID@ssh.au.dk AUID@kfaapps.uni.au.dk</code><br>",
-            "2. Kopier dette til server terminalen:<br>",
-            "<pre>",
-            "R --vanilla << 'EOF'\n",
-            "library(Microsoft365R)\n\n",
-            "cat('\\nStarting Microsoft365R device-code login...\\n\\n')\n\n",
-            "# One-time (or occasional) device-code login\n",
-            "site_list <- list_sharepoint_sites(auth_type = 'device_code')\n\n",
-            "cat('\\nAuthentication complete. Token cached for future Shiny sessions.\\n')\n",
-            "q(save = 'no')\n",
-            "EOF",
-            "</pre>"
-          ))
-        }
+if (grepl("Azure authentication missing or expired", err_msg, fixed = TRUE)) {
+  msg_ui <- HTML(paste0(
+    "Azure skal verificeres:<br>",
+    "1. Login på server fra AU net (indsæt AUID med Azure adgang som au123456): ",
+    "<code>ssh -J AUID@ssh.au.dk AUID@kfaapps.uni.au.dk</code><br>",
+    "2. Kopier dette til server-terminalen (kræver sudo-rettigheder):<br>",
+    "<pre>",
+    "sudo -u shiny -H R --vanilla << 'EOF'\n",
+    "library(AzureAuth)\n",
+    "Sys.setenv(R_AZURE_DATA_DIR = '/srv/shiny-server/kfaapps/statistik/azure_cache')\n",
+    "library(Microsoft365R)\n\n",
+    "cat('\\nStarting Microsoft365R device-code login for shiny user...\\n\\n')\n\n",
+    "site_list <- list_sharepoint_sites(auth_type = 'device_code')\n\n",
+    "cat('\\nAuthentication complete. Token should now be cached in R_AZURE_DATA_DIR.\\n')\n",
+    "q(save = 'no')\n",
+    "EOF",
+    "</pre>"
+  ))
+}
 
         script_status(list(
           type    = "error",

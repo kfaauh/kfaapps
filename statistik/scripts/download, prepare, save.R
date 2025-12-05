@@ -7,7 +7,6 @@
 # =============================================================================
 
 # Simple approach for server
-# Simple approach for server
 library(Microsoft365R)
 library(AzureAuth)  # new: used to inspect cached tokens
 
@@ -67,13 +66,19 @@ message("\nLoading data from Azure...")
 # If there is no cached token, fail fast with an explicit message.
 if (!azure_token_available()) {
   message("✗ Unable to load SharePoint sites from Azure using cached credentials.")
+  message("  No Azure tokens found in cache directory: ", cache_dir)
 
   message("\n*** ACTION REQUIRED: Re-authenticate Azure for the Shiny user on the server ***")
-  message("Log in to the server and run the following *as the 'shiny' user*:")
+  message("Log in to the server and run the following *as root or sudo-capable user*:")
   message("")
-  message("  R --vanilla << 'EOF'")
+  message("  sudo -u shiny -H R --vanilla << 'EOF'")
+  message("  library(AzureAuth)")
+  message("  Sys.setenv(R_AZURE_DATA_DIR = '", cache_dir, "')")
   message("  library(Microsoft365R)")
+  message("")
+  message("  cat('\\nStarting Microsoft365R device-code login for shiny user...\\n\\n')")
   message("  site_list <- list_sharepoint_sites(auth_type = 'device_code')")
+  message("  cat('\\nAuthentication complete. Token should now be cached in R_AZURE_DATA_DIR.\\n')")
   message("  q(save = 'no')")
   message("  EOF")
   message("")
