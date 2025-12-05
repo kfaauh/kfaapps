@@ -61,9 +61,16 @@ if (is.null(newest_file)) {
        "\nPlease run 01_azure_data_load_prep.R first")
 }
 
+# Get file info once
+newest_file_info <- file.info(newest_file)
+
+# Expose loaded-file date (for use by plotting scripts etc.)
+date.loadedFile <- as.Date(newest_file_info$mtime, tz = "Europe/Copenhagen")
+
 # Print which file is being loaded
 message("Loading: ", basename(newest_file))
-message("File date: ", file.info(newest_file)$mtime)
+message("File date (mtime): ", newest_file_info$mtime)
+message("Loaded file date (Copenhagen): ", date.loadedFile)
 
 # Load the data
 data.lmraad_filtered <- readRDS(newest_file)

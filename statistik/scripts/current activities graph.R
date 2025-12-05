@@ -86,8 +86,8 @@ svar_levels_plot <- c("Ibrugtagningssag","Medicingennemgang","Generel forespørg
                       "Almindeligt svar","Kortsvar")
 svar_levels_legend <- rev(svar_levels_plot)
 
-today_cph   <- today(tzone = "Europe/Copenhagen")
-as_of_days <- seq(today_cph - days(7), today_cph, by = "day") |>
+ref_date_cph <- as_date(date.loadedFile)
+as_of_days <- seq(ref_date_cph - days(7), ref_date_cph, by = "day") |>
   (\(x) x[wday(x, week_start = 1) <= 5])() |>
   tail(5)
 
@@ -541,7 +541,7 @@ ensure_directory <- function(dir_path) {
 }
 ensure_directory(plots_dir)
 
-plot_filename <- paste0("activity_plot_", format(Sys.Date(), "%Y-%m-%d"), ".png")
+plot_filename <- paste0("activity_plot_", format(ref_date_cph, "%Y-%m-%d"), ".png")
 plot_path <- here(plots_dir, plot_filename)
 
 ggsave(plot_path, combined_grob, width = 8, height = 5, dpi = 300)
