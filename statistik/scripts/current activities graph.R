@@ -156,6 +156,14 @@ message("✓ Plot data prepared successfully!")
 message("Creating plots...")
 
 backlog_1_42_bySvar <- activity_plot_data %>%
+    # Make filtering consistent with bottom plot
+  mutate(
+    status_norm = case_when(
+      Status %in% c("Modtaget", "Fordelt", "Startet", "Ved bagvagt") ~ Status,
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  filter(!is.na(status_norm)) %>%
   crossing(as_of = as_of_days) %>%
   filter(
     if_else(
