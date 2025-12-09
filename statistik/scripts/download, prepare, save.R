@@ -6,19 +6,8 @@
 # 1. PACKAGE LOADING
 # =============================================================================
 
-# Simple approach for server
 library(Microsoft365R)
-library(AzureAuth)  # new: used to inspect cached tokens
-
-Sys.setenv(AZURE_AUTH_TYPE = "device_code")
-
-cache_dir <- "/srv/shiny-server/kfaapps/statistik/azure_cache"
-if (!dir.exists(cache_dir)) {
-  dir.create(cache_dir, recursive = TRUE)
-}
-
-# AzureAuth looks at R_AZURE_DATA_DIR (not AZURE_DATA_DIR) for the cache directory
-Sys.setenv(R_AZURE_DATA_DIR = cache_dir)
+library(AzureAuth)
 
 library(dplyr)
 library(readr)
@@ -29,7 +18,60 @@ library(tidyr)
 library(bizdays)
 library(timeDate)
 
+# =============================================================================
+# 1a. AZURE CONFIG (NEW)
+# =============================================================================
 
+tenant_id      <- "61fd1d36-fecb-47ca-b7d7-d0df0370a198"
+client_id      <- "9ad9b61a-dacb-4d2f-8489-3e2edfda66e1"
+sharepoint_URL <- "https://aarhusuniversitet.sharepoint.com/sites/Lgemiddelrdgivning"
+
+secret_path   <- here("statistik", "secret_for_sharepoint.txt")
+client_secret <- readLines(secret_path, warn = FALSE)[1]
+
+if (is.na(client_secret) || client_secret == "") {
+  stop("INVALID_SHAREPOINT_SECRET: SharePoint client secret mangler eller er tom. Opdater filen secret_for_sharepoint.txt på serveren.", call. = FALSE)
+}
+
+message("\nAuthenticating to Azure AD using app-only credentials...")
+
+token <- tryCatch(
+  {
+    AzureAuth::get_azure_token(
+      resource  = "https://graph.microsoft.com/.default",
+      tenant    = tenant_id,
+      app       = client_id,
+      password  = client_secret,
+      auth_type = "client_credentials",
+      version   = 2
+    )
+  },
+  error = function(e) {
+    # Mark this clearly so Shiny can detect it
+    stop(
+      paste0(
+        "INVALID_SHAREPOINT_SECRET: Azure AD kunne ikke godkende klienthemmeligheden. ",
+        "Opdater secret_for_sharepoint.txt på serveren. Teknisk fejl: ",
+        e$message
+      ),
+      call. = FALSE
+    )
+  }
+)
+
+message("✓ Azure AD token acquired")
+
+message("Connecting to SharePoint site...")
+
+site <- get_sharepoint_site(
+  site_url = sharepoint_URL,
+  token    = token
+)
+
+message("✓ Connected to SharePoint site")
+
+doc_lib <- site$get_list("Dokumenter")
+message("✓ Retrieved document library 'Dokumenter'")
 
 # =============================================================================
 # 2. SETUP AND UTILITY FUNCTIONS
@@ -47,74 +89,33 @@ ensure_directory <- function(dir_path) {
 creation_date_string <- format(Sys.Date(), "%d-%m-%y")
 
 # =============================================================================
-# 3. AZURE DATA LOADING
+# 3. AZURE DATA LOADING (NEW APP-ONLY AUTH)
 # =============================================================================
 
-azure_token_available <- function() {
-  # Returns TRUE if there is at least one cached Azure token in the current data dir
-  toks <- tryCatch(AzureAuth::list_azure_tokens(), error = function(e) NULL)
-  if (is.null(toks) || length(toks) == 0) {
-    return(FALSE)
-  }
-  TRUE
-}
+message("\nAuthenticating to Azure AD using app-only credentials...")
 
-
-message("\nLoading data from Azure...")
-
-# Do NOT start a new device_code flow inside Shiny.
-# If there is no cached token, fail fast with an explicit message.
-if (!azure_token_available()) {
-  message("✗ Unable to load SharePoint sites from Azure using cached credentials.")
-  message("  No Azure tokens found in cache directory: ", cache_dir)
-
-  message("\n*** ACTION REQUIRED: Re-authenticate Azure for the Shiny user on the server ***")
-  message("Log in to the server and run the following *as root or sudo-capable user*:")
-  message("")
-  message("  sudo -u shiny -H R --vanilla << 'EOF'")
-  message("  library(AzureAuth)")
-  message("  Sys.setenv(R_AZURE_DATA_DIR = '", cache_dir, "')")
-  message("  library(Microsoft365R)")
-  message("")
-  message("  cat('\\nStarting Microsoft365R device-code login for shiny user...\\n\\n')")
-  message("  site_list <- list_sharepoint_sites(auth_type = 'device_code')")
-  message("  cat('\\nAuthentication complete. Token should now be cached in R_AZURE_DATA_DIR.\\n')")
-  message("  q(save = 'no')")
-  message("  EOF")
-  message("")
-  message("After successful authentication, try running this script again.")
-
-  stop("Azure authentication missing or expired. Please re-authenticate on the server (see messages above).")
-}
-
-# If we get here, there is at least one cached token.
-# Let Microsoft365R reuse it. If this still errors, show the same instructions.
-site_list <- tryCatch(
-  {
-    list_sharepoint_sites(auth_type = "device_code")
-  },
-  error = function(e) {
-    message("✗ Unable to load SharePoint sites from Azure using cached credentials.")
-    message("  Error message: ", e$message)
-
-    message("\n*** ACTION REQUIRED: Re-authenticate Azure for the Shiny user on the server ***")
-    message("Log in to the server and run the following *as the 'shiny' user*:")
-    message("")
-    message("  R --vanilla << 'EOF'")
-    message("  library(Microsoft365R)")
-    message("  site_list <- list_sharepoint_sites(auth_type = 'device_code')")
-    message("  q(save = 'no')")
-    message("  EOF")
-    message("")
-    message("After successful authentication, try running this script again.")
-
-    stop("Azure authentication missing or expired. Please re-authenticate on the server (see messages above).")
-  }
+token <- AzureAuth::get_azure_token(
+  resource  = "https://graph.microsoft.com/.default",
+  tenant    = tenant_id,
+  app       = client_id,
+  password  = client_secret,
+  auth_type = "client_credentials",
+  version   = 2
 )
 
-# If we got here, Azure auth worked via the cache
-site <- site_list[[1]]
+message("✓ Azure AD token acquired")
+
+message("Connecting to SharePoint site...")
+
+site <- get_sharepoint_site(
+  site_url = sharepoint_URL,
+  token    = token
+)
+
+message("✓ Connected to SharePoint site")
+
 doc_lib <- site$get_list("Dokumenter")
+message("✓ Retrieved document library 'Dokumenter'")
 
 # =============================================================================
 # 3a. LOAD BIVIRKNINGSINDERETNING DATA
@@ -697,11 +698,11 @@ transform_data <- function(data) {
       AdjustedDate = as_date(AdjustedDate),
       FaerdigDate  = as_date(`Færdig (*)`),
       svar_kategori = case_when(
-        `Svartype (*)` == "Medicingennemgang"      ~ "Medicingennemgang",
-        `Svartype (*)` == "Ibrugtagningssag"       ~ "Ibrugtagningssag",
-        `Svartype (*)` == "Kortsvar"               ~ "Kortsvar",
-        `Svartype (*)` == "Generel forespørgsel"   ~ "Generel forespørgsel",
-        `Svartype (*)` == "Almindeligt svar"       ~ "Almindeligt svar",
+        `Svartype (*)` == "Medicingennemgang"       ~ "Medicingennemgang",
+        `Svartype (*)` == "Ibrugtagningssag"        ~ "Ibrugtagningssag",
+        `Svartype (*)` == "Kortsvar"                ~ "Kortsvar",
+        `Svartype (*)` == "Generel forespørgsel"    ~ "Generel forespørgsel",
+        `Svartype (*)` == "Almindeligt svar"        ~ "Almindeligt svar",
         `Svartype (*)` == "Bivirkningsindberetning" ~ "Bivirkningsindberetning",
         TRUE ~ NA_character_
       )
