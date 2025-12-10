@@ -2,6 +2,7 @@
 .Rhistory
 .RData
 *.Rproj
-
 # Git artefakter
 .DS_Store
+.Rproj.user
+Azure test script.R

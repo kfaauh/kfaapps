@@ -63,6 +63,11 @@ ui <- fluidPage(
         color: #555;
       }
 
+            /* Black summary text for 'Tidligere aktiviteter' settings */
+      .tidligere-settings > summary {
+        color: #000000;
+      }
+
       /* Status box (only for errors now) */
       .status-message {
         margin-top: 0.2em;
@@ -138,7 +143,7 @@ ui <- fluidPage(
 
       /* Dedicated separator just above KFE/KFA section */
       .section-separator-above-kfe {
-        border-top: 1px solid #cccccc;
+        border-top: 2px solid #000000 !important;
         width: 85%;
         margin: 8px auto 2px auto;  /* adjust 8 for more/less vertical space */
         position: relative;
@@ -171,7 +176,7 @@ ui <- fluidPage(
         padding: 0 !important;
       }
       .download-links-svartype {
-        margin: -130px 0 0 0 !important;   /* less tight under Tidligere aktiviteter plot */
+        margin: -10px 0 0 0 !important;   /* less tight under Tidligere aktiviteter plot */
         padding: 0 !important;
       }
 
@@ -261,7 +266,7 @@ ui <- fluidPage(
         display: flex;
         flex-wrap: wrap;
         justify-content: center;
-        gap: 10px;
+        gap: 8px;
         margin-bottom: 10px;
       }
       .controls-row .shiny-input-container {
@@ -270,6 +275,40 @@ ui <- fluidPage(
       .controls-row label {
         font-size: 0.9em;
       }
+
+      /* Compact dropdowns in 'Tidligere aktiviteter' */
+      .controls-row .selectize-control.single .selectize-input {
+        font-size: 0.8em;
+        padding: 1px 1px;         /* smaller vertical padding */
+        min-height: 25px !important;
+        height: 20px !important;  /* sometimes needed as well */
+        line-height: 10px;        /* text height */
+      }
+
+      /* Text inside the selected item */
+      .controls-row .selectize-control.single .selectize-input > .item,
+      .controls-row .selectize-control.single .selectize-input > .item + input {
+        line-height: 20px;
+        padding-top: 0;
+        padding-bottom: 0;
+      }
+
+/* Compact, centered date fields (Fra/Til) */
+.controls-row input.form-control {
+  height: 24px;          /* adjust up/down to taste */
+  padding: 2px 4px;      /* reduces vertical size */
+  font-size: 0.8em;
+  text-align: center;
+  line-height: 1.2;      /* keeps text vertically OK */
+}
+
+/* Smaller text inside the opened dropdown menu */
+.controls-row .selectize-dropdown,
+.controls-row .selectize-dropdown .option {
+  font-size: 0.9em;
+  line-height: 1.2;
+  padding: 2px 4px;
+}
 
 /* Tighter row for third line of checkboxes - FIXED with even spacing */
 .controls-row-tight {
@@ -405,113 +444,119 @@ ui <- fluidPage(
       )
     ),
 
-    # Line 1: Fra, Til, Tidsopløsning, Vis antal
-    div(
-      class = "controls-row",
-      dateInput(
-        "from_date",
-        label = "Fra",
-        value = floor_date(Sys.Date(), "month") %m-% years(1),  # first day of month, one year back
-        format = "dd-mm-yyyy",
-        width = "120px"
-      ),
-dateInput(
-  "to_date",
-  label = "Til",
-  value = floor_date(Sys.Date(), "month") - days(1),  # Last day of previous month
-  format = "dd-mm-yyyy",
-  width = "120px"
-),
-      selectInput(
-        "timeGranularity",
-        label = "Tidsopløsning",
-        choices = c("Uge", "Måned", "Kvartal"),
-        selected = "Måned",
-        width = "120px"
-      ),
-      selectInput(
-        "countMode",
-        label = "Vis antal",
-        choices = c("Ingen", "Samlet", "Opdelt"),
-        selected = "Samlet",
-        width = "140px"
-      )
-    ),
+     # Fold-out panel for indstillinger til 'Tidligere aktiviteter'
+    tags$details(
+      class = "tidligere-settings",
+      tags$summary("Indstillinger for 'Tidligere aktiviteter' (klik for at folde ud)"),
 
-    # Line 2: Svartype, Speciale, Region
-    div(
-      class = "controls-row",
-      selectInput(
-        "svartypeFilterToggle",
-        label = "Svartype",
-        choices = c(
-          "Alle",
-          "Klinisk rådgivning",
-          "Almindeligt svar",
-          "Kortsvar",
-          "Generel forespørgsel",
-          "Medicingennemgang",
-          "Ibrugtagningssag"
+      # Line 1: Fra, Til, Tidsopløsning, Vis antal
+      div(
+        class = "controls-row",
+        dateInput(
+          "from_date",
+          label = "Fra",
+          value = floor_date(Sys.Date(), "month") %m-% years(1),  # first day of month, one year back
+          format = "dd-mm-yyyy",
+          width = "120px"
         ),
-        selected = "Alle",
-        width = "190px"
+        dateInput(
+          "to_date",
+          label = "Til",
+          value = floor_date(Sys.Date(), "month") - days(1),  # Last day of previous month
+          format = "dd-mm-yyyy",
+          width = "120px"
+        ),
+        selectInput(
+          "timeGranularity",
+          label = "Tidsopløsning",
+          choices = c("Uge", "Måned", "Kvartal", "År"),
+          selected = "Måned",
+          width = "120px"
+        ),
+        selectInput(
+          "countMode",
+          label = "Vis antal",
+          choices = c("Ingen", "Samlet", "Opdelt"),
+          selected = "Samlet",
+          width = "140px"
+        )
       ),
-      selectInput(
-        "specialeToggle",
-        label = "Speciale og sektor",
-        choices = "Alle",     # updated in server when data is known
-        selected = "Alle",
-        width = "220px"
+
+      # Line 2: Svartype, Speciale, Region
+      div(
+        class = "controls-row",
+        selectInput(
+          "svartypeFilterToggle",
+          label = "Svartype",
+          choices = c(
+            "Alle",
+            "Klinisk rådgivning",
+            "Almindeligt svar",
+            "Kortsvar",
+            "Generel forespørgsel",
+            "Medicingennemgang",
+            "Ibrugtagningssag"
+          ),
+          selected = "Alle",
+          width = "190px"
+        ),
+        selectInput(
+          "specialeToggle",
+          label = "Speciale og sektor",
+          choices = "Alle",     # updated in server when data is known
+          selected = "Alle",
+          width = "220px"
+        ),
+        selectInput(
+          "regionToggle",
+          label = "Region (rekvirent)",
+          choices = c("Begge", "Nordjylland", "Midtjylland"),
+          selected = "Begge",
+          width = "180px"
+        )
       ),
-      selectInput(
-        "regionToggle",
-        label = "Region (rekvirent)",
-        choices = c("Begge", "Nordjylland", "Midtjylland"),
-        selected = "Begge",
-        width = "180px"
+
+      # Line 3: Grupper..., Vis Psykiatrikonference og Andre, Trendlinje, Vis samlet antal
+      div(
+        class = "controls-row-tight",
+        div(
+          class = "cb-wrap",
+          div(HTML("Gruppér kliniske henvendelser<br>(alm., kort, generel)")),
+          checkboxInput(
+            "groupSvarToggle",
+            label = NULL,
+            value = FALSE
+          )
+        ),
+        div(
+          class = "cb-wrap",
+          div("Vis Psykiatrikonference og Andre"),
+          checkboxInput(
+            "psykiatrikonf_AndreToggle",
+            label = NULL,
+            value = FALSE
+          )
+        ),
+        div(
+          class = "cb-wrap",
+          div("Trendlinje"),
+          checkboxInput(
+            "showTrendlineToggle",
+            label = NULL,
+            value = FALSE
+          )
+        ),
+        div(
+          class = "cb-wrap",
+          div("Vis samlet antal"),
+          checkboxInput(
+            "showCountInLegend",
+            label = NULL,
+            value = FALSE
+          )
+        )
       )
     ),
-
-# Line 3: Grupper..., Vis Psykiatrikonference og Andre, Trendlinje, Vis samlet antal
-div(
-  class = "controls-row-tight",
-  div(
-    class = "cb-wrap",
-    div(HTML("Gruppér kliniske henvendelser<br>(alm., kort, generel)")),
-    checkboxInput(
-      "groupSvarToggle",
-      label = NULL,
-      value = FALSE
-    )
-  ),
-  div(
-    class = "cb-wrap",
-    div("Vis Psykiatrikonference og Andre"),
-    checkboxInput(
-      "psykiatrikonf_AndreToggle",
-      label = NULL,
-      value = FALSE
-    )
-  ),
-  div(
-    class = "cb-wrap",
-    div("Trendlinje"),
-    checkboxInput(
-      "showTrendlineToggle",
-      label = NULL,
-      value = FALSE
-    )
-  ),
-  div(
-    class = "cb-wrap",
-    div("Vis samlet antal"),
-    checkboxInput(
-      "showCountInLegend",
-      label = NULL,
-      value = FALSE
-    )
-  )
-),
 
     conditionalPanel(
       condition = "output.svartype_plot_available == true",
@@ -524,7 +569,9 @@ div(
           downloadButton("download_svartype_png", "Download PNG", class = "small-button"),
           downloadButton("download_svartype_svg", "Download SVG", class = "small-button")
         )
-      )
+      ),
+      div(style = "height: 0px;")  # Add this line - spacer to push down next section
+
     ),
 
     # Always: line above KFE/KFA, regardless of plot
@@ -848,6 +895,7 @@ ui <- fluidPage(
         max-width: 900px;
         font-size: 0.9em;
       }
+
       .status-error {
         background-color: #f8d7da;
         color: #721c24;
@@ -912,7 +960,7 @@ ui <- fluidPage(
 
       /* Dedicated separator just above KFE/KFA section */
       .section-separator-above-kfe {
-        border-top: 1px solid #cccccc;
+        border-top: 2px solid #000000 !important;
         width: 85%;
         margin: 8px auto 2px auto;  /* adjust 8 for more/less vertical space */
         position: relative;
@@ -945,7 +993,7 @@ ui <- fluidPage(
         padding: 0 !important;
       }
       .download-links-svartype {
-        margin: -130px 0 0 0 !important;   /* less tight under Tidligere aktiviteter plot */
+        margin: 10px 0 0 0 !important;   /* less tight under Tidligere aktiviteter plot */
         padding: 0 !important;
       }
 
@@ -1199,7 +1247,7 @@ dateInput(
       selectInput(
         "timeGranularity",
         label = "Tidsopløsning",
-        choices = c("Uge", "Måned", "Kvartal"),
+        choices = c("Uge", "Måned", "Kvartal", "År"),
         selected = "Måned",
         width = "120px"
       ),

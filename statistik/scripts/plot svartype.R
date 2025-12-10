@@ -277,6 +277,12 @@ if (timeGranularity == "Uge") {
       quarter_start_date >= start_quarter_date,
       quarter_start_date <= end_quarter_date
     )
+} else if (timeGranularity == "År") {
+  weekly_filtered <- weekly_base %>%
+    filter(
+      year_adj >= start_year,
+      year_adj <= end_year
+    )
 }
 
 period_grid <- NULL
@@ -380,6 +386,25 @@ if (timeGranularity == "Uge") {
     mutate(
       n = tidyr::replace_na(n, 0L)
     )
+} else if (timeGranularity == "År") {
+  message("Preparing YEARLY data...")
+
+  year_seq <- seq(from = start_year, to = end_year, by = 1)
+
+  period_grid <- tibble::tibble(
+    year_adj       = year_seq,
+    period_label   = as.character(year_seq),
+    period_display = as.character(year_seq)
+  )
+
+  counts <- weekly_filtered %>%
+    count(year_adj, svar_kategori, name = "n")
+
+  plot_counts <- period_grid %>%
+    left_join(counts, by = "year_adj") %>%
+    mutate(
+      n = tidyr::replace_na(n, 0L)
+    )
 }
 
 period_levels <- period_grid$period_label
@@ -455,20 +480,27 @@ raw_radius_pts <- 5 - n_periods / 20
 bar_radius_pts <- max(min_radius_pts, min(max_radius_pts, raw_radius_pts))
 bar_radius     <- grid::unit(bar_radius_pts, "pt")
 
-year_data <- period_data %>%
-  group_by(year_adj) %>%
-  summarise(
-    xmin    = min(period_index) - 0.43,
-    xmax    = max(period_index) + 0.43,
-    xcenter = mean(period_index),
-    .groups = "drop"
-  )
+# If timeGranularity is "År", we don't need extra year highlighting
+# since the x-axis already shows years
+if (timeGranularity != "År") {
+  year_data <- period_data %>%
+    group_by(year_adj) %>%
+    summarise(
+      xmin    = min(period_index) - 0.43,
+      xmax    = max(period_index) + 0.43,
+      xcenter = mean(period_index),
+      .groups = "drop"
+    )
 
-year_labels_df <- year_data %>%
-  mutate(
-    y     = -y_top5 * 0.10,
-    label = as.character(year_adj)
-  )
+  year_labels_df <- year_data %>%
+    mutate(
+      y     = -y_top5 * 0.10,
+      label = as.character(year_adj)
+    )
+} else {
+  year_data <- NULL
+  year_labels_df <- NULL
+}
 
 legend_df <- tibble::tibble(
   period_label  = factor(rep(period_levels[1], length(legend_levels_effective)),
@@ -510,8 +542,16 @@ if (!identical(specialeToggle, "Alle")) {
   subtitle_filters <- c(subtitle_filters, specialeToggle)
 }
 
+# Determine base location
+if (!identical(svartypeFilterToggle, "Alle") &&
+    svartypeFilterToggle %in% c("Medicingennemgang", "Generel forespørgsel", "Ibrugtagningssag")) {
+  base_location <- "Midtjylland"
+} else {
+  base_location <- "Aarhus og Aalborg"
+}
+
 subtitle_text <- paste(
-  c("Aarhus og Aalborg", subtitle_filters),
+  c(base_location, subtitle_filters),
   collapse = " | "
 )
 
@@ -560,27 +600,34 @@ p <- ggplot() +
     size         = 0.5,
     inherit.aes  = FALSE,
     show.legend  = TRUE
-  ) +
-  geom_rect(
-    data  = year_data,
-    aes(xmin = xmin, xmax = xmax, ymin = 0, ymax = Inf),
-    fill  = "grey95",
-    alpha = 0.5
-  ) +
-  geom_rect(
-    data = year_labels_df,
-    aes(
-      xmin = xmin,
-      xmax = xmax,
-      ymin = y - y_top5 * 0.03,
-      ymax = y + y_top5 * 0.03
-    ),
-    inherit.aes = FALSE,
-    fill        = "grey95",
-    colour      = NA,
-    linewidth   = 0,
-    alpha       = .5
-  ) +
+  )
+
+# Add year highlighting only if not in yearly granularity
+if (timeGranularity != "År" && !is.null(year_data)) {
+  p <- p +
+    geom_rect(
+      data  = year_data,
+      aes(xmin = xmin, xmax = xmax, ymin = 0, ymax = Inf),
+      fill  = "grey95",
+      alpha = 0.5
+    ) +
+    geom_rect(
+      data = year_labels_df,
+      aes(
+        xmin = xmin,
+        xmax = xmax,
+        ymin = y - y_top5 * 0.03,
+        ymax = y + y_top5 * 0.03
+      ),
+      inherit.aes = FALSE,
+      fill        = "grey95",
+      colour      = NA,
+      linewidth   = 0,
+      alpha       = .5
+    )
+}
+
+p <- p +
   # Trendline with linetype mapped for legend
   (if (showTrendlineToggle) {
     geom_line(
@@ -644,19 +691,26 @@ p <- ggplot() +
     )
   } else {
     NULL
-  }) +
-  geom_label(
-    data   = year_labels_df,
-    aes(x = xcenter, y = y, label = label),
-    size   = 5,
-    fontface = "bold",
-    vjust  = 0.5,
-    color  = "black",
-    fill   = NA,
-    label.r = grid::unit(0, "pt"),
-    label.padding = grid::unit(2, "pt"),
-    linewidth = 0
-  ) +
+  })
+
+# Add year labels only if not in yearly granularity
+if (timeGranularity != "År" && !is.null(year_labels_df)) {
+  p <- p +
+    geom_label(
+      data   = year_labels_df,
+      aes(x = xcenter, y = y, label = label),
+      size   = 5,
+      fontface = "bold",
+      vjust  = 0.5,
+      color  = "black",
+      fill   = NA,
+      label.r = grid::unit(0, "pt"),
+      label.padding = grid::unit(2, "pt"),
+      linewidth = 0
+    )
+}
+
+p <- p +
   # Fill legend with optional (n)
   scale_fill_manual(
     values = vibrant_palette[legend_levels_effective],
@@ -729,7 +783,7 @@ p <- ggplot() +
 
     plot.title    = element_text(size = 16, hjust = 0.5, face = "bold"),
     plot.subtitle = element_text(size = 12, hjust = 0.5),
-    plot.margin   = margin(t = 3, r = 0, b = 90, l = 0, unit = "pt")
+    plot.margin   = margin(t = 2, r = 2, b = -5, l = 2, unit = "pt")
   )
 
 print(p)
