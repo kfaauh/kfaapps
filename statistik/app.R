@@ -1982,46 +1982,43 @@ shinyApp(ui, server)
         )
       },
 error = function(e) {
-      err_msg <- e$message
-      sync_ok(FALSE)
+  err_msg <- e$message
+  sync_ok(FALSE)
 
-      # Default UI message
-      msg_ui <- "Der opstod en fejl under synkronisering af data. Se tekniske detaljer eller kontakt support."
+  # Default UI message
+  msg_ui <- "Der opstod en fejl under synkronisering af data. Se tekniske detaljer eller kontakt support."
 
-      # 1) Special case: invalid or expired SharePoint secret
-      if (grepl("INVALID_SHAREPOINT_SECRET", err_msg, fixed = TRUE)) {
-        msg_ui <- HTML(paste0(
-          "Client secret til Azure/SharePoint skal opdateres på serveren:<br>",
-          "1) Login på server fra AU-net (indsæt eget AUID begge steder):<br>",
-          "<code>ssh -J AUID@ssh.au.dk AUID@kfaapps.uni.au.dk</code><br><br>",
-          "2) Gå til mappen med secret-filen:<br>",
-          "<code>cd /srv/shiny-server/kfaapps/statistik</code><br><br>",
-          "3) Åbn secret-filen, fjern gammel secret og indsæt ny secret:<br>",
-          "<code>nano secret_for_sharepoint.txt</code><br>",
-          "   - Indsæt ny secret på én linje<br>",
-          "   - Gem og luk nano med: <code>Ctrl+O</code>, <code>Enter</code>, <code>Ctrl+X</code><br><br>",
-          "4) Kør synkronisering igen i denne app (knappen 'Synkroniser data med Sharepoint')."
-        ))
-      }
+  # 1) Special case: invalid or expired SharePoint secret
+  if (grepl("INVALID_SHAREPOINT_SECRET", err_msg, fixed = TRUE)) {
+    msg_ui <- HTML(paste0(
+      "Client secret til Azure/SharePoint skal opdateres på serveren:<br>",
+      "1) Åbn Terminal og login på serveren fra AU-net (indsæt eget AUID begge steder):<br>",
+      "<code>ssh -J AUID@ssh.au.dk AUID@kfaapps.uni.au.dk</code><br><br>",
+      "2) Gå til mappen med secret-filen:<br>",
+      "<code>cd /srv/shiny-server/kfaapps/statistik</code><br><br>",
+      "3) Åbn secret-filen med sudo, fjern gammel secret og indsæt ny secret:<br>",
+      "<code>sudo nano secret_for_sharepoint.txt</code><br>",
+      "   - Indsæt ny secret på én linje<br>",
+      "   - Gem og luk nano med: <code>Ctrl+O</code>, <code>Enter</code>, <code>Ctrl+X</code><br><br>",
+      "4) Kør synkronisering igen i denne app (knappen 'Synkroniser data med Sharepoint')."
+    ))
+  }
 
-      # (Optional) keep any other special cases here, if you still need them
-      # else if (grepl("Azure authentication missing or expired", err_msg, fixed = TRUE)) { ... }
+  script_status(list(
+    type    = "error",
+    message = msg_ui
+  ))
 
-      script_status(list(
-        type    = "error",
-        message = msg_ui
-      ))
-
-      shinyjs::html(
-        id   = "console_output",
-        html = paste0(
-          "\n*** TEKNISK FEJL ***\n",
-          err_msg,
-          "\n********************\n"
-        ),
-        add  = TRUE
-      )
-    }
+  shinyjs::html(
+    id   = "console_output",
+    html = paste0(
+      "\n*** TEKNISK FEJL ***\n",
+      err_msg,
+      "\n********************\n"
+    ),
+    add  = TRUE
+  )
+}
     )
 
     shinyjs::enable("download_data")
