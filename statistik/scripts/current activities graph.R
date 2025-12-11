@@ -294,7 +294,7 @@ as_of <- max(as_of_days)
 # CHANGED: Replaced Kortsvar with Ibrugtagningssag and reordered as requested
 y_levels <- c("Ibrugtagningssag", "Medicingennemgang", "Generel forespørgsel", "Almindeligt svar")
 status_levels <- c("Modtaget", "Fordelt", "Startet", "Ved bagvagt")
-status_cols <- c("Modtaget" = "#444444", "Fordelt" = "#808080", "Startet" = "#E6D27F", "Ved bagvagt" = "#EFBDA7")
+status_cols <- c("Modtaget" = "#444444", "Fordelt" = "#808080", "Startet" = "#E6D27F", "Ved bagvagt" = "#D97A5E")
 
 scatter_df <- activity_plot_data %>%
   filter(is.na(FaerdigDate) | FaerdigDate >= as_of) %>%
