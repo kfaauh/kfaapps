@@ -771,6 +771,18 @@ data.lmraad_filtered <- data.lmraad_filtered %>%
 
 message("✓ Affiliation data merged successfully")
 
+
+# =============================================================================
+# NEEDS NUMBER.UNIFORMISE CERTAIN INPUTS
+# =============================================================================
+data.lmraad_filtered <- data.lmraad_filtered %>%
+  mutate(
+    `Speciale corrected` = case_when(
+      `Speciale corrected` == "Rheumatologi" ~ "Reumatologi",
+      TRUE                                   ~ `Speciale corrected`
+    )
+  )
+
 # =============================================================================
 # 7. REORGANISE STATUS
 # =============================================================================
