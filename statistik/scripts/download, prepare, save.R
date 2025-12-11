@@ -777,9 +777,9 @@ message("✓ Affiliation data merged successfully")
 # =============================================================================
 data.lmraad_filtered <- data.lmraad_filtered %>%
   mutate(
-    `Speciale corrected` = case_when(
-      `Speciale corrected` == "Rheumatologi" ~ "Reumatologi",
-      TRUE                                   ~ `Speciale corrected`
+    `specialeCorrected` = case_when(
+      `specialeCorrected` == "Rheumatologi" ~ "Reumatologi",
+      TRUE                                   ~ `specialeCorrected`
     )
   )
 
