@@ -545,13 +545,34 @@ if (!identical(specialeToggle, "Alle")) {
 # Determine base location
 if (!identical(svartypeFilterToggle, "Alle") &&
     svartypeFilterToggle %in% c("Medicingennemgang", "Generel forespørgsel", "Ibrugtagningssag")) {
-  base_location <- "Midtjylland"
+
+  if (identical(regionToggle, "Nordjylland")) {
+    # For these svartyper with region = Nordjylland -> show only "Nordjylland"
+    base_location <- "Nordjylland"
+
+  } else if (identical(regionToggle, "Begge")) {
+
+    # For region = Begge:
+    # - "Medicingennemgang" or "Ibrugtagningssag" -> keep "Midtjylland"
+    # - "Generel forespørgsel" -> fall back to default "Aarhus og Aalborg"
+    if (svartypeFilterToggle %in% c("Medicingennemgang", "Ibrugtagningssag")) {
+      base_location <- "Midtjylland"
+    } else {  # "Generel forespørgsel"
+      base_location <- "Aarhus og Aalborg"
+    }
+
+  } else {
+    # Other explicit regions (e.g. Midtjylland) -> "Midtjylland"
+    base_location <- "Midtjylland"
+  }
+
 } else {
+  # All other Svartype/region combinations -> default
   base_location <- "Aarhus og Aalborg"
 }
 
 subtitle_text <- paste(
-  c(base_location, subtitle_filters),
+  unique(c(base_location, subtitle_filters)),
   collapse = " | "
 )
 
@@ -578,7 +599,7 @@ legend_labels_with_n <- vapply(
 
 # Choose labels and title based on showCountInLegend
 legend_labels <- if (isTRUE(showCountInLegend)) legend_labels_with_n else legend_levels_effective
-legend_title  <- if (isTRUE(showCountInLegend)) "Type aktivitet (n)" else "Type aktivitet"
+legend_title  <- if (isTRUE(showCountInLegend)) "Type aktivitet (antal)" else "Type aktivitet"
 
 message("Creating plot…")
 
