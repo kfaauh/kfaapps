@@ -54,8 +54,8 @@ vibrant_palette <- c(
   "Klinisk forespørgsel"    = "#0083B8",
   "Medicingennemgang"       = "#F0C571",
   "Ibrugtagningssag"        = "#2E8B57",
-  "Psykiatrikonference"     = "#A559AA",
-  "Andre"                   = "#808080",
+  # "Psykiatrikonference"     = "#A559AA",
+  # "Andre"                   = "#808080",
   "Bivirkningsindberetning" = "#C96A2B"
 )
 
@@ -64,59 +64,27 @@ if (any(duplicated(unname(vibrant_palette)))) {
 }
 
 if (effective_groupSvarToggle) {
-  if (psykiatrikonf_AndreToggle) {
-    svar_levels_plot <- c(
-      "Ibrugtagningssag",
-      "Medicingennemgang",
-      "Generel forespørgsel",
-      "Klinisk forespørgsel",
-      "Psykiatrikonference",
-      "Andre"
-    )
-    svar_levels_legend <- c(
-      "Klinisk forespørgsel",
-      "Generel forespørgsel",
-      "Medicingennemgang",
-      "Ibrugtagningssag",
-      "Psykiatrikonference",
-      "Andre"
-    )
-  } else {
-    svar_levels_plot <- c(
-      "Ibrugtagningssag",
-      "Medicingennemgang",
-      "Generel forespørgsel",
-      "Klinisk forespørgsel"
-    )
-    svar_levels_legend <- c(
-      "Klinisk forespørgsel",
-      "Generel forespørgsel",
-      "Medicingennemgang",
-      "Ibrugtagningssag"
-    )
-  }
+  svar_levels_plot <- c(
+    "Ibrugtagningssag",
+    "Medicingennemgang",
+    "Generel forespørgsel",
+    "Klinisk forespørgsel"
+  )
+  svar_levels_legend <- c(
+    "Klinisk forespørgsel",
+    "Generel forespørgsel",
+    "Medicingennemgang",
+    "Ibrugtagningssag"
+  )
 } else {
-  if (psykiatrikonf_AndreToggle) {
-    svar_levels_plot <- c(
-      "Ibrugtagningssag",
-      "Medicingennemgang",
-      "Generel forespørgsel",
-      "Almindeligt svar",
-      "Kortsvar",
-      "Psykiatrikonference",
-      "Andre"
-    )
-    svar_levels_legend <- rev(svar_levels_plot)
-  } else {
-    svar_levels_plot <- c(
-      "Ibrugtagningssag",
-      "Medicingennemgang",
-      "Generel forespørgsel",
-      "Almindeligt svar",
-      "Kortsvar"
-    )
-    svar_levels_legend <- rev(svar_levels_plot)
-  }
+  svar_levels_plot <- c(
+    "Ibrugtagningssag",
+    "Medicingennemgang",
+    "Generel forespørgsel",
+    "Almindeligt svar",
+    "Kortsvar"
+  )
+  svar_levels_legend <- rev(svar_levels_plot)
 }
 
 # -------------------------------------------------------------------------
