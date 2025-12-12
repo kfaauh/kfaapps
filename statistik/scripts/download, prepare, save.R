@@ -716,6 +716,7 @@ data.lmraad <- transform_data(data.lmraad)
 data.medicingennemgang <- transform_data(data.medicingennemgang)
 data.ibrugtagning <- transform_data(data.ibrugtagning)
 data.ibrugtagning$`Svartype (*)` <- "Ibrugtagningssag"
+data.ibrugtagning$`Region (*)` <- "Midtjylland"
 
 # Combine all contacts
 data.lmraad_filtered <- rbind(data.lmraad, data.medicingennemgang, data.ibrugtagning)
@@ -782,6 +783,10 @@ data.lmraad_filtered <- data.lmraad_filtered %>%
       TRUE                                   ~ `specialeCorrected`
     )
   )
+
+# =============================================================================
+# NEEDS NUMBER.
+# =============================================================================
 
 # =============================================================================
 # 7. REORGANISE STATUS
