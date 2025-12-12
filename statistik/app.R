@@ -32,12 +32,15 @@ ui <- fluidPage(
         font-size: 3em;
         margin-bottom: 0.3em;
       }
+
+      /* Reduced margins around all section subheadings */
       .subheader {
         font-size: 1.5em;
-        margin-top: 1.0em;
-        margin-bottom: 0.4em;
+        margin-top: 0.55em;
+        margin-bottom: 0.20em;
         color: #555;
       }
+
       .links {
         margin: 0.3em 0;
       }
@@ -65,6 +68,11 @@ ui <- fluidPage(
 
       /* Black summary text for Tidligere aktiviteter settings */
       .tidligere-settings > summary {
+        color: #000000;
+      }
+
+      /* Black summary text for Svartider settings */
+      .svartider-settings > summary {
         color: #000000;
       }
 
@@ -183,6 +191,10 @@ ui <- fluidPage(
         margin: -10px 0 0 0 !important;
         padding: 0 !important;
       }
+      .download-links-svartider {
+        margin: -10px 0 0 0 !important;
+        padding: 0 !important;
+      }
 
       /* Small button styling */
       .small-button {
@@ -284,7 +296,7 @@ ui <- fluidPage(
         height: 28px !important;
       }
 
-      /* Controls row for Tidligere aktiviteter */
+      /* Controls row for Tidligere aktiviteter (and reused for Svartider) */
       .controls-row {
         display: flex;
         flex-wrap: wrap;
@@ -433,7 +445,6 @@ ui <- fluidPage(
       )
     ),
 
-    # Fold-out panel for indstillinger til 'Tidligere aktiviteter'
     tags$details(
       class = "tidligere-settings",
       tags$summary("Indstillinger for 'Tidligere aktiviteter' (klik for at folde ud)"),
@@ -444,7 +455,7 @@ ui <- fluidPage(
         dateInput(
           "from_date",
           label = "Fra",
-          value = floor_date(Sys.Date(), "month") %m-% years(5),
+          value = floor_date(Sys.Date(), "month") %m-% years(2),
           format = "dd-mm-yyyy",
           width = "120px"
         ),
@@ -511,29 +522,17 @@ ui <- fluidPage(
         div(
           class = "cb-wrap",
           div(HTML("Gruppér kliniske henvendelser<br>(alm., kort, generel)")),
-          checkboxInput(
-            "groupSvarToggle",
-            label = NULL,
-            value = FALSE
-          )
+          checkboxInput("groupSvarToggle", label = NULL, value = FALSE)
         ),
         div(
           class = "cb-wrap",
           div("Trendlinje"),
-          checkboxInput(
-            "showTrendlineToggle",
-            label = NULL,
-            value = FALSE
-          )
+          checkboxInput("showTrendlineToggle", label = NULL, value = FALSE)
         ),
         div(
           class = "cb-wrap",
           div("Vis samlet antal"),
-          checkboxInput(
-            "showCountInLegend",
-            label = NULL,
-            value = FALSE
-          )
+          checkboxInput("showCountInLegend", label = NULL, value = FALSE)
         )
       )
     ),
@@ -548,6 +547,144 @@ ui <- fluidPage(
           class = "download-links-svartype",
           downloadButton("download_svartype_png", "Download PNG", class = "small-button"),
           downloadButton("download_svartype_svg", "Download SVG", class = "small-button")
+        )
+      ),
+      div(style = "height: 0px;")
+    ),
+
+    # --- Thin separator line between "Tidligere aktiviteter" and "Svartider"
+    div(class = "section-separator-thin"),
+
+    # ---- Svartider ----
+    div(class = "subheader", "Svartider"),
+
+    div(
+      class = "links",
+      actionButton(
+        "run_svartider_plot",
+        "Plot svartider",
+        class = "link-button"
+      )
+    ),
+
+    tags$details(
+      class = "svartider-settings",
+      tags$summary("Indstillinger for 'Svartider' (klik for at folde ud)"),
+
+      # Line 1: Fra, Til, Tidsopløsning, Inkluderede dage
+      div(
+        class = "controls-row",
+        dateInput(
+          "from_date_timePlot",
+          label = "Fra",
+          value = floor_date(Sys.Date(), "month") %m-% years(2),
+          format = "dd-mm-yyyy",
+          width = "120px"
+        ),
+        dateInput(
+          "to_date_timePlot",
+          label = "Til",
+          value = floor_date(Sys.Date(), "month") - days(1),
+          format = "dd-mm-yyyy",
+          width = "120px"
+        ),
+        selectInput(
+          "timeGranularity_timePlot",
+          label = "Tidsopløsning",
+          choices = c("Uge", "Måned", "Kvartal", "År"),
+          selected = "Måned",
+          width = "120px"
+        ),
+        selectInput(
+          "svartidTypeToggle_timePlot",
+          label = "Inkluderede dage",
+          choices = c(
+            "Alle dage",
+            "Hverdage m. helligdage",
+            "Hverdage u. helligdage og weekend"
+          ),
+          selected = "Hverdage u. helligdage og weekend",
+          width = "250px"
+        )
+      ),
+
+      # Line 2: Svartider-specific: Svartype, Region
+      div(
+        class = "controls-row",
+        selectInput(
+          "svartypeFilterToggle_timePlot",
+          label = "Svartype",
+          choices = c(
+            "Alle",
+            "Klinisk rådgivning",
+            "Almindeligt svar",
+            "Kortsvar",
+            "Generel forespørgsel",
+            "Medicingennemgang"
+          ),
+          selected = "Almindeligt svar",
+          width = "190px"
+        ),
+        selectInput(
+          "regionToggle_timePlot",
+          label = "Region (rekvirent)",
+          choices = c("Begge", "Nordjylland", "Midtjylland"),
+          selected = "Begge",
+          width = "180px"
+        )
+      ),
+
+      # Line 3: Percentiles
+      div(
+        class = "controls-row",
+        selectInput(
+          "graf1_percentile_timePlot",
+          label = "Graf 1 (percentil)",
+          choices = c("Ingen", "20", "40", "Median (50)", "75", "80", "90", "100"),
+          selected = "90",
+          width = "160px"
+        ),
+        selectInput(
+          "graf2_percentile_timePlot",
+          label = "Graf 2 (Percentil)",
+          choices = c("Ingen", "20", "40", "Median (50)", "75", "80", "90", "100"),
+          selected = "Median (50)",
+          width = "160px"
+        ),
+        selectInput(
+          "graf3_percentile_timePlot",
+          label = "Graf 3 (Percentil)",
+          choices = c("Ingen", "20", "40", "Median (50)", "75", "80", "90", "100"),
+          selected = "Ingen",
+          width = "160px"
+        )
+      ),
+
+      # Line 4: checkbox with same look as Trendlinje checkbox
+      div(
+        class = "controls-row-tight",
+        div(
+          class = "cb-wrap",
+          div("Vis gennemsnit"),
+          checkboxInput(
+            "showMeanToggle_timePlot",
+            label = NULL,
+            value = FALSE
+          )
+        )
+      )
+    ),
+
+    conditionalPanel(
+      condition = "output.svartider_plot_available == true",
+      div(class = "section-separator-thin"),
+      div(
+        class = "plot-container",
+        plotOutput("svartider_plot", inline = TRUE),
+        div(
+          class = "download-links-svartider",
+          downloadButton("download_svartider_png", "Download PNG", class = "small-button"),
+          downloadButton("download_svartider_svg", "Download SVG", class = "small-button")
         )
       ),
       div(style = "height: 0px;")
@@ -605,8 +742,12 @@ server <- function(input, output, session) {
 
   script_status <- reactiveVal(NULL)
 
-  activity_plot     <- reactiveVal(NULL)
-  svartype_plot_obj <- reactiveVal(NULL)
+  activity_plot        <- reactiveVal(NULL)
+  svartype_plot_obj    <- reactiveVal(NULL)
+  svartider_plot_obj   <- reactiveVal(NULL)
+
+  svartype_plot_active  <- reactiveVal(FALSE)
+  svartider_plot_active <- reactiveVal(FALSE)
 
   output$plot_available <- reactive({
     !is.null(activity_plot())
@@ -617,6 +758,11 @@ server <- function(input, output, session) {
     !is.null(svartype_plot_obj())
   })
   outputOptions(output, "svartype_plot_available", suspendWhenHidden = FALSE)
+
+  output$svartider_plot_available <- reactive({
+    !is.null(svartider_plot_obj())
+  })
+  outputOptions(output, "svartider_plot_available", suspendWhenHidden = FALSE)
 
   # -------------------------- LAST SYNC -------------------------- #
 
@@ -1042,12 +1188,10 @@ server <- function(input, output, session) {
 
   # -------------------------- SVARTYPE PLOT (Tidligere aktiviteter) -------------------------- #
 
-  observeEvent(input$run_svartype_plot, {
-    shinyjs::disable("run_svartype_plot")
-
+  run_svartype_plot <- function() {
     shinyjs::html(
       id   = "console_output",
-      html = "Starter script til 'Tidligere aktiviteter'...\n\n",
+      html = "Opdaterer 'Tidligere aktiviteter'...\n\n",
       add  = TRUE
     )
 
@@ -1070,8 +1214,6 @@ server <- function(input, output, session) {
         type    = "error",
         message = "Scriptet 'plot svartype.R' blev ikke fundet. Kontakt support."
       ))
-
-      shinyjs::enable("run_svartype_plot")
       return(invisible(NULL))
     }
 
@@ -1120,10 +1262,11 @@ server <- function(input, output, session) {
         }
 
         svartype_plot_obj(get("p", envir = plot_env))
+        script_status(NULL)
 
         shinyjs::html(
           id   = "console_output",
-          html = "\n'Tidligere aktiviteter' plot-script færdigt.\n",
+          html = "\n'Tidligere aktiviteter' opdateret.\n",
           add  = TRUE
         )
 
@@ -1148,8 +1291,36 @@ server <- function(input, output, session) {
       }
     )
 
+    invisible(NULL)
+  }
+
+  observeEvent(input$run_svartype_plot, {
+    shinyjs::disable("run_svartype_plot")
+    svartype_plot_active(TRUE)
+    run_svartype_plot()
     shinyjs::enable("run_svartype_plot")
   })
+
+  observeEvent(
+    list(
+      input$from_date,
+      input$to_date,
+      input$timeGranularity,
+      input$countMode,
+      input$svartypeFilterToggle,
+      input$specialeToggle,
+      input$regionToggle,
+      input$groupSvarToggle,
+      input$showTrendlineToggle,
+      input$showCountInLegend
+    ),
+    {
+      if (isTRUE(svartype_plot_active())) {
+        run_svartype_plot()
+      }
+    },
+    ignoreInit = TRUE
+  )
 
   output$svartype_plot <- renderPlot(
     {
@@ -1184,6 +1355,178 @@ server <- function(input, output, session) {
       grDevices::svg(file, width = 10, height = 6.5)
       grid::grid.newpage()
       grid::grid.draw(svartype_plot_obj())
+      grDevices::dev.off()
+    }
+  )
+
+  # -------------------------- SVARTIDER PLOT (time plot) -------------------------- #
+
+  map_percentile_input <- function(x) {
+    if (is.null(x) || identical(x, "Ingen")) return("Ingen")
+    if (identical(x, "Median (50)")) return(50)
+    as.numeric(x)
+  }
+
+  run_svartider_plot <- function() {
+    script_path_plot <- file.path(
+      here("statistik", "scripts"),
+      "plot svartid.R"
+    )
+
+    if (!file.exists(script_path_plot)) {
+      shinyjs::html(
+        id   = "console_output",
+        html = paste0("FEJL: 'plot svartid.R' script ikke fundet:\n", script_path_plot, "\n"),
+        add  = TRUE
+      )
+      script_status(list(
+        type    = "error",
+        message = "Scriptet til 'Svartider' blev ikke fundet. Kontakt support."
+      ))
+      return(invisible(NULL))
+    }
+
+    plot_env <- new.env(parent = globalenv())
+
+    plot_env$timeGranularity.timePlot      <- input$timeGranularity_timePlot
+    plot_env$regionToggle.timePlot         <- input$regionToggle_timePlot
+    plot_env$svartypeFilterToggle.timePlot <- input$svartypeFilterToggle_timePlot
+
+    from_tp <- as.Date(input$from_date_timePlot)
+    to_tp   <- as.Date(input$to_date_timePlot)
+
+    plot_env$start_year.timePlot  <- as.integer(format(from_tp, "%Y"))
+    plot_env$start_month.timePlot <- as.integer(format(from_tp, "%m"))
+    plot_env$start_day.timePlot   <- as.integer(format(from_tp, "%d"))
+    plot_env$end_year.timePlot    <- as.integer(format(to_tp, "%Y"))
+    plot_env$end_month.timePlot   <- as.integer(format(to_tp, "%m"))
+    plot_env$end_day.timePlot     <- as.integer(format(to_tp, "%d"))
+
+    plot_env$svartidTypeToggle <- input$svartidTypeToggle_timePlot
+    plot_env$graf1_percentile  <- map_percentile_input(input$graf1_percentile_timePlot)
+    plot_env$graf2_percentile  <- map_percentile_input(input$graf2_percentile_timePlot)
+    plot_env$graf3_percentile  <- map_percentile_input(input$graf3_percentile_timePlot)
+
+    # Vis gennemsnit toggle (used by plot script)
+    plot_env$showMeanToggle <- isTRUE(input$showMeanToggle_timePlot)
+
+    tryCatch(
+      {
+        withCallingHandlers(
+          {
+            message("Kører 'Svartider' script: ", script_path_plot)
+            source(script_path_plot, local = plot_env)
+          },
+          message = function(m) {
+            shinyjs::html(
+              id   = "console_output",
+              html = paste0(m$message, "\n"),
+              add  = TRUE
+            )
+            invokeRestart("muffleMessage")
+          }
+        )
+
+        if (!exists("p", envir = plot_env, inherits = FALSE)) {
+          stop("Plot-objekt 'p' ikke fundet efter kørsel af 'plot svartid.R'.")
+        }
+
+        svartider_plot_obj(get("p", envir = plot_env))
+        script_status(NULL)
+
+        shinyjs::html(
+          id   = "console_output",
+          html = "\n'Svartider' plot-script færdigt.\n",
+          add  = TRUE
+        )
+
+      },
+      error = function(e) {
+        err_msg <- e$message
+        script_status(list(
+          type    = "error",
+          message = "Der opstod en fejl under opdatering af 'Svartider'. Se tekniske detaljer eller kontakt support."
+        ))
+        shinyjs::html(
+          id   = "console_output",
+          html = paste0(
+            "\n*** TEKNISK FEJL (svartider-plot) ***\n",
+            err_msg,
+            "\n****************************************\n"
+          ),
+          add  = TRUE
+        )
+      }
+    )
+
+    invisible(NULL)
+  }
+
+  observeEvent(input$run_svartider_plot, {
+    shinyjs::disable("run_svartider_plot")
+    shinyjs::html(
+      id   = "console_output",
+      html = "Starter script til 'Svartider'...\n\n",
+      add  = TRUE
+    )
+
+    svartider_plot_active(TRUE)
+    run_svartider_plot()
+
+    shinyjs::enable("run_svartider_plot")
+  })
+
+  observeEvent(
+    list(
+      input$from_date_timePlot,
+      input$to_date_timePlot,
+      input$timeGranularity_timePlot,
+      input$svartidTypeToggle_timePlot,
+      input$svartypeFilterToggle_timePlot,
+      input$regionToggle_timePlot,
+      input$graf1_percentile_timePlot,
+      input$graf2_percentile_timePlot,
+      input$graf3_percentile_timePlot,
+      input$showMeanToggle_timePlot
+    ),
+    {
+      if (isTRUE(svartider_plot_active())) {
+        run_svartider_plot()
+      }
+    },
+    ignoreInit = TRUE
+  )
+
+  output$svartider_plot <- renderPlot(
+    {
+      req(svartider_plot_obj())
+      print(svartider_plot_obj())
+    },
+    width  = 800,
+    height = 650,
+    res    = 96
+  )
+
+  output$download_svartider_png <- downloadHandler(
+    filename = function() {
+      paste0("svartider_plot_", Sys.Date(), ".png")
+    },
+    content = function(file) {
+      req(svartider_plot_obj())
+      grDevices::png(file, width = 10, height = 6.5, units = "in", res = 300)
+      print(svartider_plot_obj())
+      grDevices::dev.off()
+    }
+  )
+
+  output$download_svartider_svg <- downloadHandler(
+    filename = function() {
+      paste0("svartider_plot_", Sys.Date(), ".svg")
+    },
+    content = function(file) {
+      req(svartider_plot_obj())
+      grDevices::svg(file, width = 10, height = 6.5)
+      print(svartider_plot_obj())
       grDevices::dev.off()
     }
   )
