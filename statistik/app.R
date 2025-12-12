@@ -444,7 +444,7 @@ ui <- fluidPage(
         dateInput(
           "from_date",
           label = "Fra",
-          value = floor_date(Sys.Date(), "month") %m-% years(1),
+          value = floor_date(Sys.Date(), "month") %m-% years(5),
           format = "dd-mm-yyyy",
           width = "120px"
         ),
