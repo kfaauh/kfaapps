@@ -163,6 +163,15 @@ if (identical(specialeToggle, "Hospital")) {
 if (!identical(regionToggle, "Begge")) {
   filtered_data <- filtered_data %>%
     dplyr::filter(`Region (*)` == regionToggle)
+
+
+  # DEBUG: Check if Ibrugtagningssag exists in filtered data
+  message("DEBUG: After region filter (", regionToggle, ")")
+  message("DEBUG: Unique Svartype values in filtered_data: ",
+          paste(unique(filtered_data$`Svartype (*)`), collapse = ", "))
+  message("DEBUG: Count of Ibrugtagningssag: ",
+          sum(filtered_data$`Svartype (*)` == "Ibrugtagningssag", na.rm = TRUE))
+  message("DEBUG: Total rows after region filter: ", nrow(filtered_data))
 }
 
 # 3) Svartype filter
