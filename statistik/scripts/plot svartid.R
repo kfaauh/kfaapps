@@ -397,6 +397,14 @@ if (nrow(line_data) > 0) {
     mutate(series_label = factor(character(0)), value = numeric(0))
 }
 
+# NEW: Only add markers when some time bins are missing (i.e. NA after join)
+has_missing_bins <- (nrow(line_data) > 0) && any(is.na(line_data$value))
+line_data_for_geom <- if (isTRUE(has_missing_bins)) {
+  line_data %>% filter(!is.na(value))
+} else {
+  line_data
+}
+
 # -----------------------------------------------------------------------------
 # 9. Y-axis limits (min 5 + n*5)
 # -----------------------------------------------------------------------------
@@ -507,7 +515,7 @@ p <- p +
     linewidth  = 0.8
   ) +
   geom_line(
-    data = line_data,
+    data = line_data_for_geom,
     aes(
       x        = period_label,
       y        = value,
@@ -521,6 +529,24 @@ p <- p +
     linejoin  = "round",
     na.rm     = TRUE
   )
+
+# NEW: Markers only when there are missing bins
+if (isTRUE(has_missing_bins)) {
+  p <- p +
+    geom_point(
+      data = line_data_for_geom,
+      aes(
+        x     = period_label,
+        y     = value,
+        color = series_label,
+        group = series_label
+      ),
+      size  = 2.5,
+      alpha = 0.9,
+      stroke = 0,
+      na.rm = TRUE
+    )
+}
 
 if (timeGranularity.timePlot != "År" && !is.null(year_labels_df) && nrow(year_labels_df) > 0) {
   p <- p +
@@ -556,9 +582,9 @@ p <- p +
     minor_breaks = seq(0, y_upper, by = break_interval / 5),
     expand       = c(0, 0)
   ) +
-	scale_x_discrete(
-		limits = period_levels,
-		drop   = FALSE,
+  scale_x_discrete(
+    limits = period_levels,
+    drop   = FALSE,
     labels = x_labels_map
   ) +
   labs(
