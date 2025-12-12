@@ -245,10 +245,8 @@ if (effective_groupSvarToggle) {
     )
 }
 
-if (!psykiatrikonf_AndreToggle) {
-  weekly_base <- weekly_base %>%
-    filter(!svar_kategori %in% c("Psykiatrikonference", "Andre"))
-}
+weekly_base <- weekly_base %>%
+  filter(!svar_kategori %in% c("Psykiatrikonference", "Andre"))
 
 # -------------------------------------------------------------------------
 # 4. TIME GRID AND COUNTS

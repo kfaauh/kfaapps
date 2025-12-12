@@ -519,15 +519,6 @@ ui <- fluidPage(
         ),
         div(
           class = "cb-wrap",
-          div("Vis Psykiatrikonference og Andre"),
-          checkboxInput(
-            "psykiatrikonf_AndreToggle",
-            label = NULL,
-            value = FALSE
-          )
-        ),
-        div(
-          class = "cb-wrap",
           div("Trendlinje"),
           checkboxInput(
             "showTrendlineToggle",
@@ -1093,7 +1084,6 @@ server <- function(input, output, session) {
         plot_env$timeGranularity <- input$timeGranularity
         plot_env$showTrendlineToggle   <- isTRUE(input$showTrendlineToggle)
         plot_env$groupSvarToggle       <- isTRUE(input$groupSvarToggle)
-        plot_env$psykiatrikonf_AndreToggle <- isTRUE(input$psykiatrikonf_AndreToggle)
         plot_env$sektorToggle          <- "Alle"
         plot_env$specialeToggle        <- input$specialeToggle
         plot_env$regionToggle          <- input$regionToggle
