@@ -434,7 +434,7 @@ ui <- fluidPage(
     div(class = "section-separator"),
 
     # ---- Tidligere aktiviteter ----
-    div(class = "subheader", "Tidligere aktiviteter"),
+    div(class = "subheader", "Antal tidligere aktiviteter"),
 
     div(
       class = "links",
@@ -447,7 +447,7 @@ ui <- fluidPage(
 
     tags$details(
       class = "tidligere-settings",
-      tags$summary("Indstillinger for 'Tidligere aktiviteter' (klik for at folde ud)"),
+      tags$summary("Indstillinger for 'Antal tidligere aktiviteter' (klik for at folde ud)"),
 
       # Line 1: Fra, Til, Tidsopløsning, Vis antal
       div(
