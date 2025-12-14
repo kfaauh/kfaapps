@@ -32,7 +32,7 @@ message("✓ Pakker til 'speciale'-piechart er indlæst")
 # Options: "Set3", "Paired", "Set1", "Set2", "Dark2", "Accent",
 #          "viridis", "plasma", "magma", "inferno", "cividis"
 if (!exists("colorToggle.specialePlot")) {
-  colorToggle <- "Set2"
+  colorToggle <- "Set3"
 } else {
   colorToggle <- as.character(colorToggle.specialePlot)
 }

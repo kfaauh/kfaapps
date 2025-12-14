@@ -82,6 +82,11 @@ ui <- fluidPage(
         color: #000000;
       }
 
+      /* Black summary text for Spørgsmålstypefordeling settings */
+      .spmfordeling-settings > summary {
+        color: #000000;
+      }
+
       .section-separator-first {
         border-top: 2px solid #000000 !important;
       }
@@ -201,7 +206,11 @@ ui <- fluidPage(
         margin: -10px 0 0 0 !important;
         padding: 0 !important;
       }
-            .download-links-specialefordeling {
+      .download-links-specialefordeling {
+        margin: -10px 0 0 0 !important;
+        padding: 0 !important;
+      }
+      .download-links-spmfordeling {
         margin: -10px 0 0 0 !important;
         padding: 0 !important;
       }
@@ -213,28 +222,22 @@ ui <- fluidPage(
         margin: 0.05em !important;
       }
 
-           /* Ensure both Top buttons are blue (match link-button styling) */
-     #top8_specialer,
-     #top15_specialer {
-       background-color: #0033A0 !important;
-       color: #ffffff !important;
-       border: none !important;
-     }
+      /* Ensure Top buttons are blue (match link-button styling) */
+      #top8_specialer,
+      #top15_specialer,
+      #top5_spm,
+      #top10_spm {
+        background-color: #0033A0 !important;
+        color: #ffffff !important;
+        border: none !important;
+      }
 
-
-            .top-buttons-stack {
+      .top-buttons-stack {
         display: flex;
         flex-direction: column;
         gap: 4px;
         align-items: center;
         justify-content: center;
-      }
-
-           /* Make the Top 8 button blue (match link-button styling) */
-      #top8_specialer {
-        background-color: #0033A0 !important;
-        color: #ffffff !important;
-        border: none !important;
       }
 
       .small-download-button {
@@ -330,7 +333,7 @@ ui <- fluidPage(
         height: 28px !important;
       }
 
-      /* Controls row for Tidligere aktiviteter (and reused for Svartider + Specialefordeling) */
+      /* Controls row for Tidligere aktiviteter (and reused for Svartider + Specialefordeling + Spmfordeling) */
       .controls-row {
         display: flex;
         flex-wrap: wrap;
@@ -410,30 +413,30 @@ ui <- fluidPage(
         padding: 0;
       }
 
-/* Compact multiselect dropdowns in controls-row (selectizeInput, multiple=TRUE) - allow wrapping */
-.controls-row .selectize-control.multi .selectize-input {
-  font-size: 0.8em;
-  padding: 1px 1px;
-  min-height: 25px !important;
+      /* Compact multiselect dropdowns in controls-row (selectizeInput, multiple=TRUE) - allow wrapping */
+      .controls-row .selectize-control.multi .selectize-input {
+        font-size: 0.8em;
+        padding: 1px 1px;
+        min-height: 25px !important;
 
-  height: auto !important;         /* allow multi-line growth */
-  max-height: 60px;                /* prevent huge controls */
-  overflow-y: auto;                /* scroll when many items */
+        height: auto !important;
+        max-height: 60px;
+        overflow-y: auto;
 
-  white-space: normal !important;  /* allow wrapping */
-}
+        white-space: normal !important;
+      }
 
-.controls-row .selectize-control.multi .selectize-input > .item {
-  line-height: 20px;
-  padding: 0 4px;
-  margin: 0 2px 2px 0;             /* small vertical spacing between lines */
-}
+      .controls-row .selectize-control.multi .selectize-input > .item {
+        line-height: 20px;
+        padding: 0 4px;
+        margin: 0 2px 2px 0;
+      }
 
-.controls-row .selectize-control.multi .selectize-input > input {
-  line-height: 20px;
-  padding: 0 !important;
-  margin: 0 !important;
-}
+      .controls-row .selectize-control.multi .selectize-input > input {
+        line-height: 20px;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
 
     "))
   ),
@@ -769,7 +772,7 @@ ui <- fluidPage(
       class = "specialefordeling-settings",
       tags$summary("Indstillinger for specialefordeling (klik for at folde ud)"),
 
-       # Line 1: Fra, Til, Specialer
+      # Line 1: Fra, Til, Specialer
       div(
         class = "controls-row",
         dateInput(
@@ -858,7 +861,6 @@ ui <- fluidPage(
         )
       ),
 
-      # Line 3: Vis antal + Signaturforklaring
       # Line 3: Vis antal + Signaturforklaring + Farveskema
       div(
         class = "controls-row",
@@ -873,36 +875,197 @@ ui <- fluidPage(
           "legendPositionToggle_specialePlot",
           label = "Signaturforklaring",
           choices = c("I diagram", "Udenfor diagram"),
-          selected = "I diagram",
+          selected = "Udenfor diagram",
           width = "170px"
         ),
         selectInput(
           "colorToggle_specialePlot",
           label = "Farveskema",
           choices = c(
-            "Set2", "Set3", "Paired", "Set1", "Dark2", "Accent",
+            "Set1", "Set2", "Set3", "Paired", "Dark2", "Accent",
             "viridis", "plasma", "magma", "inferno", "cividis"
           ),
-          selected = "Set2",
+          selected = "Set3",
+          width = "170px"
+        ),
+        selectInput(
+          "andreAlwaysGreyToggle_specialePlot",
+          label = "Farve på Andre-kategori",
+          choices = c("Grå", "Efter skema"),
+          selected = "Grå",
           width = "170px"
         )
       )
     ),
 
-conditionalPanel(
-  condition = "output.specialefordeling_plot_available == true",
-  div(class = "section-separator-thin"),
-  div(
-    class = "plot-container",
-    plotOutput("specialefordeling_plot", inline = TRUE),
+    conditionalPanel(
+      condition = "output.specialefordeling_plot_available == true",
+      div(class = "section-separator-thin"),
+      div(
+        class = "plot-container",
+        plotOutput("specialefordeling_plot", inline = TRUE),
+        div(
+          class = "download-links-specialefordeling",
+          downloadButton("download_specialefordeling_png", "Download PNG", class = "small-button"),
+          downloadButton("download_specialefordeling_svg", "Download SVG", class = "small-button")
+        )
+      ),
+      div(style = "height: 0px;")
+    ),
+
+    # --- Thin separator line between "Specialefordeling" and "Spørgsmålstypefordeling"
+    div(class = "section-separator-thin"),
+
+    # ---- Spørgsmålstypefordeling ----
+    div(class = "subheader", "Spørgsmålstypefordeling"),
+
     div(
-      class = "download-links-specialefordeling",
-      downloadButton("download_specialefordeling_png", "Download PNG", class = "small-button"),
-      downloadButton("download_specialefordeling_svg", "Download SVG", class = "small-button")
-    )
-  ),
-  div(style = "height: 0px;")
-),
+      class = "links",
+      actionButton(
+        "run_spmfordeling_plot",
+        "Plot spørgsmålstypefordeling",
+        class = "link-button"
+      )
+    ),
+
+    tags$details(
+      class = "spmfordeling-settings",
+      tags$summary("Indstillinger for spørgsmålstypefordeling (klik for at folde ud)"),
+
+      # Line 1: Fra, Til, Spørgsmålskategorier (to plot)
+      div(
+        class = "controls-row",
+        dateInput(
+          "from_date_spmPlot",
+          label = "Fra",
+          value = floor_date(Sys.Date(), "month") %m-% years(2),
+          format = "dd-mm-yyyy",
+          width = "120px"
+        ),
+        dateInput(
+          "to_date_spmPlot",
+          label = "Til",
+          value = floor_date(Sys.Date(), "month") - days(1),
+          format = "dd-mm-yyyy",
+          width = "120px"
+        ),
+        selectizeInput(
+          "pie_spmtyper",
+          label = "Spørgsmålskategorier",
+          choices = c(
+            "Interaktioner",
+            "Bivirkninger",
+            "Graviditet",
+            "Farmakokinetik",
+            "Terapivalg",
+            "TDM"
+          ),
+          selected = c(
+            "Interaktioner",
+            "Bivirkninger",
+            "Graviditet",
+            "Farmakokinetik",
+            "Terapivalg",
+            "TDM"
+          ),
+          multiple = TRUE,
+          width = "420px",
+          options = list(plugins = list("remove_button"))
+        ),
+        div(
+          class = "top-buttons-stack",
+          actionButton("top5_spm",  "Top 5",  class = "small-button"),
+          actionButton("top10_spm", "Top 10", class = "small-button")
+        )
+      ),
+
+      # Line 2: Svartype, Region, Speciale
+      div(
+        class = "controls-row",
+        selectInput(
+          "svartypeFilterToggle_spmPlot",
+          label = "Svartype",
+          choices = c(
+            "Alle",
+            "Klinisk rådgivning",
+            "Almindeligt svar",
+            "Kortsvar",
+            "Generel forespørgsel",
+            "Medicingennemgang",
+            "Ibrugtagningssag"
+          ),
+          selected = "Klinisk rådgivning",
+          width = "190px"
+        ),
+        selectInput(
+          "regionToggle_spmPlot",
+          label = "Region (rekvirent)",
+          choices = c("Begge", "Nordjylland", "Midtjylland"),
+          selected = "Begge",
+          width = "180px"
+        ),
+        selectizeInput(
+          "specialeFilterToggle_spmPlot",
+          label = "Speciale",
+          choices = "Alle",
+          selected = "Alle",
+          multiple = TRUE,
+          width = "220px",
+          options = list(plugins = list("remove_button"))
+        )
+      ),
+
+      # Line 3: Vis antal + Signaturforklaring + Farveskema
+      div(
+        class = "controls-row",
+        selectInput(
+          "showNumbersToggle_spmPlot",
+          label = "Vis antal",
+          choices = c("%", "Absolut", "Ingen"),
+          selected = "%",
+          width = "120px"
+        ),
+        selectInput(
+          "legendPositionToggle_spmPlot",
+          label = "Signaturforklaring",
+          choices = c("I diagram", "Udenfor diagram"),
+          selected = "I diagram",
+          width = "170px"
+        ),
+        selectInput(
+          "colorToggle_spmPlot",
+          label = "Farveskema",
+          choices = c(
+            "Set1", "Set2", "Set3", "Paired", "Dark2", "Accent",
+            "viridis", "plasma", "magma", "inferno", "cividis"
+          ),
+          selected = "Set3",
+          width = "170px"
+        ),
+        selectInput(
+          "andreAlwaysGreyToggle_spmPlot",
+          label = "Farve på Andre-kategori",
+          choices = c("Grå", "Efter skema"),
+          selected = "Grå",
+          width = "170px"
+        )
+      )
+    ),
+
+    conditionalPanel(
+      condition = "output.spmfordeling_plot_available == true",
+      div(class = "section-separator-thin"),
+      div(
+        class = "plot-container",
+        plotOutput("spmfordeling_plot", inline = TRUE),
+        div(
+          class = "download-links-spmfordeling",
+          downloadButton("download_spmfordeling_png", "Download PNG", class = "small-button"),
+          downloadButton("download_spmfordeling_svg", "Download SVG", class = "small-button")
+        )
+      ),
+      div(style = "height: 0px;")
+    ),
 
     # Line above KFE/KFA, regardless of plot
     div(class = "section-separator-above-kfe"),
@@ -960,10 +1123,12 @@ server <- function(input, output, session) {
   svartype_plot_obj    <- reactiveVal(NULL)
   svartider_plot_obj   <- reactiveVal(NULL)
   specialefordeling_plot_obj <- reactiveVal(NULL)
+  spmfordeling_plot_obj <- reactiveVal(NULL)
 
   svartype_plot_active        <- reactiveVal(FALSE)
   svartider_plot_active       <- reactiveVal(FALSE)
   specialefordeling_plot_active <- reactiveVal(FALSE)
+  spmfordeling_plot_active <- reactiveVal(FALSE)
 
   output$plot_available <- reactive({
     !is.null(activity_plot())
@@ -984,6 +1149,11 @@ server <- function(input, output, session) {
     !is.null(specialefordeling_plot_obj())
   })
   outputOptions(output, "specialefordeling_plot_available", suspendWhenHidden = FALSE)
+
+  output$spmfordeling_plot_available <- reactive({
+    !is.null(spmfordeling_plot_obj())
+  })
+  outputOptions(output, "spmfordeling_plot_available", suspendWhenHidden = FALSE)
 
   # -------------------------- LAST SYNC -------------------------- #
 
@@ -1432,6 +1602,15 @@ server <- function(input, output, session) {
       server = TRUE
     )
 
+    # Spørgsmålstypefordeling: Speciale filter (multi select, default Alle)
+    updateSelectizeInput(
+      session,
+      "specialeFilterToggle_spmPlot",
+      choices = c("Alle", specs_ordered),
+      selected = "Alle",
+      server = TRUE
+    )
+
     # Specialefordeling: spørgsmålskategori multiselect
     if ("Spørgsmålskategori (*)" %in% names(df)) {
       cats <- sort(unique(na.omit(df$`Spørgsmålskategori (*)`)))
@@ -1442,11 +1621,27 @@ server <- function(input, output, session) {
         selected = "Alle",
         server = TRUE
       )
+
+      # Spørgsmålstypefordeling: categories-to-plot multiselect (no residual option shown)
+      default_spm_plot <- c("Interaktioner", "Bivirkninger", "Graviditet", "Farmakokinetik", "Terapivalg", "TDM")
+      selected_spm_plot <- default_spm_plot[default_spm_plot %in% cats]
+      if (length(selected_spm_plot) == 0 && length(cats) > 0) {
+        selected_spm_plot <- head(cats, min(6, length(cats)))
+      }
+
+      updateSelectizeInput(
+        session,
+        "pie_spmtyper",
+        choices = cats,
+        selected = selected_spm_plot,
+        server = TRUE
+      )
     }
   })
 
   # -------------------------- SVARTYPE PLOT (Tidligere aktiviteter) -------------------------- #
-  # (UNCHANGED - omitted here for brevity in comment only; code below is identical)
+  # (UNCHANGED - below is identical to your current app)
+
   run_svartype_plot <- function() {
     shinyjs::html(
       id   = "console_output",
@@ -1619,6 +1814,7 @@ server <- function(input, output, session) {
   )
 
   # -------------------------- SVARTIDER PLOT (time plot) -------------------------- #
+  # (UNCHANGED - below is identical to your current app)
 
   map_percentile_input <- function(x) {
     if (is.null(x) || identical(x, "Ingen")) return("Ingen")
@@ -1790,6 +1986,7 @@ server <- function(input, output, session) {
   )
 
   # -------------------------- SPECIALEFORDELING (pie chart) -------------------------- #
+  # (UNCHANGED - below is identical to your current app)
 
   observeEvent(input$top8_specialer, {
     newest <- get_newest_rds_file(data_dir)
@@ -1799,7 +1996,6 @@ server <- function(input, output, session) {
     if (is.null(df)) return()
     if (!"specialeCorrected" %in% names(df)) return()
 
-    # Resolve date column (same logic as in plot script)
     resolve_date_col_local <- function(d) {
       if ("AdjustedDate" %in% names(d)) {
         dd <- suppressWarnings(as.Date(d$AdjustedDate))
@@ -1824,12 +2020,10 @@ server <- function(input, output, session) {
              .date_for_filter >= from_p,
              .date_for_filter <= to_p)
 
-    # Region
     if (!identical(input$regionToggle_specialePlot, "Begge") && "Region (*)" %in% names(filtered)) {
       filtered <- filtered %>% filter(`Region (*)` == input$regionToggle_specialePlot)
     }
 
-    # Svartype (incl. Klinisk rådgivning grouping)
     if (!identical(input$svartypeFilterToggle_specialePlot, "Alle") && "Svartype (*)" %in% names(filtered)) {
       if (identical(input$svartypeFilterToggle_specialePlot, "Klinisk rådgivning")) {
         filtered <- filtered %>%
@@ -1839,7 +2033,6 @@ server <- function(input, output, session) {
       }
     }
 
-    # Spørgsmålskategori (multiple) - treat "Alle" as no filter (even if combined)
     if ("Spørgsmålskategori (*)" %in% names(filtered)) {
       spm_sel <- input$spmKategoriFilterToggle_specialePlot
       if (!is.null(spm_sel) && length(spm_sel) > 0 && !("Alle" %in% spm_sel)) {
@@ -1856,9 +2049,6 @@ server <- function(input, output, session) {
       return()
     }
 
-    # Top 8 handling:
-    # Keep "Andre specialer" as a required bucket in the plot script,
-    # so we select top 7 actual specialties + "Andre specialer" = 8.
     top_specs <- filtered %>%
       filter(!is.na(specialeCorrected)) %>%
       count(specialeCorrected, sort = TRUE) %>%
@@ -1867,7 +2057,6 @@ server <- function(input, output, session) {
 
     new_selected <- unique(c("Andre specialer", top_specs))
 
-    # Ensure choices include "Andre specialer"
     all_specs <- sort(unique(na.omit(df$specialeCorrected)))
     if (!("Andre specialer" %in% all_specs)) all_specs <- c("Andre specialer", all_specs)
 
@@ -1881,86 +2070,85 @@ server <- function(input, output, session) {
   })
 
   observeEvent(input$top15_specialer, {
-  newest <- get_newest_rds_file(data_dir)
-  if (is.null(newest)) return()
+    newest <- get_newest_rds_file(data_dir)
+    if (is.null(newest)) return()
 
-  df <- tryCatch(readRDS(newest), error = function(e) NULL)
-  if (is.null(df)) return()
-  if (!"specialeCorrected" %in% names(df)) return()
+    df <- tryCatch(readRDS(newest), error = function(e) NULL)
+    if (is.null(df)) return()
+    if (!"specialeCorrected" %in% names(df)) return()
 
-  resolve_date_col_local <- function(d) {
-    if ("AdjustedDate" %in% names(d)) {
-      dd <- suppressWarnings(as.Date(d$AdjustedDate))
-      if (sum(!is.na(dd)) > 0) return(dd)
+    resolve_date_col_local <- function(d) {
+      if ("AdjustedDate" %in% names(d)) {
+        dd <- suppressWarnings(as.Date(d$AdjustedDate))
+        if (sum(!is.na(dd)) > 0) return(dd)
+      }
+      if (all(c("Year", "Month") %in% names(d))) {
+        y <- suppressWarnings(as.integer(d$Year))
+        m <- suppressWarnings(as.integer(d$Month))
+        return(suppressWarnings(as.Date(sprintf("%04d-%02d-01", y, m))))
+      }
+      rep(as.Date(NA), nrow(d))
     }
-    if (all(c("Year", "Month") %in% names(d))) {
-      y <- suppressWarnings(as.integer(d$Year))
-      m <- suppressWarnings(as.integer(d$Month))
-      return(suppressWarnings(as.Date(sprintf("%04d-%02d-01", y, m))))
+
+    from_p <- as.Date(input$from_date_specialePlot)
+    to_p   <- as.Date(input$to_date_specialePlot)
+
+    dvec <- resolve_date_col_local(df)
+
+    filtered <- df %>%
+      mutate(.date_for_filter = dvec) %>%
+      filter(!is.na(.date_for_filter),
+             .date_for_filter >= from_p,
+             .date_for_filter <= to_p)
+
+    if (!identical(input$regionToggle_specialePlot, "Begge") && "Region (*)" %in% names(filtered)) {
+      filtered <- filtered %>% filter(`Region (*)` == input$regionToggle_specialePlot)
     }
-    rep(as.Date(NA), nrow(d))
-  }
 
-  from_p <- as.Date(input$from_date_specialePlot)
-  to_p   <- as.Date(input$to_date_specialePlot)
-
-  dvec <- resolve_date_col_local(df)
-
-  filtered <- df %>%
-    mutate(.date_for_filter = dvec) %>%
-    filter(!is.na(.date_for_filter),
-           .date_for_filter >= from_p,
-           .date_for_filter <= to_p)
-
-  if (!identical(input$regionToggle_specialePlot, "Begge") && "Region (*)" %in% names(filtered)) {
-    filtered <- filtered %>% filter(`Region (*)` == input$regionToggle_specialePlot)
-  }
-
-  if (!identical(input$svartypeFilterToggle_specialePlot, "Alle") && "Svartype (*)" %in% names(filtered)) {
-    if (identical(input$svartypeFilterToggle_specialePlot, "Klinisk rådgivning")) {
-      filtered <- filtered %>%
-        filter(`Svartype (*)` %in% c("Almindeligt svar", "Kortsvar", "Generel forespørgsel"))
-    } else {
-      filtered <- filtered %>% filter(`Svartype (*)` == input$svartypeFilterToggle_specialePlot)
+    if (!identical(input$svartypeFilterToggle_specialePlot, "Alle") && "Svartype (*)" %in% names(filtered)) {
+      if (identical(input$svartypeFilterToggle_specialePlot, "Klinisk rådgivning")) {
+        filtered <- filtered %>%
+          filter(`Svartype (*)` %in% c("Almindeligt svar", "Kortsvar", "Generel forespørgsel"))
+      } else {
+        filtered <- filtered %>% filter(`Svartype (*)` == input$svartypeFilterToggle_specialePlot)
+      }
     }
-  }
 
-  if ("Spørgsmålskategori (*)" %in% names(filtered)) {
-    spm_sel <- input$spmKategoriFilterToggle_specialePlot
-    if (!is.null(spm_sel) && length(spm_sel) > 0 && !("Alle" %in% spm_sel)) {
-      filtered <- filtered %>% filter(`Spørgsmålskategori (*)` %in% spm_sel)
+    if ("Spørgsmålskategori (*)" %in% names(filtered)) {
+      spm_sel <- input$spmKategoriFilterToggle_specialePlot
+      if (!is.null(spm_sel) && length(spm_sel) > 0 && !("Alle" %in% spm_sel)) {
+        filtered <- filtered %>% filter(`Spørgsmålskategori (*)` %in% spm_sel)
+      }
     }
-  }
 
-  if (nrow(filtered) == 0) {
-    shinyjs::html(
-      id = "console_output",
-      html = "Top 15: Ingen rækker efter filtrering - ingen ændring.\n",
-      add = TRUE
+    if (nrow(filtered) == 0) {
+      shinyjs::html(
+        id = "console_output",
+        html = "Top 15: Ingen rækker efter filtrering - ingen ændring.\n",
+        add = TRUE
+      )
+      return()
+    }
+
+    top_specs <- filtered %>%
+      filter(!is.na(specialeCorrected)) %>%
+      count(specialeCorrected, sort = TRUE) %>%
+      slice_head(n = 14) %>%
+      pull(specialeCorrected)
+
+    new_selected <- unique(c("Andre specialer", top_specs))
+
+    all_specs <- sort(unique(na.omit(df$specialeCorrected)))
+    if (!("Andre specialer" %in% all_specs)) all_specs <- c("Andre specialer", all_specs)
+
+    updateSelectizeInput(
+      session,
+      "pie_specialer",
+      choices  = all_specs,
+      selected = new_selected,
+      server   = TRUE
     )
-    return()
-  }
-
-  # Top 15: pick top 14 specialties + "Andre specialer" = 15
-  top_specs <- filtered %>%
-    filter(!is.na(specialeCorrected)) %>%
-    count(specialeCorrected, sort = TRUE) %>%
-    slice_head(n = 14) %>%
-    pull(specialeCorrected)
-
-  new_selected <- unique(c("Andre specialer", top_specs))
-
-  all_specs <- sort(unique(na.omit(df$specialeCorrected)))
-  if (!("Andre specialer" %in% all_specs)) all_specs <- c("Andre specialer", all_specs)
-
-  updateSelectizeInput(
-    session,
-    "pie_specialer",
-    choices  = all_specs,
-    selected = new_selected,
-    server   = TRUE
-  )
-})
+  })
 
   run_specialefordeling_plot <- function() {
     shinyjs::html(
@@ -2008,6 +2196,7 @@ server <- function(input, output, session) {
     plot_env$showNumbersToggle.specialePlot  <- input$showNumbersToggle_specialePlot
     plot_env$legendPositionToggle.specialePlot <- input$legendPositionToggle_specialePlot
     plot_env$colorToggle.specialePlot <- input$colorToggle_specialePlot
+    plot_env$AndreAlwaysGreyToggle.specialePlot <- identical(input$andreAlwaysGreyToggle_specialePlot, "Grå")
 
     tryCatch(
       {
@@ -2078,7 +2267,8 @@ server <- function(input, output, session) {
       input$spmKategoriFilterToggle_specialePlot,
       input$showNumbersToggle_specialePlot,
       input$legendPositionToggle_specialePlot,
-      input$colorToggle_specialePlot
+      input$colorToggle_specialePlot,
+      input$andreAlwaysGreyToggle_specialePlot
     ),
     {
       if (isTRUE(specialefordeling_plot_active())) {
@@ -2097,30 +2287,344 @@ server <- function(input, output, session) {
     height = 650,
     res    = 96
   )
+
   output$download_specialefordeling_png <- downloadHandler(
-  filename = function() {
-    paste0("specialefordeling_plot_", Sys.Date(), ".png")
-  },
-  content = function(file) {
-    req(specialefordeling_plot_obj())
-    grDevices::png(file, width = 10, height = 6.5, units = "in", res = 300)
-    print(specialefordeling_plot_obj())
-    grDevices::dev.off()
-  }
-)
+    filename = function() {
+      paste0("specialefordeling_plot_", Sys.Date(), ".png")
+    },
+    content = function(file) {
+      req(specialefordeling_plot_obj())
+      grDevices::png(file, width = 10, height = 6.5, units = "in", res = 300)
+      print(specialefordeling_plot_obj())
+      grDevices::dev.off()
+    }
+  )
 
-output$download_specialefordeling_svg <- downloadHandler(
-  filename = function() {
-    paste0("specialefordeling_plot_", Sys.Date(), ".svg")
-  },
-  content = function(file) {
-    req(specialefordeling_plot_obj())
-    grDevices::svg(file, width = 10, height = 6.5)
-    print(specialefordeling_plot_obj())
-    grDevices::dev.off()
-  }
-)
+  output$download_specialefordeling_svg <- downloadHandler(
+    filename = function() {
+      paste0("specialefordeling_plot_", Sys.Date(), ".svg")
+    },
+    content = function(file) {
+      req(specialefordeling_plot_obj())
+      grDevices::svg(file, width = 10, height = 6.5)
+      print(specialefordeling_plot_obj())
+      grDevices::dev.off()
+    }
+  )
 
+  # -------------------------- SPØRGSMÅLSTYPEFORDELING (pie chart) -------------------------- #
+
+  observeEvent(input$top5_spm, {
+    newest <- get_newest_rds_file(data_dir)
+    if (is.null(newest)) return()
+
+    df <- tryCatch(readRDS(newest), error = function(e) NULL)
+    if (is.null(df)) return()
+    if (!("Spørgsmålskategori (*)" %in% names(df))) return()
+
+    resolve_date_col_local <- function(d) {
+      if ("AdjustedDate" %in% names(d)) {
+        dd <- suppressWarnings(as.Date(d$AdjustedDate))
+        if (sum(!is.na(dd)) > 0) return(dd)
+      }
+      if (all(c("Year", "Month") %in% names(d))) {
+        y <- suppressWarnings(as.integer(d$Year))
+        m <- suppressWarnings(as.integer(d$Month))
+        return(suppressWarnings(as.Date(sprintf("%04d-%02d-01", y, m))))
+      }
+      rep(as.Date(NA), nrow(d))
+    }
+
+    from_p <- as.Date(input$from_date_spmPlot)
+    to_p   <- as.Date(input$to_date_spmPlot)
+    dvec <- resolve_date_col_local(df)
+
+    filtered <- df %>%
+      mutate(.date_for_filter = dvec) %>%
+      filter(!is.na(.date_for_filter),
+             .date_for_filter >= from_p,
+             .date_for_filter <= to_p)
+
+    if (!identical(input$regionToggle_spmPlot, "Begge") && "Region (*)" %in% names(filtered)) {
+      filtered <- filtered %>% filter(`Region (*)` == input$regionToggle_spmPlot)
+    }
+
+    if (!identical(input$svartypeFilterToggle_spmPlot, "Alle") && "Svartype (*)" %in% names(filtered)) {
+      if (identical(input$svartypeFilterToggle_spmPlot, "Klinisk rådgivning")) {
+        filtered <- filtered %>%
+          filter(`Svartype (*)` %in% c("Almindeligt svar", "Kortsvar", "Generel forespørgsel"))
+      } else {
+        filtered <- filtered %>% filter(`Svartype (*)` == input$svartypeFilterToggle_spmPlot)
+      }
+    }
+
+    if (!identical(input$specialeFilterToggle_spmPlot, "Alle") && "specialeCorrected" %in% names(filtered)) {
+      filtered <- filtered %>% filter(specialeCorrected == input$specialeFilterToggle_spmPlot)
+    }
+
+    if (nrow(filtered) == 0) {
+      shinyjs::html(
+        id = "console_output",
+        html = "Top 5: Ingen rækker efter filtrering - ingen ændring.\n",
+        add = TRUE
+      )
+      return()
+    }
+
+    cats <- sort(unique(na.omit(df$`Spørgsmålskategori (*)`)))
+
+    top_cats <- filtered %>%
+      filter(!is.na(`Spørgsmålskategori (*)`)) %>%
+      count(`Spørgsmålskategori (*)`, sort = TRUE) %>%
+      slice_head(n = 5) %>%
+      pull(`Spørgsmålskategori (*)`) %>%
+      as.character()
+
+    updateSelectizeInput(
+      session,
+      "pie_spmtyper",
+      choices  = cats,
+      selected = unique(top_cats),
+      server   = TRUE
+    )
+  })
+
+  observeEvent(input$top10_spm, {
+    newest <- get_newest_rds_file(data_dir)
+    if (is.null(newest)) return()
+
+    df <- tryCatch(readRDS(newest), error = function(e) NULL)
+    if (is.null(df)) return()
+    if (!("Spørgsmålskategori (*)" %in% names(df))) return()
+
+    resolve_date_col_local <- function(d) {
+      if ("AdjustedDate" %in% names(d)) {
+        dd <- suppressWarnings(as.Date(d$AdjustedDate))
+        if (sum(!is.na(dd)) > 0) return(dd)
+      }
+      if (all(c("Year", "Month") %in% names(d))) {
+        y <- suppressWarnings(as.integer(d$Year))
+        m <- suppressWarnings(as.integer(d$Month))
+        return(suppressWarnings(as.Date(sprintf("%04d-%02d-01", y, m))))
+      }
+      rep(as.Date(NA), nrow(d))
+    }
+
+    from_p <- as.Date(input$from_date_spmPlot)
+    to_p   <- as.Date(input$to_date_spmPlot)
+    dvec <- resolve_date_col_local(df)
+
+    filtered <- df %>%
+      mutate(.date_for_filter = dvec) %>%
+      filter(!is.na(.date_for_filter),
+             .date_for_filter >= from_p,
+             .date_for_filter <= to_p)
+
+    if (!identical(input$regionToggle_spmPlot, "Begge") && "Region (*)" %in% names(filtered)) {
+      filtered <- filtered %>% filter(`Region (*)` == input$regionToggle_spmPlot)
+    }
+
+    if (!identical(input$svartypeFilterToggle_spmPlot, "Alle") && "Svartype (*)" %in% names(filtered)) {
+      if (identical(input$svartypeFilterToggle_spmPlot, "Klinisk rådgivning")) {
+        filtered <- filtered %>%
+          filter(`Svartype (*)` %in% c("Almindeligt svar", "Kortsvar", "Generel forespørgsel"))
+      } else {
+        filtered <- filtered %>% filter(`Svartype (*)` == input$svartypeFilterToggle_spmPlot)
+      }
+    }
+
+    if (!identical(input$specialeFilterToggle_spmPlot, "Alle") && "specialeCorrected" %in% names(filtered)) {
+      filtered <- filtered %>% filter(specialeCorrected == input$specialeFilterToggle_spmPlot)
+    }
+
+    if (nrow(filtered) == 0) {
+      shinyjs::html(
+        id = "console_output",
+        html = "Top 10: Ingen rækker efter filtrering - ingen ændring.\n",
+        add = TRUE
+      )
+      return()
+    }
+
+    cats <- sort(unique(na.omit(df$`Spørgsmålskategori (*)`)))
+
+    top_cats <- filtered %>%
+      filter(!is.na(`Spørgsmålskategori (*)`)) %>%
+      count(`Spørgsmålskategori (*)`, sort = TRUE) %>%
+      slice_head(n = 10) %>%
+      pull(`Spørgsmålskategori (*)`) %>%
+      as.character()
+
+    updateSelectizeInput(
+      session,
+      "pie_spmtyper",
+      choices  = cats,
+      selected = unique(top_cats),
+      server   = TRUE
+    )
+  })
+
+  run_spmfordeling_plot <- function() {
+    shinyjs::html(
+      id   = "console_output",
+      html = "Opdaterer 'Spørgsmålstypefordeling'...\n\n",
+      add  = TRUE
+    )
+
+    script_path_plot <- file.path(
+      here("statistik", "scripts"),
+      "plot spørgsmålsfordeling.R"
+    )
+
+    if (!file.exists(script_path_plot)) {
+      shinyjs::html(
+        id   = "console_output",
+        html = paste0("FEJL: 'plot spørgsmålsfordeling.R' script ikke fundet:\n", script_path_plot, "\n"),
+        add  = TRUE
+      )
+      script_status(list(
+        type    = "error",
+        message = "Scriptet til 'Spørgsmålstypefordeling' blev ikke fundet. Kontakt support."
+      ))
+      return(invisible(NULL))
+    }
+
+    plot_env <- new.env(parent = globalenv())
+
+    from_p <- as.Date(input$from_date_spmPlot)
+    to_p   <- as.Date(input$to_date_spmPlot)
+
+    plot_env$start_year.spmPlot  <- as.integer(format(from_p, "%Y"))
+    plot_env$start_month.spmPlot <- as.integer(format(from_p, "%m"))
+    plot_env$start_day.spmPlot   <- as.integer(format(from_p, "%d"))
+    plot_env$end_year.spmPlot    <- as.integer(format(to_p, "%Y"))
+    plot_env$end_month.spmPlot   <- as.integer(format(to_p, "%m"))
+    plot_env$end_day.spmPlot     <- as.integer(format(to_p, "%d"))
+
+    plot_env$regionToggle.spmPlot         <- input$regionToggle_spmPlot
+    plot_env$svartypeFilterToggle.spmPlot <- input$svartypeFilterToggle_spmPlot
+    plot_env$specialeFilterToggle.spmPlot <- input$specialeFilterToggle_spmPlot
+
+    plot_env$spmTyperAtPlotte.spmPlot <- input$pie_spmtyper
+
+    plot_env$showNumbersToggle.spmPlot  <- input$showNumbersToggle_spmPlot
+    plot_env$legendPositionToggle.spmPlot <- input$legendPositionToggle_spmPlot
+    plot_env$colorToggle.spmPlot <- input$colorToggle_spmPlot
+    plot_env$AndreAlwaysGreyToggle.spmPlot <- identical(input$andreAlwaysGreyToggle_spmPlot, "Grå")
+
+    tryCatch(
+      {
+        withCallingHandlers(
+          {
+            message("Kører 'Spørgsmålstypefordeling' script: ", script_path_plot)
+            source(script_path_plot, local = plot_env)
+          },
+          message = function(m) {
+            shinyjs::html(
+              id   = "console_output",
+              html = paste0(m$message, "\n"),
+              add  = TRUE
+            )
+            invokeRestart("muffleMessage")
+          }
+        )
+
+        if (!exists("p", envir = plot_env, inherits = FALSE)) {
+          stop("Plot-objekt 'p' ikke fundet efter kørsel af 'plot spørgsmålsfordeling.R'.")
+        }
+
+        spmfordeling_plot_obj(get("p", envir = plot_env))
+        script_status(NULL)
+
+        shinyjs::html(
+          id   = "console_output",
+          html = "\n'Spørgsmålstypefordeling' opdateret.\n",
+          add  = TRUE
+        )
+
+      },
+      error = function(e) {
+        err_msg <- e$message
+        script_status(list(
+          type    = "error",
+          message = "Der opstod en fejl under opdatering af 'Spørgsmålstypefordeling'. Se tekniske detaljer eller kontakt support."
+        ))
+        shinyjs::html(
+          id   = "console_output",
+          html = paste0(
+            "\n*** TEKNISK FEJL (spørgsmålstypefordeling) ***\n",
+            err_msg,
+            "\n**********************************************\n"
+          ),
+          add  = TRUE
+        )
+      }
+    )
+
+    invisible(NULL)
+  }
+
+  observeEvent(input$run_spmfordeling_plot, {
+    shinyjs::disable("run_spmfordeling_plot")
+    spmfordeling_plot_active(TRUE)
+    run_spmfordeling_plot()
+    shinyjs::enable("run_spmfordeling_plot")
+  })
+
+  observeEvent(
+    list(
+      input$from_date_spmPlot,
+      input$to_date_spmPlot,
+      input$pie_spmtyper,
+      input$svartypeFilterToggle_spmPlot,
+      input$regionToggle_spmPlot,
+      input$specialeFilterToggle_spmPlot,
+      input$showNumbersToggle_spmPlot,
+      input$legendPositionToggle_spmPlot,
+      input$colorToggle_spmPlot,
+      input$andreAlwaysGreyToggle_spmPlot
+    ),
+    {
+      if (isTRUE(spmfordeling_plot_active())) {
+        run_spmfordeling_plot()
+      }
+    },
+    ignoreInit = TRUE
+  )
+
+  output$spmfordeling_plot <- renderPlot(
+    {
+      req(spmfordeling_plot_obj())
+      print(spmfordeling_plot_obj())
+    },
+    width  = 800,
+    height = 650,
+    res    = 96
+  )
+
+  output$download_spmfordeling_png <- downloadHandler(
+    filename = function() {
+      paste0("spmfordeling_plot_", Sys.Date(), ".png")
+    },
+    content = function(file) {
+      req(spmfordeling_plot_obj())
+      grDevices::png(file, width = 10, height = 6.5, units = "in", res = 300)
+      print(spmfordeling_plot_obj())
+      grDevices::dev.off()
+    }
+  )
+
+  output$download_spmfordeling_svg <- downloadHandler(
+    filename = function() {
+      paste0("spmfordeling_plot_", Sys.Date(), ".svg")
+    },
+    content = function(file) {
+      req(spmfordeling_plot_obj())
+      grDevices::svg(file, width = 10, height = 6.5)
+      print(spmfordeling_plot_obj())
+      grDevices::dev.off()
+    }
+  )
 
   # -------------------------- STATUS MESSAGE -------------------------- #
 
