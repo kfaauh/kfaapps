@@ -248,6 +248,8 @@ cols_to_analyze <- c(
   "Færdig (*)",
   "Speciale (*)",
   "Speciale",
+  "Spørgsmålskategori (*)",
+  "Fokus (medicingennemgang)",
   "Hospital (*)",
   "Region (*)",
   "Status",
@@ -310,7 +312,8 @@ data.lmraad <- data.lmraad %>%
     rowSums(
       is.na(select(., any_of(c(
         "Svartype (*)", "Forvagt*", "Bagvagt*", "Modtaget (*)",
-        "Færdig (*)", "Speciale (*)", "Hospital (*)", "Region (*)"
+        "Færdig (*)", "Speciale (*)", "Hospital (*)", "Region (*)",
+        "Spørgsmålskategori (*)", "Fokus (medicingennemgang)"
       ))))
     ) < 8
   )
@@ -682,7 +685,19 @@ data.lmraad_filtered <- data.lmraad_filtered %>%
 message("✓ Status values reorganised successfully")
 
 # =============================================================================
-# 12. DATA SAVING AND FILE CLEANING
+# 12. REORGANIZE COLUMNS
+# =============================================================================
+
+message("\nReorganizing columns...")
+
+data.lmraad_filtered <- data.lmraad_filtered %>%
+  select(Id, Status, , `Modtaget (*)`, `Færdig (*)`, `Svartype (*)`, `Forvagt*`, `Bagvagt*`, KFE_KFA, Forvagt_affiliation, Bagvagt_affiliation, specialeCorrected, `Region (*)`, `Hospital (*)`, `Spørgsmålskategori (*)`, AdjustedDate, Month, WeekNumber,
+         ugedag_modtaget, ugedag_svaret, MonthDate, everything())
+
+message("✓ Columns reorganized")
+
+# =============================================================================
+# 13. DATA SAVING AND FILE CLEANING
 # =============================================================================
 
 message("\nSaving prepared data...")
@@ -778,7 +793,7 @@ for (file in current_biv_files) {
 }
 
 # =============================================================================
-# 13. COMPLETION SUMMARY
+# 14. COMPLETION SUMMARY
 # =============================================================================
 
 message("\n", rep("=", 50))
