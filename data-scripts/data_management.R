@@ -13,20 +13,46 @@ if (!dir.exists("data")) {
   dir.create("data")
 }
 
-# Define and download eSundhed medicinforbrug data
-url <- "https://www.esundhed.dk/Emner/Laegemidler/Medicintilskud#tabpanel8D68CD313C234CD7810555310F6171AC"
+# Definer og download Sundhedsdatabank Medicintilskud data
+url <- "https://sundhedsdatabank.dk/medicin/medicinsalg-og-udgifter"
 page <- read_html(url)
-links <- page %>% html_nodes("a") %>% html_attr("href")
-links <- links[!is.na(links)]
-download_link <- links[str_detect(links, "Medicintilskud_regionsinddelt")]
-if (!str_detect(download_link, "^http")) {
-  download_link <- paste0("https://www.esundhed.dk", download_link)
-}
-temp1 <- tempfile(fileext = ".xlsx")
-download.file(download_link, destfile = temp1, mode = "wb")
-medicinforbrug_data <- read_excel(temp1, sheet = 7, skip = 5)
 
-# Define and download generisk data
+# Udtræk linktekst + href
+link_df <- page %>%
+  html_elements("a") %>%
+  tibble(
+    text = str_squish(html_text2(.)),
+    href = html_attr(., "href")
+  ) %>%
+  filter(!is.na(href), href != "")
+
+# Vælg det rigtige Medicintilskud-link
+download_link <- link_df %>%
+  filter(
+    str_detect(text, regex("\\bMedicintilskud\\b", ignore_case = TRUE)),
+    str_detect(href, regex("\\.xlsx(\\?|$)", ignore_case = TRUE))
+  ) %>%
+  slice(1) %>%
+  pull(href)
+
+if (length(download_link) == 0 || is.na(download_link)) {
+  stop("Ingen gyldig 'Medicintilskud' .xlsx-link fundet på siden")
+}
+
+# Lav specifik download-URL
+download_link <- ifelse(
+  str_detect(download_link, "^https?://"),
+  download_link,
+  paste0("https://sundhedsdatabank.dk", download_link)
+)
+
+temp1 <- tempfile(fileext = ".xlsx")
+download.file(download_link, destfile = temp1, mode = "wb", timeout = 180)
+
+# Nuværende format: sheet 9, skip first 6 rows
+medicinforbrug_data <- read_excel(temp1, sheet = 9, skip = 6)
+
+# Definer og download generisk data
 url_excel <- "https://laegemiddelstyrelsen.dk/LinkArchive.ashx?id=23D846362C144111B63358E63C44E32C&lang=en"
 temp2 <- tempfile(fileext = ".xls")
 download.file(url_excel, destfile = temp2, mode = "wb")
