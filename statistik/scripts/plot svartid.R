@@ -138,20 +138,17 @@ weekly_base <- filtered_data %>%
   mutate(
     AdjustedDate = as.Date(AdjustedDate),
 
-    year_adj  = suppressWarnings(as.integer(Year)),
+    year_adj  = lubridate::year(AdjustedDate),
+    month_num = lubridate::month(AdjustedDate),
+
     month_adj = factor(
-      suppressWarnings(as.integer(Month)),
+      month_num,
       levels = 1:12,
       labels = c("Jan", "Feb", "Mar", "Apr", "Maj", "Jun",
                  "Jul", "Aug", "Sep", "Okt", "Nov", "Dec")
     ),
-    month_num = suppressWarnings(as.integer(Month)),
-    quarter_num = case_when(
-      month_num <= 3 ~ 1L,
-      month_num <= 6 ~ 2L,
-      month_num <= 9 ~ 3L,
-      TRUE ~ 4L
-    ),
+
+    quarter_num = lubridate::quarter(AdjustedDate),
     quarter_adj = factor(quarter_num, levels = 1:4, labels = c("K1", "K2", "K3", "K4"))
   ) %>%
   filter(!is.na(AdjustedDate))
