@@ -10,44 +10,39 @@ cat_file <- if (length(args)>=2) args[2] else "Alle lægemidler.xlsx"
 if (!dir.exists(out_dir)) dir.create(out_dir)
 cat_data <- read_excel(cat_file)
 
-# 2) Hent pris-data
 url_price <- "https://sundhedsdatabank.dk/medicin/medicinpriser"
 page <- read_html(url_price)
 
-# Udtræk linktekst + href
-link_df <- page %>%
-  html_elements("a") %>%
-  tibble(
-    text = str_squish(html_text2(.)),
-    href = html_attr(., "href")
-  ) %>%
+nodes <- page %>% html_elements("a")
+
+link_df <- tibble(
+  text = str_squish(html_text2(nodes)),
+  href = html_attr(nodes, "href")
+) %>%
   filter(!is.na(href), href != "")
 
 download_link <- link_df %>%
   filter(
-    str_detect(text, regex("\\bMedicinpriser\\b", ignore_case = TRUE)),   # Skal indeholde "Medicinpriser"
-    !str_detect(text, regex("Medicinprisindeks", ignore_case = TRUE)),    # Må ikke være et index
-    str_detect(href, regex("\\.xlsx(\\?|$)", ignore_case = TRUE))         # Skal være excel
+    str_detect(text, regex("\\bMedicinpriser\\b", ignore_case = TRUE)),
+    !str_detect(text, regex("Medicinprisindeks", ignore_case = TRUE)),
+    str_detect(href, regex("\\.xlsx(\\?|$)", ignore_case = TRUE))
   ) %>%
   slice(1) %>%
   pull(href)
 
 if (length(download_link) == 0 || is.na(download_link)) {
-  stop("Ingen gyldig 'Medicinpriser'-Excel-link fundet på siden")
+  stop("Ingen gyldig 'Medicinpriser' .xlsx-link fundet på siden")
 }
 
-# Generer download link
 download_link <- ifelse(
   str_detect(download_link, "^https?://"),
   download_link,
   paste0("https://sundhedsdatabank.dk", download_link)
 )
 
-# Download excel-fil
 xlsx_file <- tempfile(fileext = ".xlsx")
 download.file(download_link, xlsx_file, mode = "wb", timeout = 180)
 
-# Data is now in sheet 4
 price_data <- read_excel(xlsx_file, sheet = 4)
 
 # 3) Hent substitutions‐data
@@ -84,4 +79,5 @@ clean_data <- price_wide |> left_join(
 # gem output i en undermappe "data"
 saveRDS(clean_data, file.path(out_dir, "clean_data.rds"))
 message("✔ clean_data.rds skrevet til ", normalizePath(out_dir))
+
 
