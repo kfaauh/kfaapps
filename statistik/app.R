@@ -703,40 +703,26 @@ ui <- fluidPage(
         selectInput(
           "graf1_percentile_timePlot",
           label = "Graf 1 (percentil)",
-          choices = c("Ingen", "20", "40", "Median (50)", "75", "80", "90", "100"),
+          choices = c("Ingen", "Gennemsnit", "20", "40", "Median (50)", "75", "80", "90", "100"),
           selected = "90",
           width = "160px"
         ),
         selectInput(
           "graf2_percentile_timePlot",
           label = "Graf 2 (Percentil)",
-          choices = c("Ingen", "20", "40", "Median (50)", "75", "80", "90", "100"),
+          choices = c("Ingen", "Gennemsnit", "20", "40", "Median (50)", "75", "80", "90", "100"),
           selected = "Median (50)",
           width = "160px"
         ),
         selectInput(
           "graf3_percentile_timePlot",
           label = "Graf 3 (Percentil)",
-          choices = c("Ingen", "20", "40", "Median (50)", "75", "80", "90", "100"),
+          choices = c("Ingen", "Gennemsnit", "20", "40", "Median (50)", "75", "80", "90", "100"),
           selected = "Ingen",
           width = "160px"
         )
-      ),
-
-      # Line 4: checkbox with same look as Trendlinje checkbox
-      div(
-        class = "controls-row-tight",
-        div(
-          class = "cb-wrap",
-          div("Vis gennemsnit"),
-          checkboxInput(
-            "showMeanToggle_timePlot",
-            label = NULL,
-            value = FALSE
-          )
-        )
       )
-    ),
+      ),
 
     conditionalPanel(
       condition = "output.svartider_plot_available == true",
@@ -1818,6 +1804,7 @@ server <- function(input, output, session) {
 
   map_percentile_input <- function(x) {
     if (is.null(x) || identical(x, "Ingen")) return("Ingen")
+    if (identical(x, "Gennemsnit")) return("Gennemsnit")
     if (identical(x, "Median (50)")) return(50)
     as.numeric(x)
   }
@@ -1857,12 +1844,26 @@ server <- function(input, output, session) {
     plot_env$end_month.timePlot   <- as.integer(format(to_tp, "%m"))
     plot_env$end_day.timePlot     <- as.integer(format(to_tp, "%d"))
 
-    plot_env$svartidTypeToggle <- input$svartidTypeToggle_timePlot
-    plot_env$graf1_percentile  <- map_percentile_input(input$graf1_percentile_timePlot)
-    plot_env$graf2_percentile  <- map_percentile_input(input$graf2_percentile_timePlot)
-    plot_env$graf3_percentile  <- map_percentile_input(input$graf3_percentile_timePlot)
+g1_raw <- input$graf1_percentile_timePlot
+g2_raw <- input$graf2_percentile_timePlot
+g3_raw <- input$graf3_percentile_timePlot
 
-    plot_env$showMeanToggle <- isTRUE(input$showMeanToggle_timePlot)
+# Mean is enabled if any graf dropdown is set to "Gennemsnit"
+mean_ix   <- which(c(g1_raw, g2_raw, g3_raw) == "Gennemsnit")[1]
+show_mean <- !is.na(mean_ix)
+
+# Mean line should match the selected graf's color, and always be solid
+mean_color    <- if (show_mean) c("#2F2F2F", "#4F6FA6", "#C97A2B")[mean_ix] else "#B35C5C"
+mean_linetype <- "solid"
+
+# If a graf is "Gennemsnit", treat it as "Ingen" for percentile calculation
+plot_env$graf1_percentile <- map_percentile_input(if (g1_raw == "Gennemsnit") "Ingen" else g1_raw)
+plot_env$graf2_percentile <- map_percentile_input(if (g2_raw == "Gennemsnit") "Ingen" else g2_raw)
+plot_env$graf3_percentile <- map_percentile_input(if (g3_raw == "Gennemsnit") "Ingen" else g3_raw)
+
+plot_env$showMeanToggle <- show_mean
+plot_env$mean_color     <- mean_color
+plot_env$mean_linetype  <- mean_linetype
 
     tryCatch(
       {
@@ -1940,8 +1941,7 @@ server <- function(input, output, session) {
       input$regionToggle_timePlot,
       input$graf1_percentile_timePlot,
       input$graf2_percentile_timePlot,
-      input$graf3_percentile_timePlot,
-      input$showMeanToggle_timePlot
+      input$graf3_percentile_timePlot
     ),
     {
       if (isTRUE(svartider_plot_active())) {
@@ -1973,17 +1973,26 @@ server <- function(input, output, session) {
     }
   )
 
-  output$download_svartider_svg <- downloadHandler(
-    filename = function() {
-      paste0("svartider_plot_", Sys.Date(), ".svg")
-    },
-    content = function(file) {
-      req(svartider_plot_obj())
-      grDevices::svg(file, width = 10, height = 6.5)
-      print(svartider_plot_obj())
-      grDevices::dev.off()
-    }
-  )
+output$download_svartider_svg <- downloadHandler(
+  filename = function() {
+    paste0("svartider_plot_", Sys.Date(), ".svg")
+  },
+  contentType = "image/svg+xml",
+  content = function(file) {
+    req(svartider_plot_obj())
+
+    # Save with ggsave for better control
+   ggplot2::ggsave(
+  filename = file,
+  plot = svartider_plot_obj(),
+  device = cairo_pdf,  # Use Cairo device
+  width = 10,
+  height = 6.5,
+  units = "in",
+  dpi = 300
+)
+  }
+)
 
   # -------------------------- SPECIALEFORDELING (pie chart) -------------------------- #
   # (UNCHANGED - below is identical to your current app)

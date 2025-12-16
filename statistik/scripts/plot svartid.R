@@ -46,13 +46,15 @@ if (!exists("graf3_percentile")) graf3_percentile <- "Ingen"
 # New toggle: show mean line
 if (!exists("showMeanToggle")) showMeanToggle <- FALSE
 
+# Fallbacks for mean styling (provided by Shiny)
+if (!exists("mean_color"))    mean_color    <- "#B35C5C"
+if (!exists("mean_linetype")) mean_linetype <- "solid"
+
 # Mellow but fixed mappings (black/blue/orange families)
 graf1_color <- "#2F2F2F"  # mellow charcoal
 graf2_color <- "#4F6FA6"  # mellow blue
 graf3_color <- "#C97A2B"  # mellow orange
 
-# New: mellow red for mean
-mean_color  <- "#B35C5C"  # mellow red
 
 # -----------------------------------------------------------------------------
 # 1. Load data (same pattern as other scripts)
@@ -476,7 +478,7 @@ if (nrow(series_specs) > 0) {
 
 if (isTRUE(showMeanToggle)) {
   series_colors <- c(series_colors, setNames(mean_color, "Gennemsnit"))
-  series_linetypes <- c(series_linetypes, setNames("dashed", "Gennemsnit"))
+  series_linetypes <- c(series_linetypes, setNames(mean_linetype, "Gennemsnit"))
 }
 
 p <- ggplot()
