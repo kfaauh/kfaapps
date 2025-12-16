@@ -1519,17 +1519,45 @@ server <- function(input, output, session) {
   )
 
   output$download_plot_svg <- downloadHandler(
-    filename = function() {
-      paste0("activity_plot_", Sys.Date(), ".svg")
-    },
-    content = function(file) {
-      req(activity_plot())
-      grDevices::svg(file, width = 8, height = 5)
-      grid::grid.newpage()
-      grid::grid.draw(activity_plot())
-      grDevices::dev.off()
+  filename = function() {
+    paste0("activity_plot_", Sys.Date(), ".svg")
+  },
+  contentType = "image/svg+xml",
+  content = function(file) {
+    req(activity_plot())
+
+    # Convert grid object to ggplot for ggsave compatibility
+    svg_plot <- activity_plot()
+
+    if (inherits(svg_plot, "grob")) {
+      # Create a minimal ggplot with the grob as annotation
+      p <- ggplot2::ggplot() +
+        ggplot2::annotation_custom(svg_plot) +
+        ggplot2::theme_void()
+
+      ggplot2::ggsave(
+        filename = file,
+        plot = p,
+        device = cairo_pdf,
+        width = 8,
+        height = 5,
+        units = "in",
+        dpi = 300
+      )
+    } else {
+      # If it's already a ggplot object
+      ggplot2::ggsave(
+        filename = file,
+        plot = svg_plot,
+        device = cairo_pdf,
+        width = 8,
+        height = 5,
+        units = "in",
+        dpi = 300
+      )
     }
-  )
+  }
+)
 
   # ------------------- LOAD DATA FOR DROPDOWNS -------------------- #
 
@@ -1786,18 +1814,26 @@ server <- function(input, output, session) {
     }
   )
 
-  output$download_svartype_svg <- downloadHandler(
-    filename = function() {
-      paste0("svartype_plot_", Sys.Date(), ".svg")
-    },
-    content = function(file) {
-      req(svartype_plot_obj())
-      grDevices::svg(file, width = 10, height = 6.5)
-      grid::grid.newpage()
-      grid::grid.draw(svartype_plot_obj())
-      grDevices::dev.off()
-    }
-  )
+output$download_svartype_svg <- downloadHandler(
+  filename = function() {
+    paste0("svartype_plot_", Sys.Date(), ".svg")
+  },
+  contentType = "image/svg+xml",
+  content = function(file) {
+    req(svartype_plot_obj())
+
+    # Save with ggsave using cairo_pdf device
+    ggplot2::ggsave(
+      filename = file,
+      plot = svartype_plot_obj(),
+      device = cairo_pdf,
+      width = 10,
+      height = 6.5,
+      units = "in",
+      dpi = 300
+    )
+  }
+)
 
   # -------------------------- SVARTIDER PLOT (time plot) -------------------------- #
   # (UNCHANGED - below is identical to your current app)
@@ -1985,7 +2021,7 @@ output$download_svartider_svg <- downloadHandler(
    ggplot2::ggsave(
   filename = file,
   plot = svartider_plot_obj(),
-  device = cairo_pdf,  # Use Cairo device
+  device = cairo_pdf,
   width = 10,
   height = 6.5,
   units = "in",
@@ -2310,16 +2346,25 @@ output$download_svartider_svg <- downloadHandler(
   )
 
   output$download_specialefordeling_svg <- downloadHandler(
-    filename = function() {
-      paste0("specialefordeling_plot_", Sys.Date(), ".svg")
-    },
-    content = function(file) {
-      req(specialefordeling_plot_obj())
-      grDevices::svg(file, width = 10, height = 6.5)
-      print(specialefordeling_plot_obj())
-      grDevices::dev.off()
-    }
-  )
+  filename = function() {
+    paste0("specialefordeling_plot_", Sys.Date(), ".svg")
+  },
+  contentType = "image/svg+xml",
+  content = function(file) {
+    req(specialefordeling_plot_obj())
+
+    # Save with ggsave using cairo_pdf device
+    ggplot2::ggsave(
+      filename = file,
+      plot = specialefordeling_plot_obj(),
+      device = cairo_pdf,
+      width = 10,
+      height = 6.5,
+      units = "in",
+      dpi = 300
+    )
+  }
+)
 
   # -------------------------- SPØRGSMÅLSTYPEFORDELING (pie chart) -------------------------- #
 
@@ -2624,16 +2669,25 @@ output$download_svartider_svg <- downloadHandler(
   )
 
   output$download_spmfordeling_svg <- downloadHandler(
-    filename = function() {
-      paste0("spmfordeling_plot_", Sys.Date(), ".svg")
-    },
-    content = function(file) {
-      req(spmfordeling_plot_obj())
-      grDevices::svg(file, width = 10, height = 6.5)
-      print(spmfordeling_plot_obj())
-      grDevices::dev.off()
-    }
-  )
+  filename = function() {
+    paste0("spmfordeling_plot_", Sys.Date(), ".svg")
+  },
+  contentType = "image/svg+xml",
+  content = function(file) {
+    req(spmfordeling_plot_obj())
+
+    # Save with ggsave using cairo_pdf device
+    ggplot2::ggsave(
+      filename = file,
+      plot = spmfordeling_plot_obj(),
+      device = cairo_pdf,
+      width = 10,
+      height = 6.5,
+      units = "in",
+      dpi = 300
+    )
+  }
+)
 
   # -------------------------- STATUS MESSAGE -------------------------- #
 
