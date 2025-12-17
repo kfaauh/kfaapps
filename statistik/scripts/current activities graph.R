@@ -148,8 +148,8 @@ backlog_1_42_bySvar <- activity_plot_data %>%
   filter(
     if_else(
       as_of == max(as_of_days),
-      dplyr::between(age, 0, 42),
-      dplyr::between(age, 1, 42)
+      dplyr::between(age, 0, 56),
+      dplyr::between(age, 1, 56)
     ),
     !is.na(svar_kategori)
   ) %>%
