@@ -11,7 +11,7 @@ ui <- fluidPage(
   
   sidebarLayout(
     sidebarPanel(
-      selectInput("model_type", "Vælg PK-model:", 
+      selectInput("model_type", "Vælg model:", 
                   choices = c(
                     "1-kompartment IV bolus"    = "1cpt_ivbolus",
                     "1-kompartment IV infusion" = "1cpt_ivinf",
@@ -63,16 +63,16 @@ ui <- fluidPage(
       hr(),
       h4("Doseringsregime 1"),
       textInput("amt1",  "Dosis (kommasepareret):",  "500,500"),
-      textInput("time1", "Doseringstidspunkter (HH:MM, kommasepareret):", "08:00,20:00"),
+      textInput("time1", "Doseringstidspunkter (TT:MM, kommasepareret):", "08:00,20:00"),
       numericInput("days1", "Antal behandlingsdage:", 7, min = 1),
       
-      checkboxInput("enableRegimen2", "Tilføj andet doseringsregime?", FALSE),
+      checkboxInput("enableRegimen2", "Tilføj andet doseringsregime", FALSE),
       
       conditionalPanel(
         condition = "input.enableRegimen2",
         h4("Doseringsregime 2"),
         textInput("amt2",  "Dosis (kommasepareret):", "1000"),
-        textInput("time2", "Doseringstidspunkter (HH:MM, kommasepareret):", "12:00"),
+        textInput("time2", "Doseringstidspunkter (TT:MM, kommasepareret):", "12:00"),
         numericInput("days2", "Antal behandlingsdage:", 7, min = 1)
       ),
       
@@ -82,7 +82,7 @@ ui <- fluidPage(
       
       hr(),
       # 3) Tærskellinje option
-      checkboxInput("enableThreshold", "Vis tærskellinje?", FALSE),
+      checkboxInput("enableThreshold", "Vis tærskellinje", FALSE),
       conditionalPanel(
         condition = "input.enableThreshold",
         numericInput("threshold", "Tærskelværdi (samme enhed som koncentration):", 16, min = 0)
@@ -92,13 +92,45 @@ ui <- fluidPage(
     ),
     
     mainPanel(
-      # Tilføj hoverOpts i plotOutput
-      plotOutput(
-        "pkPlot", 
-        height = "500px",
-        hover = hoverOpts(id = "plot_hover", delay = 100, delayType = "throttle")
-      ),
-      verbatimTextOutput("hover_info")
+      # -------------------------
+      # NEW: Tabs i mainPanel
+      # -------------------------
+      tabsetPanel(
+        tabPanel(
+          "Simulation",
+          plotOutput(
+            "pkPlot", 
+            height = "500px",
+            hover = hoverOpts(id = "plot_hover", delay = 100, delayType = "throttle")
+          ),
+          verbatimTextOutput("hover_info")
+        ),
+        
+        tabPanel(
+          "Variabel-udregner",
+          tags$div(
+            style = "max-width: 900px;",
+            h4("Udregner af farmakokinetiske variable"),
+            helpText(
+              "Felterne kan være tomme. Når du indtaster en eller flere værdier, udfyldes de øvrige felter automatisk, hvis de kan udledes.",
+              br(),
+              "Antagelser: Ke = CL/V, T½ = ln(2)/Ke. For Tmax/Ka anvendes Bateman-funktionen for 1-kompartment, 1.-ordens absorption: Tmax = ln(Ka/Ke)/(Ka-Ke) med Ka > Ke."
+            ),
+            fluidRow(
+              column(4, textInput("pk_V",   "Fordelingsvolumen V (L):", "")),
+              column(4, textInput("pk_CL",  "Clearance CL (L/t):", "")),
+              column(4, textInput("pk_Ke",  "Eliminationskonstant Ke (1/t):", ""))
+            ),
+            fluidRow(
+              column(4, textInput("pk_t12", "T½ (t):", "")),
+              column(4, textInput("pk_Tmax","Tmax (t):", "")),
+              column(4, textInput("pk_Ka",  "Absorptionsratekonstant Ka (1/t):", ""))
+            ),
+            hr(),
+            actionButton("pk_reset", "Nulstil felter")
+          )
+        )
+      )
     )
   )
 )
@@ -108,7 +140,7 @@ ui <- fluidPage(
 # ------------------------------------------------------------
 server <- function(input, output, session) {
   
-  # Omregn tid "HH:MM" til decimale timer
+  # Omregn tid "TT:MM" til decimale timer
   convert_time_to_hours <- function(time_vector) {
     sapply(time_vector, function(time_str) {
       parts <- strsplit(time_str, ":")[[1]]
@@ -343,14 +375,12 @@ server <- function(input, output, session) {
   })
   
   # ------------------------------------------------------------
-  # 3) Brug nearPoints() til at finde det datapunkt, brugeren hover over,
-  #    og udskriv tiden og koncentrationen
+  # 3) Hover-info
   # ------------------------------------------------------------
   output$hover_info <- renderText({
     df_all <- sim_data()
     hover <- input$plot_hover
     if (is.null(df_all) || is.null(hover)) {
-      # returnér kun denne tekst (ingen cat(), så intet NULL kommer med)
       return("Før musen hen over grafen for at se tids- og koncentrations-værdier.")
     }
     point <- nearPoints(
@@ -363,12 +393,144 @@ server <- function(input, output, session) {
     if (nrow(point) == 0) {
       return("Ingen data tæt på hover-punktet.")
     }
-    # Ellers returnér også bare som én streng:
     paste0(
       "Regime: ", point$Regime, "\n",
       "Tid: ", round(point$time, 2), " timer\n",
       "CP: ", round(point$CP, 2), " ", input$unit, "/L"
     )
+  })
+  
+  # ------------------------------------------------------------
+  # NEW: PK-UDREGNER (auto-udfyld felter)
+  # ------------------------------------------------------------
+  
+  to_num_or_na <- function(x) {
+    x <- trimws(x %||% "")
+    if (identical(x, "") || is.na(x)) return(NA_real_)
+    x <- gsub(",", ".", x, fixed = FALSE)  # tillad 0,5 -> 0.5
+    suppressWarnings(as.numeric(x))
+  }
+  
+  fmt <- function(x) {
+    if (is.na(x) || is.nan(x) || is.infinite(x)) return("")
+    format(round(x, 6), scientific = FALSE, trim = TRUE)
+  }
+  
+  tmax_from_ka_ke <- function(Ka, Ke) {
+    if (is.na(Ka) || is.na(Ke)) return(NA_real_)
+    if (Ka <= Ke || Ka <= 0 || Ke <= 0) return(NA_real_)
+    log(Ka / Ke) / (Ka - Ke)
+  }
+  
+  solve_ka_from_tmax_ke <- function(Tmax, Ke) {
+    if (is.na(Tmax) || is.na(Ke)) return(NA_real_)
+    if (Tmax <= 0 || Ke <= 0) return(NA_real_)
+    f <- function(Ka) tmax_from_ka_ke(Ka, Ke) - Tmax
+    lower <- Ke * 1.0001
+    upper <- max(Ke * 1000, 1)
+    if (is.na(f(lower)) || is.na(f(upper))) return(NA_real_)
+    if (f(lower) * f(upper) > 0) return(NA_real_)
+    uniroot(f, lower = lower, upper = upper)$root
+  }
+  
+  solve_ke_from_tmax_ka <- function(Tmax, Ka) {
+    if (is.na(Tmax) || is.na(Ka)) return(NA_real_)
+    if (Tmax <= 0 || Ka <= 0) return(NA_real_)
+    f <- function(Ke) tmax_from_ka_ke(Ka, Ke) - Tmax
+    lower <- Ka / 1000
+    upper <- Ka / 1.0001
+    if (lower <= 0) lower <- 1e-6
+    if (is.na(f(lower)) || is.na(f(upper))) return(NA_real_)
+    if (f(lower) * f(upper) > 0) return(NA_real_)
+    uniroot(f, lower = lower, upper = upper)$root
+  }
+  
+  updating_pk <- reactiveVal(FALSE)
+  
+  update_pk_fields <- function(vals) {
+    updating_pk(TRUE)
+    on.exit(updating_pk(FALSE), add = TRUE)
+    updateTextInput(session, "pk_V",    value = fmt(vals$V))
+    updateTextInput(session, "pk_CL",   value = fmt(vals$CL))
+    updateTextInput(session, "pk_Ke",   value = fmt(vals$Ke))
+    updateTextInput(session, "pk_t12",  value = fmt(vals$t12))
+    updateTextInput(session, "pk_Tmax", value = fmt(vals$Tmax))
+    updateTextInput(session, "pk_Ka",   value = fmt(vals$Ka))
+  }
+  
+  compute_pk <- function(V, CL, Ke, t12, Tmax, Ka) {
+    vals <- list(V = V, CL = CL, Ke = Ke, t12 = t12, Tmax = Tmax, Ka = Ka)
+    
+    for (i in 1:10) {
+      # Ke <-> CL/V
+      if (is.na(vals$Ke) && !is.na(vals$CL) && !is.na(vals$V) && vals$V > 0) {
+        vals$Ke <- vals$CL / vals$V
+      }
+      if (is.na(vals$CL) && !is.na(vals$Ke) && !is.na(vals$V)) {
+        vals$CL <- vals$Ke * vals$V
+      }
+      if (is.na(vals$V) && !is.na(vals$CL) && !is.na(vals$Ke) && vals$Ke > 0) {
+        vals$V <- vals$CL / vals$Ke
+      }
+      
+      # t1/2 <-> Ke
+      if (is.na(vals$t12) && !is.na(vals$Ke) && vals$Ke > 0) {
+        vals$t12 <- log(2) / vals$Ke
+      }
+      if (is.na(vals$Ke) && !is.na(vals$t12) && vals$t12 > 0) {
+        vals$Ke <- log(2) / vals$t12
+      }
+      
+      # Tmax <-> Ka,Ke
+      if (is.na(vals$Tmax) && !is.na(vals$Ka) && !is.na(vals$Ke)) {
+        vals$Tmax <- tmax_from_ka_ke(vals$Ka, vals$Ke)
+      }
+      if (is.na(vals$Ka) && !is.na(vals$Tmax) && !is.na(vals$Ke)) {
+        vals$Ka <- solve_ka_from_tmax_ke(vals$Tmax, vals$Ke)
+      }
+      if (is.na(vals$Ke) && !is.na(vals$Tmax) && !is.na(vals$Ka)) {
+        vals$Ke <- solve_ke_from_tmax_ka(vals$Tmax, vals$Ka)
+      }
+    }
+    
+    vals
+  }
+  
+  observeEvent(
+    {
+      input$pk_V; input$pk_CL; input$pk_Ke; input$pk_t12; input$pk_Tmax; input$pk_Ka
+    },
+    {
+      if (isTRUE(updating_pk())) return()
+      
+      V    <- to_num_or_na(input$pk_V)
+      CL   <- to_num_or_na(input$pk_CL)
+      Ke   <- to_num_or_na(input$pk_Ke)
+      t12  <- to_num_or_na(input$pk_t12)
+      Tmax <- to_num_or_na(input$pk_Tmax)
+      Ka   <- to_num_or_na(input$pk_Ka)
+      
+      vals <- compute_pk(V, CL, Ke, t12, Tmax, Ka)
+      
+      # Mild feedback hvis Ka/Ke-kravet brydes
+      if (!is.na(vals$Ka) && !is.na(vals$Ke) && vals$Ka <= vals$Ke) {
+        showNotification("Bemærk: Tmax-formlen kræver Ka > Ke. Tjek dine input.", type = "warning", duration = 4)
+      }
+      
+      update_pk_fields(vals)
+    },
+    ignoreInit = TRUE
+  )
+  
+  observeEvent(input$pk_reset, {
+    updating_pk(TRUE)
+    on.exit(updating_pk(FALSE), add = TRUE)
+    updateTextInput(session, "pk_V",    value = "")
+    updateTextInput(session, "pk_CL",   value = "")
+    updateTextInput(session, "pk_Ke",   value = "")
+    updateTextInput(session, "pk_t12",  value = "")
+    updateTextInput(session, "pk_Tmax", value = "")
+    updateTextInput(session, "pk_Ka",   value = "")
   })
 }
 
