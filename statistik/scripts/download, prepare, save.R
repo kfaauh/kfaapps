@@ -780,7 +780,7 @@ message(
 
 message("\nSaving prepared data...")
 
-output_dir <- here("statistik", "Data", "Azure data")
+output_dir <- here("statistik", "data", "Azure data")
 ensure_directory(output_dir)
 
 message("Output directory: ", output_dir)
