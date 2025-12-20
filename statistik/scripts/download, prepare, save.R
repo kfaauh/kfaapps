@@ -827,7 +827,7 @@ message("✓ Saved Excel snapshot: ", xlsx_name)
 
 message("\nSaving Bivirkningsindberetning data...")
 
-biv_dir <- here("statistik", "Data", "Azure data", "bivirkninger")
+biv_dir <- here("statistik", "data", "Azure data", "bivirkninger")
 ensure_directory(biv_dir)
 
 message("Bivirkninger directory: ", biv_dir)
