@@ -1550,7 +1550,7 @@ server <- function(input, output, session) {
     filename = function() {
       paste0("activity_plot_", Sys.Date(), ".pdf")
     },
-    contentType = "image/svg+xml",
+    contentType = "application/pdf",
     content = function(file) {
       req(activity_plot())
 
@@ -1823,7 +1823,7 @@ observeEvent(
     filename = function() {
       paste0("svartype_plot_", Sys.Date(), ".pdf")
     },
-    contentType = "image/svg+xml",
+    contentType = "application/pdf",
     content = function(file) {
       req(svartype_plot_obj())
 
@@ -2019,7 +2019,7 @@ observeEvent(
     filename = function() {
       paste0("svartider_plot_", Sys.Date(), ".pdf")
     },
-    contentType = "image/svg+xml",
+    contentType = "application/pdf",
     content = function(file) {
       req(svartider_plot_obj())
 
@@ -2389,7 +2389,7 @@ observeEvent(
     filename = function() {
       paste0("specialefordeling_plot_", Sys.Date(), ".pdf")
     },
-    contentType = "image/svg+xml",
+    contentType = "application/pdf",
     content = function(file) {
       req(specialefordeling_plot_obj())
 
@@ -2751,7 +2751,7 @@ observeEvent(
     filename = function() {
       paste0("spmfordeling_plot_", Sys.Date(), ".pdf")
     },
-    contentType = "image/svg+xml",
+    contentType = "application/pdf",
     content = function(file) {
       req(spmfordeling_plot_obj())
 
