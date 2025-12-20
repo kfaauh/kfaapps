@@ -18,6 +18,7 @@ suppressPackageStartupMessages({
   library(tidyr)
   library(bizdays)
   library(timeDate)
+  library(writexl)
 })
 
 # =============================================================================
@@ -218,6 +219,7 @@ cols_to_analyze <- c(
   "Færdig (*)",
   "Speciale (*)",
   "Speciale",
+  "Kommune (hvis primærsektor, *)",
   "Spørgsmålskategori (*)",
   "Fokus (medicingennemgang)",
   "Hospital (*)",
@@ -228,6 +230,7 @@ cols_to_analyze <- c(
 )
 
 colinfo <- doc_lib$get_column_info()
+
 needed_info <- subset(colinfo, displayName %in% cols_to_analyze)
 
 # Handle ID column mapping to "Id"
@@ -302,7 +305,6 @@ data.ibrugtagning <- subset(
 )
 
 data.ibrugtagning <- data.ibrugtagning[!is.na(data.ibrugtagning$`Hospital (*)`),]
-data.medicingennemgang$`Svartype (*)` <- "Medicingennemgang"
 
 format_dates <- function(data) {
   if (!"Modtaget (*)" %in% names(data)) {
@@ -527,22 +529,14 @@ transform_data <- function(data) {
         cal = "DK_helligdage"
       )
     ) %>%
-    mutate(
-      ugedag_modtaget = unname(eng_to_dk[ugedag_modtaget]),
-      ugedag_svaret   = unname(eng_to_dk[ugedag_svaret]),
-      sektor = case_when(
-        `Speciale (*)` == "Almen medicin" ~ "Almen praksis",
-        is.na(`Hospital (*)`) ~ "Almen praksis",
-        is.na(`Hospital (*)`) & is.na(`Speciale (*)`) ~ "Almen praksis",
-        TRUE ~ "Hospital"
-      ),
-      specialeCorrected = case_when(
-        `Speciale (*)` == "Almen medicin" ~ "Almen praksis",
-        is.na(`Hospital (*)`) ~ "Almen praksis",
-        is.na(`Hospital (*)`) & is.na(`Speciale (*)`) ~ "Almen praksis",
-        !is.na(`Speciale (*)`) ~ `Speciale (*)`,
-        TRUE ~ "Andre"
-      ),
+  	mutate(
+  		ugedag_modtaget = unname(eng_to_dk[ugedag_modtaget]),
+  		ugedag_svaret   = unname(eng_to_dk[ugedag_svaret]),
+  		sektor = dplyr::case_when(
+  			`Speciale (*)` == "Almen medicin" ~ "Almen praksis",
+  			!is.na(`Hospital (*)`)           ~ "Hospital",
+  			TRUE                             ~ NA_character_
+  		),
       AdjustedDate = as_date(AdjustedDate),
       FaerdigDate  = as_date(`Færdig (*)`),
       svar_kategori = case_when(
@@ -566,7 +560,45 @@ data.ibrugtagning <- transform_data(data.ibrugtagning)
 data.ibrugtagning$`Svartype (*)` <- "Ibrugtagningssag"
 data.ibrugtagning$`Region (*)` <- "Midtjylland"
 
+
+# Combine datasets
 data.lmraad_filtered <- rbind(data.lmraad, data.medicingennemgang, data.ibrugtagning)
+
+# Standardize Kommune column name (rename late, after rbind)
+if ("Kommune (hvis primærsektor, *)" %in% names(data.lmraad_filtered)) {
+  data.lmraad_filtered <- data.lmraad_filtered %>%
+    rename(Kommune = `Kommune (hvis primærsektor, *)`)
+}
+
+# Ensure Speciale (*) reflects primary sector when Kommune is present
+if ("Kommune" %in% names(data.lmraad_filtered)) {
+  data.lmraad_filtered <- data.lmraad_filtered %>%
+    mutate(
+      `Speciale (*)` = dplyr::case_when(
+        !is.na(Kommune) ~ "Almen praksis",
+        `Speciale (*)` == "Almen medicin" ~ "Almen praksis",
+        TRUE ~ `Speciale (*)`
+      )
+    )
+} else {
+  data.lmraad_filtered <- data.lmraad_filtered %>%
+    mutate(
+      `Speciale (*)` = dplyr::case_when(
+        `Speciale (*)` == "Almen medicin" ~ "Almen praksis",
+        TRUE ~ `Speciale (*)`
+      )
+    )
+}
+
+# Ensure sektor matches updated Speciale (*)
+data.lmraad_filtered <- data.lmraad_filtered %>%
+  mutate(
+    sektor = dplyr::case_when(
+      `Speciale (*)` == "Almen praksis" ~ "Almen praksis",
+      !is.na(`Hospital (*)`)            ~ "Hospital",
+      TRUE                              ~ sektor
+    )
+  )
 
 today_cph <- today(tzone = "Europe/Copenhagen")
 
@@ -624,9 +656,9 @@ message("✓ Affiliation data merged successfully")
 
 data.lmraad_filtered <- data.lmraad_filtered %>%
   mutate(
-    specialeCorrected = case_when(
-      specialeCorrected == "Rheumatologi" ~ "Reumatologi",
-      TRUE ~ specialeCorrected
+    `Speciale (*)` = dplyr::case_when(
+      `Speciale (*)` == "Rheumatologi" ~ "Reumatologi",
+      TRUE ~ `Speciale (*)`
     )
   )
 
@@ -661,8 +693,30 @@ message("✓ Status values reorganised successfully")
 message("\nReorganizing columns...")
 
 data.lmraad_filtered <- data.lmraad_filtered %>%
-  select(Id, Status, , `Modtaget (*)`, `Færdig (*)`, `Svartype (*)`, `Forvagt*`, `Bagvagt*`, KFE_KFA, Forvagt_affiliation, Bagvagt_affiliation, specialeCorrected, `Region (*)`, `Hospital (*)`, `Spørgsmålskategori (*)`, AdjustedDate, Month, WeekNumber,
-         ugedag_modtaget, ugedag_svaret, MonthDate, everything())
+  select(
+    Id,
+    Status,
+    `Modtaget (*)`,
+    `Færdig (*)`,
+    `Svartype (*)`,
+    `Forvagt*`,
+    `Bagvagt*`,
+    KFE_KFA,
+    Forvagt_affiliation,
+    Bagvagt_affiliation,
+    `Speciale (*)`,
+    `Region (*)`,
+     any_of("Kommune"),
+    `Hospital (*)`,
+    `Spørgsmålskategori (*)`,
+    AdjustedDate,
+    Month,
+    WeekNumber,
+    ugedag_modtaget,
+    ugedag_svaret,
+    MonthDate,
+    everything()
+  )
 
 message("✓ Columns reorganized")
 
@@ -742,6 +796,34 @@ if (file.exists(file_path)) {
 
 saveRDS(data.lmraad_filtered, file_path)
 message("✓ Saved main data: ", file_name)
+
+message("\nSaving main data also as Excel (single fixed file)...")
+
+xlsx_name <- "data.lmraad_filtered_latest.xlsx"
+xlsx_path <- here(output_dir, xlsx_name)
+
+# Ensure Excel export is robust: flatten any list-columns (Excel can't store lists)
+excel_export <- data.lmraad_filtered
+list_cols <- names(excel_export)[vapply(excel_export, is.list, logical(1))]
+if (length(list_cols) > 0) {
+  excel_export[list_cols] <- lapply(
+    excel_export[list_cols],
+    function(col) vapply(col, function(x) paste(x, collapse = "; "), character(1))
+  )
+  message("✓ Flattened list columns for Excel: ", paste(list_cols, collapse = ", "))
+}
+
+if (file.exists(xlsx_path)) {
+  file.remove(xlsx_path)
+  message("✓ Replaced existing Excel file: ", xlsx_name)
+}
+
+writexl::write_xlsx(
+  x = list(data_lmraad_filtered = excel_export),
+  path = xlsx_path
+)
+
+message("✓ Saved Excel snapshot: ", xlsx_name)
 
 message("\nSaving Bivirkningsindberetning data...")
 

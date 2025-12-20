@@ -38,13 +38,19 @@ if (!exists("colorToggle.specialePlot")) {
 }
 
 # ANDRE SPECIALER GREY TOGGLE
-# When TRUE: "Andre specialer" is always grey
-# When FALSE: "Andre specialer" gets the last color in the palette
 if (!exists("AndreAlwaysGreyToggle.specialePlot")) {
   AndreAlwaysGreyToggle <- TRUE  # Default: "Andre specialer" is grey
 } else {
   AndreAlwaysGreyToggle <- as.logical(AndreAlwaysGreyToggle.specialePlot)
 }
+
+# SHOW NA SPECIALITY TOGGLE
+if (!exists("showNASpecialityToggle.specialePlot")) {
+  showNASpecialityToggle <- FALSE
+} else {
+  showNASpecialityToggle <- as.logical(showNASpecialityToggle.specialePlot)
+}
+
 
 # Color palette functions
 get_color_palette <- function(palette_name, n) {
@@ -154,6 +160,13 @@ filtered_data <- data.lmraad_filtered %>%
 
 message("✓ Rows after date filter: ", nrow(filtered_data))
 
+# Always exclude "Bivirkningsindberetning" entirely (never included in this plot)
+if ("Spørgsmålskategori (*)" %in% names(filtered_data)) {
+  filtered_data <- filtered_data %>%
+    filter(is.na(`Spørgsmålskategori (*)`) | `Spørgsmålskategori (*)` != "Bivirkningsindberetning")
+  message("✓ Rows after excluding 'Bivirkningsindberetning': ", nrow(filtered_data))
+}
+
 # Region
 if (!identical(regionToggle.specialePlot, "Begge")) {
   filtered_data <- filtered_data %>%
@@ -175,6 +188,8 @@ if (!identical(svartypeFilterToggle.specialePlot, "Alle")) {
 
 # Spørgsmålskategori (multiple allowed)
 spm_filter <- as_filter_vec(spmKategoriFilterToggle.specialePlot)
+spm_filter <- setdiff(spm_filter, "Bivirkningsindberetning")
+
 if (length(spm_filter) > 0) {
   filtered_data <- filtered_data %>%
     filter(`Spørgsmålskategori (*)` %in% spm_filter)
@@ -184,12 +199,53 @@ if (length(spm_filter) > 0) {
 # -----------------------------------------------------------------------------
 # 4. Prepare data (match provided pie chart logic)
 # -----------------------------------------------------------------------------
+# Speciale missing handling (robust: NA + empty + "NA"/"null" text)
+# Create a local 'specialeCorrected' for plotting, based on raw "Speciale (*)" (preferred)
+speciale_src_col <- dplyr::case_when(
+  "Speciale (*)" %in% names(filtered_data) ~ "Speciale (*)",
+  "Speciale"     %in% names(filtered_data) ~ "Speciale",
+  TRUE ~ NA_character_
+)
+
+if (is.na(speciale_src_col)) {
+  stop("Mangler kolonne til speciale. Forventede 'Speciale (*)' (eller alternativt 'Speciale').")
+}
+
+filtered_data <- filtered_data %>%
+  mutate(
+    specialeCorrected = as.character(.data[[speciale_src_col]]),
+
+    # Optional: keep old label convention without touching sector logic
+    specialeCorrected = if_else(specialeCorrected == "Almen medicin", "Almen praksis", specialeCorrected),
+
+    .speciale_missing =
+      is.na(specialeCorrected) |
+      trimws(specialeCorrected) == "" |
+      tolower(trimws(specialeCorrected)) %in% c("na", "n/a", "null")
+  )
+
+# Count missing BEFORE filtering/replacing (your previous code counted after filtering, which can hide the issue)
+n_missing <- sum(filtered_data$.speciale_missing, na.rm = TRUE)
+
+if (isTRUE(showNASpecialityToggle)) {
+  filtered_data <- filtered_data %>%
+    mutate(specialeCorrected = if_else(.speciale_missing, "Ikke angivet", specialeCorrected))
+} else {
+  filtered_data <- filtered_data %>%
+    filter(!.speciale_missing)
+}
+
+filtered_data <- filtered_data %>% select(-.speciale_missing)
 
 specialerAtPlotte <- as.character(specialerAtPlotte.specialePlot)
 specialerAtPlotte <- specialerAtPlotte[!is.na(specialerAtPlotte) & nzchar(specialerAtPlotte)]
 specialerAtPlotte <- unique(specialerAtPlotte)
 if (!("Andre specialer" %in% specialerAtPlotte)) {
   specialerAtPlotte <- c("Andre specialer", specialerAtPlotte)
+}
+
+if (isTRUE(showNASpecialityToggle) && !("Ikke angivet" %in% specialerAtPlotte)) {
+  specialerAtPlotte <- c(specialerAtPlotte, "Ikke angivet")
 }
 
 yearly_counts_speciale <- filtered_data %>%
@@ -248,6 +304,16 @@ if (total_count == 0) {
       levels = new_levels
     )
   }
+  # SECOND: Move "Ikke angivet" to the very end (after "Andre specialer")
+current_levels <- levels(yearly_counts_speciale$specialeCorrected)
+if ("Ikke angivet" %in% current_levels) {
+  new_levels <- setdiff(current_levels, "Ikke angivet")
+  new_levels <- c(new_levels, "Ikke angivet")
+  yearly_counts_speciale$specialeCorrected <- factor(
+    yearly_counts_speciale$specialeCorrected,
+    levels = new_levels
+  )
+}
 
   # Prepare data for pie chart - now "Andre specialer" will be last
   pie_data <- yearly_counts_speciale %>%
@@ -271,95 +337,74 @@ if (total_count == 0) {
       pie_order = fct_inorder(specialeCorrected)
     )
 
-  # Generate colors based on the AndreAlwaysGreyToggle setting
-  n_categories <- nlevels(pie_data$pie_order)
+  # Generate colors with support for:
+# - optional fixed color for "Ikke angivet"
+# - optional fixed grey for "Andre specialer"
 
-  # Get the levels in the current order (for pie chart)
-  category_levels <- levels(pie_data$pie_order)
+n_categories <- nlevels(pie_data$pie_order)
+category_levels <- levels(pie_data$pie_order)
 
-  # Determine how many colors we need based on the toggle
-  if (AndreAlwaysGreyToggle) {
-    # "Andre specialer" is grey, so we need colors for other categories
-    n_main_categories <- n_categories - 1  # Excluding "Andre specialer"
-  } else {
-    # "Andre specialer" gets a color from the palette
-    n_main_categories <- n_categories
+has_ikke_angivet <- "Ikke angivet" %in% category_levels
+use_grey_for_andre <- isTRUE(AndreAlwaysGreyToggle) && ("Andre specialer" %in% category_levels)
+
+# Categories that should receive palette colors
+palette_categories <- setdiff(
+  category_levels,
+  c(
+    if (has_ikke_angivet) "Ikke angivet" else character(0),
+    if (use_grey_for_andre) "Andre specialer" else character(0)
+  )
+)
+
+n_palette <- length(palette_categories)
+main_colors <- if (n_palette > 0) get_color_palette(colorToggle, n_palette) else character(0)
+
+# Named color vector for all categories
+color_values <- setNames(rep(NA_character_, length(category_levels)), category_levels)
+
+# Fixed colors
+if (has_ikke_angivet) {
+  color_values["Ikke angivet"] <- "#1A1A1A"  # almost black
+}
+if (use_grey_for_andre) {
+  color_values["Andre specialer"] <- "grey70"
+}
+
+# Assign palette colors in user order where possible
+user_order <- specialerAtPlotte
+user_order_matched <- user_order[user_order %in% palette_categories]
+
+if (length(user_order_matched) > 0) {
+  color_values[user_order_matched] <- main_colors[seq_along(user_order_matched)]
+
+  remaining_categories <- setdiff(palette_categories, user_order_matched)
+  if (length(remaining_categories) > 0) {
+    start_idx <- length(user_order_matched) + 1
+    color_values[remaining_categories] <- main_colors[start_idx:(start_idx + length(remaining_categories) - 1)]
   }
-
-  main_colors <- get_color_palette(colorToggle, n_main_categories)
-
-  # Create a named color vector
-  color_values <- vector("character", n_categories)
-  names(color_values) <- category_levels
-
-  # Get all categories except "Andre specialer"
-  other_categories <- setdiff(category_levels, "Andre specialer")
-
-  if (AndreAlwaysGreyToggle) {
-    # "Andre specialer" gets grey
-    color_values["Andre specialer"] <- "grey70"  # Light grey
-
-    # Get the user's input order (excluding "Andre specialer")
-    user_order <- setdiff(specialerAtPlotte, "Andre specialer")
-
-    # Match the user's order with the categories we have
-    user_order_matched <- user_order[user_order %in% other_categories]
-
-    # If we have user-specified order, use it for color assignment
-    if (length(user_order_matched) > 0) {
-      # Assign colors in the user's specified order
-      color_values[user_order_matched] <- main_colors[1:length(user_order_matched)]
-
-      # Any remaining categories (not in user_order) get the remaining colors
-      remaining_categories <- setdiff(other_categories, user_order_matched)
-      if (length(remaining_categories) > 0) {
-        start_idx <- length(user_order_matched) + 1
-        color_values[remaining_categories] <- main_colors[start_idx:(start_idx + length(remaining_categories) - 1)]
-      }
-    } else {
-      # Fallback: assign colors in the order they appear in other_categories
-      if (length(other_categories) > 0) {
-        color_values[other_categories] <- main_colors[1:length(other_categories)]
-      }
-    }
-
-    andre_color_message <- "'Andre specialer' is colored grey"
-  } else {
-    # "Andre specialer" gets a color from the palette (the last one)
-    # All categories (including "Andre specialer") get colors
-
-    # Get the user's input order
-    user_order <- specialerAtPlotte
-
-    # Match the user's order with the categories we have
-    user_order_matched <- user_order[user_order %in% category_levels]
-
-    # If we have user-specified order, use it for color assignment
-    if (length(user_order_matched) > 0) {
-      # Assign colors in the user's specified order
-      color_values[user_order_matched] <- main_colors[1:length(user_order_matched)]
-
-      # Any remaining categories (not in user_order) get the remaining colors
-      remaining_categories <- setdiff(category_levels, user_order_matched)
-      if (length(remaining_categories) > 0) {
-        start_idx <- length(user_order_matched) + 1
-        color_values[remaining_categories] <- main_colors[start_idx:(start_idx + length(remaining_categories) - 1)]
-      }
-    } else {
-      # Fallback: assign colors in the order they appear in category_levels
-      color_values[category_levels] <- main_colors[1:n_categories]
-    }
-
-    andre_color_message <- "'Andre specialer' gets a color from the palette (last position)"
+} else {
+  if (length(palette_categories) > 0) {
+    color_values[palette_categories] <- main_colors[seq_along(palette_categories)]
   }
+}
+
+andre_color_message <- if (use_grey_for_andre) {
+  "'Andre specialer' is colored grey"
+} else {
+  "'Andre specialer' gets a color from the palette (last position, if present)"
+}
 
   # Create legend data - sorted by proportion (highest at top) but "Andre specialer" at bottom
   legend_data <- pie_data %>%
     # Calculate sort order for legend
     mutate(
-      sort_order = ifelse(specialeCorrected == "Andre specialer", Inf, -Count)
+      sort_order = dplyr::case_when(
+  specialeCorrected == "Ikke angivet"   ~ 2,
+  specialeCorrected == "Andre specialer" ~ 1,
+  TRUE                                   ~ 0
+)
     ) %>%
-    arrange(sort_order) %>%
+    arrange(sort_order, desc(Count)) %>%
     mutate(
       legend_label = dplyr::case_when(
         identical(showNumbersToggle.specialePlot, "%")       ~ paste0(as.character(specialeCorrected), " (", percent, ")"),

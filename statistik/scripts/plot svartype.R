@@ -21,6 +21,11 @@ if (!exists("showCountInLegend")) {
   showCountInLegend <- FALSE
 }
 
+# Show NA-speciale as separate stack
+if (!exists("showNASvartypeToggle")) {
+  showNASvartypeToggle <- TRUE
+}
+
 message("✓ Pakker til 'svartype'-plot er indlæst")
 
 # -------------------------------------------------------------------------
@@ -54,7 +59,8 @@ vibrant_palette <- c(
   "Klinisk forespørgsel"    = "#0083B8",
   "Medicingennemgang"       = "#C97A2B",
   "Ibrugtagningssag"        = "#2E8B57",
-  "Bivirkningsindberetning" = "#F0C571"
+  "Bivirkningsindberetning" = "#F0C571",
+  "Mangler registrering"    = "#6A00FF"
   # "Psykiatrikonference"     = "#A559AA",
   # "Andre"                   = "#808080",
 )
@@ -111,6 +117,12 @@ if (!identical(svartypeFilterToggle, "Alle")) {
   }
 }
 
+# IMPORTANT: If NA bucket is enabled, it must always be present in legend_levels_effective,
+# otherwise the bars for it will be dropped by scale_fill_manual(limits = ...)
+if (isTRUE(showNASvartypeToggle)) {
+  legend_levels_effective <- c("Mangler registrering", setdiff(legend_levels_effective, "Mangler registrering"))
+}
+
 # -------------------------------------------------------------------------
 # Filtering: start from full dataset
 # -------------------------------------------------------------------------
@@ -118,14 +130,12 @@ if (!identical(svartypeFilterToggle, "Alle")) {
 filtered_data <- data.lmraad_filtered
 
 # 1) Speciale / Hospital logic
-#    - If Speciale == "Hospital": filter on sektor == "Hospital"
-#    - Else if Speciale != "Alle": filter on the chosen speciality
 if (identical(specialeToggle, "Hospital")) {
   filtered_data <- filtered_data %>%
     dplyr::filter(sektor == "Hospital")
 } else if (!identical(specialeToggle, "Alle")) {
   filtered_data <- filtered_data %>%
-    dplyr::filter(specialeCorrected == specialeToggle)
+    dplyr::filter(`Speciale (*)` == specialeToggle)
 }
 
 # 2) Region filter
@@ -181,16 +191,21 @@ weekly_base <- filtered_data %>%
       TRUE ~ 4L
     ),
     quarter_adj = factor(quarter_num, levels = 1:4, labels = c("K1", "K2", "K3", "K4")),
-    svar_kategori = case_when(
-      !is.na(svar_kategori)                    ~ svar_kategori,
-      `Svartype (*)` == "Medicingennemgang"    ~ "Medicingennemgang",
-      `Svartype (*)` == "Ibrugtagningssag"     ~ "Ibrugtagningssag",
-      `Svartype (*)` == "Kortsvar"             ~ "Kortsvar",
-      `Svartype (*)` == "Generel forespørgsel" ~ "Generel forespørgsel",
-      `Svartype (*)` == "Almindeligt svar"     ~ "Almindeligt svar",
-      `Svartype (*)` == "Bivirkningsindberetning" ~ "Bivirkningsindberetning",
-      TRUE                                     ~ NA_character_
-    )
+svar_kategori = case_when(
+  !is.na(svar_kategori)                       ~ svar_kategori,
+  `Svartype (*)` == "Medicingennemgang"       ~ "Medicingennemgang",
+  `Svartype (*)` == "Ibrugtagningssag"        ~ "Ibrugtagningssag",
+  `Svartype (*)` == "Kortsvar"                ~ "Kortsvar",
+  `Svartype (*)` == "Generel forespørgsel"    ~ "Generel forespørgsel",
+  `Svartype (*)` == "Almindeligt svar"        ~ "Almindeligt svar",
+  `Svartype (*)` == "Bivirkningsindberetning" ~ "Bivirkningsindberetning",
+  TRUE                                        ~ NA_character_
+),
+svar_kategori = dplyr::if_else(
+  isTRUE(showNASvartypeToggle) & is.na(svar_kategori),
+  "Mangler registrering",
+  svar_kategori
+)
   ) %>%
   filter(
     !is.na(AdjustedDate),
@@ -212,6 +227,11 @@ if (effective_groupSvarToggle) {
         TRUE ~ svar_kategori
       )
     )
+}
+
+
+if (isTRUE(showNASvartypeToggle)) {
+  svar_levels_plot <- c(setdiff(svar_levels_plot, "Mangler registrering"), "Mangler registrering")
 }
 
 weekly_base <- weekly_base %>%

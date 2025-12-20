@@ -581,25 +581,30 @@ ui <- fluidPage(
       ),
 
       # Line 3: checkboxes
-      div(
-        class = "controls-row-tight",
-        div(
-          class = "cb-wrap",
-          div(HTML("Gruppér kliniske henvendelser<br>(alm., kort, generel)")),
-          checkboxInput("groupSvarToggle", label = NULL, value = FALSE)
-        ),
-        div(
-          class = "cb-wrap",
-          div("Trendlinje"),
-          checkboxInput("showTrendlineToggle", label = NULL, value = FALSE)
-        ),
-        div(
-          class = "cb-wrap",
-          div("Vis samlet antal"),
-          checkboxInput("showCountInLegend", label = NULL, value = FALSE)
-        )
-      )
-    ),
+div(
+  class = "controls-row-tight",
+  div(
+    class = "cb-wrap",
+    div(HTML("Gruppér kliniske henvendelser<br>(alm., kort, generel)")),
+    checkboxInput("groupSvarToggle", label = NULL, value = FALSE)
+  ),
+  div(
+    class = "cb-wrap",
+    div("Trendlinje"),
+    checkboxInput("showTrendlineToggle", label = NULL, value = FALSE)
+  ),
+  div(
+    class = "cb-wrap",
+    div("Vis samlet antal"),
+    checkboxInput("showCountInLegend", label = NULL, value = FALSE)
+  ),
+  div(
+    class = "cb-wrap",
+    div("Vis manglede registrering"),
+    checkboxInput("showNASvartypeToggle", label = NULL, value = FALSE)
+  )
+)
+),
 
     conditionalPanel(
       condition = "output.svartype_plot_available == true",
@@ -723,7 +728,7 @@ ui <- fluidPage(
           width = "160px"
         )
       )
-      ),
+    ),
 
     conditionalPanel(
       condition = "output.svartider_plot_available == true",
@@ -880,6 +885,13 @@ ui <- fluidPage(
           label = "Farve på Andre-kategori",
           choices = c("Grå", "Efter skema"),
           selected = "Grå",
+          width = "170px"
+        ),
+        selectInput(
+          "showNASpecialityToggle_specialePlot",
+          label = "Mangler registrering",
+          choices = c("Vis", "Vis ikke"),
+          selected = "Vis ikke",
           width = "170px"
         )
       )
@@ -1207,7 +1219,7 @@ server <- function(input, output, session) {
   })
 
   get_excel_files <- reactive({
-    files <- list.files(main_folder, pattern = "\\.xlsx$", full.names = FALSE)
+    files <- list.files(main_folder, pattern = "\\.xlsx$|\\.xls$", full.names = FALSE, ignore.case = TRUE)
     if (length(files) == 0) return(NULL)
     file_info     <- file.info(file.path(main_folder, files))
     files_ordered <- files[order(file_info$mtime, decreasing = TRUE)]
@@ -1248,13 +1260,23 @@ server <- function(input, output, session) {
     }
 
     tryCatch({
-      timestamp    <- format(Sys.time(), "%Y-%m-%d %H.%M")
-      new_filename <- paste0("Tilhørsforhold (", timestamp, ").xlsx")
+      timestamp <- format(Sys.time(), "%Y-%m-%d %H.%M")
+
+      ext <- tools::file_ext(input$excel_file$name)
+      ext <- tolower(ext)
+      if (!ext %in% c("xlsx", "xls")) ext <- "xlsx"
+
+      new_filename <- paste0("Tilhørsforhold (", timestamp, ").", ext)
       new_filepath <- file.path(main_folder, new_filename)
 
       file.copy(input$excel_file$datapath, new_filepath)
 
-      files <- list.files(main_folder, pattern = "\\.xlsx$", full.names = TRUE)
+      files <- list.files(
+        main_folder,
+        pattern = "\\.xlsx$|\\.xls$",
+        full.names = TRUE,
+        ignore.case = TRUE
+      )
       if (length(files) > 10) {
         file_info     <- file.info(files)
         files_ordered <- files[order(file_info$mtime)]
@@ -1289,7 +1311,12 @@ server <- function(input, output, session) {
 
   output$download_original <- downloadHandler(
     filename = function() {
-      original_files <- list.files(original_folder, pattern = "\\.xlsx$")
+      original_files <- list.files(
+  original_folder,
+  pattern = "\\.xlsx$|\\.xls$",
+  full.names = FALSE,
+  ignore.case = TRUE
+)
       if (length(original_files) > 0) return(original_files[1])
       "Original.xlsx"
     },
@@ -1520,45 +1547,45 @@ server <- function(input, output, session) {
   )
 
   output$download_plot_svg <- downloadHandler(
-  filename = function() {
-    paste0("activity_plot_", Sys.Date(), ".svg")
-  },
-  contentType = "image/svg+xml",
-  content = function(file) {
-    req(activity_plot())
+    filename = function() {
+      paste0("activity_plot_", Sys.Date(), ".svg")
+    },
+    contentType = "image/svg+xml",
+    content = function(file) {
+      req(activity_plot())
 
-    # Convert grid object to ggplot for ggsave compatibility
-    svg_plot <- activity_plot()
+      # Convert grid object to ggplot for ggsave compatibility
+      svg_plot <- activity_plot()
 
-    if (inherits(svg_plot, "grob")) {
-      # Create a minimal ggplot with the grob as annotation
-      p <- ggplot2::ggplot() +
-        ggplot2::annotation_custom(svg_plot) +
-        ggplot2::theme_void()
+      if (inherits(svg_plot, "grob")) {
+        # Create a minimal ggplot with the grob as annotation
+        p <- ggplot2::ggplot() +
+          ggplot2::annotation_custom(svg_plot) +
+          ggplot2::theme_void()
 
-      ggplot2::ggsave(
-        filename = file,
-        plot = p,
-        device = cairo_pdf,
-        width = 8,
-        height = 5,
-        units = "in",
-        dpi = 300
-      )
-    } else {
-      # If it's already a ggplot object
-      ggplot2::ggsave(
-        filename = file,
-        plot = svg_plot,
-        device = cairo_pdf,
-        width = 8,
-        height = 5,
-        units = "in",
-        dpi = 300
-      )
+        ggplot2::ggsave(
+          filename = file,
+          plot = p,
+          device = cairo_pdf,
+          width = 8,
+          height = 5,
+          units = "in",
+          dpi = 300
+        )
+      } else {
+        # If it's already a ggplot object
+        ggplot2::ggsave(
+          filename = file,
+          plot = svg_plot,
+          device = cairo_pdf,
+          width = 8,
+          height = 5,
+          units = "in",
+          dpi = 300
+        )
+      }
     }
-  }
-)
+  )
 
   # ------------------- LOAD DATA FOR DROPDOWNS -------------------- #
 
@@ -1571,28 +1598,31 @@ server <- function(input, output, session) {
       error = function(e) NULL
     )
     if (is.null(df)) return()
-    if (!"specialeCorrected" %in% names(df)) return()
+    if (!("Speciale (*)" %in% names(df))) return()
 
-    # Speciale dropdown (existing)
-    specs <- sort(unique(na.omit(df$specialeCorrected)))
+    # Build choices from Speciale (*) + add sector options (without storing specialeCorrected)
+    specs_raw <- df$`Speciale (*)`
+    specs_raw <- as.character(specs_raw)
+    specs_raw <- trimws(specs_raw)
+    specs_raw <- specs_raw[!is.na(specs_raw) & nzchar(specs_raw)]
 
-    if (!"Hospital" %in% specs) {
-      specs <- c(specs, "Hospital")
-    }
+    # Specialties
+    specs <- sort(unique(specs_raw))
 
+    # Add sector options explicitly
     priority <- c("Hospital", "Almen praksis")
-    priority_in_specs <- priority[priority %in% specs]
-    rest <- setdiff(specs, priority_in_specs)
-    specs_ordered <- c(priority_in_specs, sort(rest))
+    specs_ordered <- c(priority, setdiff(specs, priority))
 
     updateSelectInput(
       session,
       "specialeToggle",
-      choices = c("Alle", specs_ordered),
+      choices  = c("Alle", specs_ordered),
       selected = "Alle"
     )
 
-    # Specialefordeling: specialer multiselect
+    # Specialefordeling: specialer multiselect (pie)
+    pie_choices <- c("Andre specialer", specs_ordered)
+
     default_specialer <- c(
       "Andre specialer",
       "Intern medicin",
@@ -1604,55 +1634,27 @@ server <- function(input, output, session) {
       "Psykiatri",
       "Almen praksis"
     )
-    selected_specialer <- default_specialer[default_specialer %in% specs_ordered]
-    if (length(selected_specialer) == 0) {
-      selected_specialer <- head(specs_ordered, 5)
-    }
+    selected_specialer <- default_specialer[default_specialer %in% pie_choices]
+    if (length(selected_specialer) == 0) selected_specialer <- head(pie_choices, 5)
 
     updateSelectizeInput(
       session,
       "pie_specialer",
-      choices = specs_ordered,
+      choices  = pie_choices,
       selected = selected_specialer,
-      server = TRUE
+      server   = TRUE
     )
 
     # Spørgsmålstypefordeling: Speciale filter (multi select, default Alle)
     updateSelectizeInput(
       session,
       "specialeFilterToggle_spmPlot",
-      choices = c("Alle", specs_ordered),
+      choices  = c("Alle", specs_ordered),
       selected = "Alle",
-      server = TRUE
+      server   = TRUE
     )
-
-    # Specialefordeling: spørgsmålskategori multiselect
-    if ("Spørgsmålskategori (*)" %in% names(df)) {
-      cats <- sort(unique(na.omit(df$`Spørgsmålskategori (*)`)))
-      updateSelectizeInput(
-        session,
-        "spmKategoriFilterToggle_specialePlot",
-        choices = c("Alle", cats),
-        selected = "Alle",
-        server = TRUE
-      )
-
-      # Spørgsmålstypefordeling: categories-to-plot multiselect (no residual option shown)
-      default_spm_plot <- c("Interaktioner", "Bivirkninger", "Graviditet", "Farmakokinetik", "Terapivalg", "TDM")
-      selected_spm_plot <- default_spm_plot[default_spm_plot %in% cats]
-      if (length(selected_spm_plot) == 0 && length(cats) > 0) {
-        selected_spm_plot <- head(cats, min(6, length(cats)))
-      }
-
-      updateSelectizeInput(
-        session,
-        "pie_spmtyper",
-        choices = cats,
-        selected = selected_spm_plot,
-        server = TRUE
-      )
-    }
-  })
+  }
+  )
 
   # -------------------------- SVARTYPE PLOT (Tidligere aktiviteter) -------------------------- #
   # (UNCHANGED - below is identical to your current app)
@@ -1700,6 +1702,7 @@ server <- function(input, output, session) {
         plot_env$regionToggle          <- input$regionToggle
         plot_env$svartypeFilterToggle  <- input$svartypeFilterToggle
         plot_env$showCountInLegend     <- isTRUE(input$showCountInLegend)
+        plot_env$showNASvartypeToggle  <- isTRUE(input$showNASvartypeToggle)
 
         from <- as.Date(input$from_date)
         to   <- as.Date(input$to_date)
@@ -1770,19 +1773,20 @@ server <- function(input, output, session) {
     shinyjs::enable("run_svartype_plot")
   })
 
-  observeEvent(
-    list(
-      input$from_date,
-      input$to_date,
-      input$timeGranularity,
-      input$countMode,
-      input$svartypeFilterToggle,
-      input$specialeToggle,
-      input$regionToggle,
-      input$groupSvarToggle,
-      input$showTrendlineToggle,
-      input$showCountInLegend
-    ),
+observeEvent(
+  list(
+    input$from_date,
+    input$to_date,
+    input$timeGranularity,
+    input$countMode,
+    input$svartypeFilterToggle,
+    input$specialeToggle,
+    input$regionToggle,
+    input$groupSvarToggle,
+    input$showTrendlineToggle,
+    input$showCountInLegend,
+    input$showNASvartypeToggle
+  ),
     {
       if (isTRUE(svartype_plot_active())) {
         run_svartype_plot()
@@ -1815,26 +1819,26 @@ server <- function(input, output, session) {
     }
   )
 
-output$download_svartype_svg <- downloadHandler(
-  filename = function() {
-    paste0("svartype_plot_", Sys.Date(), ".svg")
-  },
-  contentType = "image/svg+xml",
-  content = function(file) {
-    req(svartype_plot_obj())
+  output$download_svartype_svg <- downloadHandler(
+    filename = function() {
+      paste0("svartype_plot_", Sys.Date(), ".svg")
+    },
+    contentType = "image/svg+xml",
+    content = function(file) {
+      req(svartype_plot_obj())
 
-    # Save with ggsave using cairo_pdf device
-    ggplot2::ggsave(
-      filename = file,
-      plot = svartype_plot_obj(),
-      device = cairo_pdf,
-      width = 10,
-      height = 6.5,
-      units = "in",
-      dpi = 300
-    )
-  }
-)
+      # Save with ggsave using cairo_pdf device
+      ggplot2::ggsave(
+        filename = file,
+        plot = svartype_plot_obj(),
+        device = cairo_pdf,
+        width = 10,
+        height = 6.5,
+        units = "in",
+        dpi = 300
+      )
+    }
+  )
 
   # -------------------------- SVARTIDER PLOT (time plot) -------------------------- #
   # (UNCHANGED - below is identical to your current app)
@@ -1870,6 +1874,7 @@ output$download_svartype_svg <- downloadHandler(
     plot_env$timeGranularity.timePlot      <- input$timeGranularity_timePlot
     plot_env$regionToggle.timePlot         <- input$regionToggle_timePlot
     plot_env$svartypeFilterToggle.timePlot <- input$svartypeFilterToggle_timePlot
+    plot_env$svartidTypeToggle.timePlot <- input$svartidTypeToggle_timePlot
 
     from_tp <- as.Date(input$from_date_timePlot)
     to_tp   <- as.Date(input$to_date_timePlot)
@@ -1881,26 +1886,26 @@ output$download_svartype_svg <- downloadHandler(
     plot_env$end_month.timePlot   <- as.integer(format(to_tp, "%m"))
     plot_env$end_day.timePlot     <- as.integer(format(to_tp, "%d"))
 
-g1_raw <- input$graf1_percentile_timePlot
-g2_raw <- input$graf2_percentile_timePlot
-g3_raw <- input$graf3_percentile_timePlot
+    g1_raw <- input$graf1_percentile_timePlot
+    g2_raw <- input$graf2_percentile_timePlot
+    g3_raw <- input$graf3_percentile_timePlot
 
-# Mean is enabled if any graf dropdown is set to "Gennemsnit"
-mean_ix   <- which(c(g1_raw, g2_raw, g3_raw) == "Gennemsnit")[1]
-show_mean <- !is.na(mean_ix)
+    # Mean is enabled if any graf dropdown is set to "Gennemsnit"
+    mean_ix   <- which(c(g1_raw, g2_raw, g3_raw) == "Gennemsnit")[1]
+    show_mean <- !is.na(mean_ix)
 
-# Mean line should match the selected graf's color, and always be solid
-mean_color    <- if (show_mean) c("#2F2F2F", "#4F6FA6", "#C97A2B")[mean_ix] else "#B35C5C"
-mean_linetype <- "solid"
+    # Mean line should match the selected graf's color, and always be solid
+    mean_color    <- if (show_mean) c("#2F2F2F", "#4F6FA6", "#C97A2B")[mean_ix] else "#B35C5C"
+    mean_linetype <- "solid"
 
-# If a graf is "Gennemsnit", treat it as "Ingen" for percentile calculation
-plot_env$graf1_percentile <- map_percentile_input(if (g1_raw == "Gennemsnit") "Ingen" else g1_raw)
-plot_env$graf2_percentile <- map_percentile_input(if (g2_raw == "Gennemsnit") "Ingen" else g2_raw)
-plot_env$graf3_percentile <- map_percentile_input(if (g3_raw == "Gennemsnit") "Ingen" else g3_raw)
+    # If a graf is "Gennemsnit", treat it as "Ingen" for percentile calculation
+    plot_env$graf1_percentile <- map_percentile_input(if (g1_raw == "Gennemsnit") "Ingen" else g1_raw)
+    plot_env$graf2_percentile <- map_percentile_input(if (g2_raw == "Gennemsnit") "Ingen" else g2_raw)
+    plot_env$graf3_percentile <- map_percentile_input(if (g3_raw == "Gennemsnit") "Ingen" else g3_raw)
 
-plot_env$showMeanToggle <- show_mean
-plot_env$mean_color     <- mean_color
-plot_env$mean_linetype  <- mean_linetype
+    plot_env$showMeanToggle <- show_mean
+    plot_env$mean_color     <- mean_color
+    plot_env$mean_linetype  <- mean_linetype
 
     tryCatch(
       {
@@ -2010,26 +2015,26 @@ plot_env$mean_linetype  <- mean_linetype
     }
   )
 
-output$download_svartider_svg <- downloadHandler(
-  filename = function() {
-    paste0("svartider_plot_", Sys.Date(), ".svg")
-  },
-  contentType = "image/svg+xml",
-  content = function(file) {
-    req(svartider_plot_obj())
+  output$download_svartider_svg <- downloadHandler(
+    filename = function() {
+      paste0("svartider_plot_", Sys.Date(), ".svg")
+    },
+    contentType = "image/svg+xml",
+    content = function(file) {
+      req(svartider_plot_obj())
 
-    # Save with ggsave for better control
-   ggplot2::ggsave(
-  filename = file,
-  plot = svartider_plot_obj(),
-  device = cairo_pdf,
-  width = 10,
-  height = 6.5,
-  units = "in",
-  dpi = 300
-)
-  }
-)
+      # Save with ggsave for better control
+      ggplot2::ggsave(
+        filename = file,
+        plot = svartider_plot_obj(),
+        device = cairo_pdf,
+        width = 10,
+        height = 6.5,
+        units = "in",
+        dpi = 300
+      )
+    }
+  )
 
   # -------------------------- SPECIALEFORDELING (pie chart) -------------------------- #
   # (UNCHANGED - below is identical to your current app)
@@ -2040,7 +2045,7 @@ output$download_svartider_svg <- downloadHandler(
 
     df <- tryCatch(readRDS(newest), error = function(e) NULL)
     if (is.null(df)) return()
-    if (!"specialeCorrected" %in% names(df)) return()
+    if (!("Speciale (*)" %in% names(df))) return()
 
     resolve_date_col_local <- function(d) {
       if ("AdjustedDate" %in% names(d)) {
@@ -2095,15 +2100,30 @@ output$download_svartider_svg <- downloadHandler(
       return()
     }
 
-    top_specs <- filtered %>%
-      filter(!is.na(specialeCorrected)) %>%
-      count(specialeCorrected, sort = TRUE) %>%
-      slice_head(n = 7) %>%
-      pull(specialeCorrected)
+    spec_col <- filtered$`Speciale (*)`
+    spec_col <- as.character(spec_col)
+    spec_col <- trimws(spec_col)
+
+    # Respect "Cases uden speciale" toggle (Vis -> include "Ikke angivet")
+    if (identical(input$showNASpecialityToggle_specialePlot, "Vis")) {
+      spec_col[is.na(spec_col) | !nzchar(spec_col)] <- "Ikke angivet"
+    } else {
+      spec_col[is.na(spec_col) | !nzchar(spec_col)] <- NA_character_
+    }
+
+    top_specs <- tibble::tibble(spec = spec_col) %>%
+      dplyr::filter(!is.na(spec)) %>%
+      dplyr::count(spec, sort = TRUE) %>%
+      dplyr::slice_head(n = 7) %>%
+      dplyr::pull(spec)
 
     new_selected <- unique(c("Andre specialer", top_specs))
 
-    all_specs <- sort(unique(na.omit(df$specialeCorrected)))
+    all_specs <- df$`Speciale (*)`
+    all_specs <- as.character(all_specs)
+    all_specs <- trimws(all_specs)
+    all_specs <- sort(unique(all_specs[!is.na(all_specs) & nzchar(all_specs)]))
+    all_specs <- c("Andre specialer", all_specs)
     if (!("Andre specialer" %in% all_specs)) all_specs <- c("Andre specialer", all_specs)
 
     updateSelectizeInput(
@@ -2121,7 +2141,7 @@ output$download_svartider_svg <- downloadHandler(
 
     df <- tryCatch(readRDS(newest), error = function(e) NULL)
     if (is.null(df)) return()
-    if (!"specialeCorrected" %in% names(df)) return()
+    if (!("Speciale (*)" %in% names(df))) return()
 
     resolve_date_col_local <- function(d) {
       if ("AdjustedDate" %in% names(d)) {
@@ -2176,16 +2196,30 @@ output$download_svartider_svg <- downloadHandler(
       return()
     }
 
-    top_specs <- filtered %>%
-      filter(!is.na(specialeCorrected)) %>%
-      count(specialeCorrected, sort = TRUE) %>%
+    spec_col <- filtered$`Speciale (*)`
+    spec_col <- as.character(spec_col)
+    spec_col <- trimws(spec_col)
+
+    # Respect "Cases uden speciale" toggle (Vis -> include "Ikke angivet")
+    if (identical(input$showNASpecialityToggle_specialePlot, "Vis")) {
+      spec_col[is.na(spec_col) | !nzchar(spec_col)] <- "Ikke angivet"
+    } else {
+      spec_col[is.na(spec_col) | !nzchar(spec_col)] <- NA_character_
+    }
+
+    top_specs <- tibble::tibble(spec = spec_col) %>%
+      filter(!is.na(spec)) %>%
+      count(spec, sort = TRUE) %>%
       slice_head(n = 14) %>%
-      pull(specialeCorrected)
+      pull(spec)
 
     new_selected <- unique(c("Andre specialer", top_specs))
 
-    all_specs <- sort(unique(na.omit(df$specialeCorrected)))
-    if (!("Andre specialer" %in% all_specs)) all_specs <- c("Andre specialer", all_specs)
+    all_specs <- df$`Speciale (*)`
+    all_specs <- as.character(all_specs)
+    all_specs <- trimws(all_specs)
+    all_specs <- sort(unique(all_specs[!is.na(all_specs) & nzchar(all_specs)]))
+    all_specs <- c("Andre specialer", all_specs)
 
     updateSelectizeInput(
       session,
@@ -2237,12 +2271,16 @@ output$download_svartider_svg <- downloadHandler(
     plot_env$svartypeFilterToggle.specialePlot <- input$svartypeFilterToggle_specialePlot
     plot_env$spmKategoriFilterToggle.specialePlot <- input$spmKategoriFilterToggle_specialePlot
 
-    plot_env$specialerAtPlotte.specialePlot <- input$pie_specialer
+    plot_env$specialerAtPlotte.specialePlot <- unique(c(
+      input$pie_specialer,
+      if (identical(input$showNASpecialityToggle_specialePlot, "Vis")) "Ikke angivet"
+    ))
 
     plot_env$showNumbersToggle.specialePlot  <- input$showNumbersToggle_specialePlot
     plot_env$legendPositionToggle.specialePlot <- input$legendPositionToggle_specialePlot
     plot_env$colorToggle.specialePlot <- input$colorToggle_specialePlot
     plot_env$AndreAlwaysGreyToggle.specialePlot <- identical(input$andreAlwaysGreyToggle_specialePlot, "Grå")
+    plot_env$showNASpecialityToggle.specialePlot <- identical(input$showNASpecialityToggle_specialePlot, "Vis")
 
     tryCatch(
       {
@@ -2314,7 +2352,8 @@ output$download_svartider_svg <- downloadHandler(
       input$showNumbersToggle_specialePlot,
       input$legendPositionToggle_specialePlot,
       input$colorToggle_specialePlot,
-      input$andreAlwaysGreyToggle_specialePlot
+      input$andreAlwaysGreyToggle_specialePlot,
+      input$showNASpecialityToggle_specialePlot
     ),
     {
       if (isTRUE(specialefordeling_plot_active())) {
@@ -2347,25 +2386,25 @@ output$download_svartider_svg <- downloadHandler(
   )
 
   output$download_specialefordeling_svg <- downloadHandler(
-  filename = function() {
-    paste0("specialefordeling_plot_", Sys.Date(), ".svg")
-  },
-  contentType = "image/svg+xml",
-  content = function(file) {
-    req(specialefordeling_plot_obj())
+    filename = function() {
+      paste0("specialefordeling_plot_", Sys.Date(), ".svg")
+    },
+    contentType = "image/svg+xml",
+    content = function(file) {
+      req(specialefordeling_plot_obj())
 
-    # Save with ggsave using cairo_pdf device
-    ggplot2::ggsave(
-      filename = file,
-      plot = specialefordeling_plot_obj(),
-      device = cairo_pdf,
-      width = 10,
-      height = 6.5,
-      units = "in",
-      dpi = 300
-    )
-  }
-)
+      # Save with ggsave using cairo_pdf device
+      ggplot2::ggsave(
+        filename = file,
+        plot = specialefordeling_plot_obj(),
+        device = cairo_pdf,
+        width = 10,
+        height = 6.5,
+        units = "in",
+        dpi = 300
+      )
+    }
+  )
 
   # -------------------------- SPØRGSMÅLSTYPEFORDELING (pie chart) -------------------------- #
 
@@ -2413,8 +2452,28 @@ output$download_svartider_svg <- downloadHandler(
       }
     }
 
-    if (!identical(input$specialeFilterToggle_spmPlot, "Alle") && "specialeCorrected" %in% names(filtered)) {
-      filtered <- filtered %>% filter(specialeCorrected == input$specialeFilterToggle_spmPlot)
+    if ("Speciale (*)" %in% names(filtered)) {
+      sel <- input$specialeFilterToggle_spmPlot
+      if (!is.null(sel) && length(sel) > 0 && !("Alle" %in% sel)) {
+
+        # Support sector picks without needing specialeCorrected
+        if ("Hospital" %in% sel) {
+          # requires `sektor` column in data (recommended)
+          if ("sektor" %in% names(filtered)) {
+            filtered <- filtered %>% filter(sektor == "Hospital")
+          } else if ("Hospital (*)" %in% names(filtered)) {
+            filtered <- filtered %>% filter(!is.na(`Hospital (*)`))
+          }
+        } else if ("Almen praksis" %in% sel) {
+          if ("sektor" %in% names(filtered)) {
+            filtered <- filtered %>% filter(sektor == "Almen praksis")
+          } else if ("Hospital (*)" %in% names(filtered)) {
+            filtered <- filtered %>% filter(is.na(`Hospital (*)`))
+          }
+        } else {
+          filtered <- filtered %>% filter(`Speciale (*)` %in% sel)
+        }
+      }
     }
 
     if (nrow(filtered) == 0) {
@@ -2488,8 +2547,27 @@ output$download_svartider_svg <- downloadHandler(
       }
     }
 
-    if (!identical(input$specialeFilterToggle_spmPlot, "Alle") && "specialeCorrected" %in% names(filtered)) {
-      filtered <- filtered %>% filter(specialeCorrected == input$specialeFilterToggle_spmPlot)
+    if ("Speciale (*)" %in% names(filtered)) {
+      sel <- input$specialeFilterToggle_spmPlot
+      if (!is.null(sel) && length(sel) > 0 && !("Alle" %in% sel)) {
+
+        # Support sector picks without needing specialeCorrected
+        if ("Hospital" %in% sel) {
+          if ("sektor" %in% names(filtered)) {
+            filtered <- filtered %>% filter(sektor == "Hospital")
+          } else if ("Hospital (*)" %in% names(filtered)) {
+            filtered <- filtered %>% filter(!is.na(`Hospital (*)`))
+          }
+        } else if ("Almen praksis" %in% sel) {
+          if ("sektor" %in% names(filtered)) {
+            filtered <- filtered %>% filter(sektor == "Almen praksis")
+          } else if ("Hospital (*)" %in% names(filtered)) {
+            filtered <- filtered %>% filter(is.na(`Hospital (*)`))
+          }
+        } else {
+          filtered <- filtered %>% filter(`Speciale (*)` %in% sel)
+        }
+      }
     }
 
     if (nrow(filtered) == 0) {
@@ -2670,25 +2748,25 @@ output$download_svartider_svg <- downloadHandler(
   )
 
   output$download_spmfordeling_svg <- downloadHandler(
-  filename = function() {
-    paste0("spmfordeling_plot_", Sys.Date(), ".svg")
-  },
-  contentType = "image/svg+xml",
-  content = function(file) {
-    req(spmfordeling_plot_obj())
+    filename = function() {
+      paste0("spmfordeling_plot_", Sys.Date(), ".svg")
+    },
+    contentType = "image/svg+xml",
+    content = function(file) {
+      req(spmfordeling_plot_obj())
 
-    # Save with ggsave using cairo_pdf device
-    ggplot2::ggsave(
-      filename = file,
-      plot = spmfordeling_plot_obj(),
-      device = cairo_pdf,
-      width = 10,
-      height = 6.5,
-      units = "in",
-      dpi = 300
-    )
-  }
-)
+      # Save with ggsave using cairo_pdf device
+      ggplot2::ggsave(
+        filename = file,
+        plot = spmfordeling_plot_obj(),
+        device = cairo_pdf,
+        width = 10,
+        height = 6.5,
+        units = "in",
+        dpi = 300
+      )
+    }
+  )
 
   # -------------------------- STATUS MESSAGE -------------------------- #
 

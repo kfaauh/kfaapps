@@ -171,15 +171,24 @@ if (!identical(svartypeFilterToggle.spmPlot, "Alle")) {
 	message("✓ Rows after svartype filter: ", nrow(filtered_data))
 }
 
+# Exclude activity types that should not be part of spørgsmaalskategori piechart
+filtered_data <- filtered_data %>%
+  dplyr::filter(!(`Svartype (*)` %in% c("Bivirkningsindberetning")))
+
 # Speciale (multi select; "Alle" = no filtering)
 spec_filter <- character(0)
 if (exists("specialeFilterToggle.spmPlot")) {
   spec_filter <- as_filter_vec(specialeFilterToggle.spmPlot)
 }
 
-if (length(spec_filter) > 0 && "specialeCorrected" %in% names(filtered_data)) {
+if (length(spec_filter) > 0) {
+  if (!("Speciale (*)" %in% names(filtered_data))) {
+    stop("Column 'Speciale (*)' not found in filtered_data, but specialeFilterToggle.spmPlot is set.")
+  }
+
   filtered_data <- filtered_data %>%
-    filter(specialeCorrected %in% spec_filter)
+    filter(`Speciale (*)` %in% spec_filter)
+
   message("✓ Rows after speciale filter: ", nrow(filtered_data))
 }
 
