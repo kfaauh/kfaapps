@@ -1156,7 +1156,7 @@ server <- function(input, output, session) {
 
   # -------------------------- LAST SYNC -------------------------- #
 
-  data_dir <- here("statistik", "Data", "Azure data")
+  data_dir <- here("statistik", "data", "Azure data")
 
   get_newest_rds_file <- function(directory_path) {
     rds_files <- list.files(
