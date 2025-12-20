@@ -8,9 +8,16 @@ library(dplyr)
 library(tidyr)
 library(rvest)
 
-# Ensure data directory exists
-if (!dir.exists("data")) {
-  dir.create("data")
+args <- commandArgs(trailingOnly = TRUE)
+
+if (length(args) < 1) {
+  stop("No output directory supplied to data_management.R")
+}
+
+out_dir <- args[1]
+
+if (!dir.exists(out_dir)) {
+  dir.create(out_dir, recursive = TRUE)
 }
 
 url <- "https://sundhedsdatabank.dk/medicin/medicinsalg-og-udgifter"
@@ -67,6 +74,5 @@ merged_data <- medicinforbrug_data %>%
     Dato = as.Date(paste(År, sprintf("%02d", as.numeric(Måned)), "01", sep = "-"))
   )
 
-# Save cleaned data for Shiny app
-# Save cleaned data for Shiny app
-saveRDS(merged_data, file = "data/merged_data.rds")
+saveRDS(merged_data, file.path(out_dir, "merged_data.rds"))
+message("✔ merged_data.rds skrevet til ", normalizePath(out_dir))
