@@ -270,29 +270,54 @@ total_count <- sum(yearly_counts_speciale$Count, na.rm = TRUE)
 if (total_count == 0) {
   message("ⓘ Ingen data tilgængelig med de valgte filtre. Viser 'Ingen data' beskeder.")
 
-  # Create an empty plot with "Ingen data" message
+# ---------------------------------------------------------------------------
+# Subtitle (clean)
+# ---------------------------------------------------------------------------
+subtitle_filters <- character(0)
+
+# Optional: keep chosen region in subtitle (only if user filtered away "Begge")
+if (!identical(regionToggle.specialePlot, "Begge")) {
+  subtitle_filters <- c(subtitle_filters, regionToggle.specialePlot)
+}
+
+# Keep Svartype filter (only if not "Alle")
+if (!identical(svartypeFilterToggle.specialePlot, "Alle")) {
+  subtitle_filters <- c(subtitle_filters, svartypeFilterToggle.specialePlot)
+}
+
+# Keep Spørgsmålskategori filter (if active)
+if (length(spm_filter) > 0) {
+  subtitle_filters <- c(subtitle_filters, paste(spm_filter, collapse = ", "))
+}
+
+subtitle_text <- paste(unique(c("Region Midtjylland", subtitle_filters)), collapse = " | ")
+
+  # ---------------------------------------------------------------------------
+  # Plot
+  # ---------------------------------------------------------------------------
   p <- ggplot() +
-    annotate("text", x = 0.5, y = 0.5, label = "Ingen data",
-             size = 24, fontface = "bold", color = "darkred") +
+    annotate(
+      "text",
+      x = 0.5, y = 0.5,
+      label = "Ingen data",
+      size = 24,
+      fontface = "bold",
+      color = "darkred"
+    ) +
     labs(
-      title = "Forespørgsler per speciale",
-      subtitle = paste(
-        if (!identical(regionToggle.specialePlot, "Begge")) regionToggle.specialePlot else "Aarhus og Aalborg",
-        if (!identical(svartypeFilterToggle.specialePlot, "Alle")) svartypeFilterToggle.specialePlot,
-        if (length(spm_filter) > 0) paste(spm_filter, collapse = ", "),
-        sep = " | "
-      )
+      title    = "Forespørgsler per speciale",
+      subtitle = subtitle_text
     ) +
     theme_void() +
     theme(
-      plot.title = element_text(size = 16, hjust = 0.5, face = "bold"),
-      plot.subtitle = element_text(size = 12, hjust = 0.5),
+      plot.title    = element_text(size = 16, hjust = 0.5, face = "bold"),
+      plot.subtitle = ggtext::element_markdown(size = 12, hjust = 0.5),
       panel.background = element_rect(fill = "white", color = NA),
-      plot.margin = margin(t = 10, r = 2, b = 2, l = 2, unit = "pt")
+      plot.margin   = margin(t = 10, r = 2, b = 2, l = 2, unit = "pt")
     )
 
   plot(p)
-  # p is returned to the caller
+
 } else {
   # FIRST: Move "Andre specialer" to the end of the levels
   current_levels <- levels(yearly_counts_speciale$specialeCorrected)
@@ -428,26 +453,26 @@ andre_color_message <- if (use_grey_for_andre) {
   message("✓ ", andre_color_message)
   message("✓ Pie chart order: Main categories start at 12 o'clock, 'Andre specialer' at the end")
 
-  # -----------------------------------------------------------------------------
-  # 5. Subtitle (same style/logic pattern as prior plots)
-  # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# 5. Subtitle (clean): Always show "Region Midtjylland"
+# + keep " | " filter logic (Region + Svartype + Spørgsmålskategori)
+# -----------------------------------------------------------------------------
 
-  subtitle_filters <- character(0)
+subtitle_filters <- character(0)
 
-  if (!identical(regionToggle.specialePlot, "Begge")) {
-    subtitle_filters <- c(subtitle_filters, regionToggle.specialePlot)
-  }
+if (!identical(regionToggle.specialePlot, "Begge")) {
+  subtitle_filters <- c(subtitle_filters, regionToggle.specialePlot)
+}
 
-  if (!identical(svartypeFilterToggle.specialePlot, "Alle")) {
-    subtitle_filters <- c(subtitle_filters, svartypeFilterToggle.specialePlot)
-  }
+if (!identical(svartypeFilterToggle.specialePlot, "Alle")) {
+  subtitle_filters <- c(subtitle_filters, svartypeFilterToggle.specialePlot)
+}
 
-  if (length(spm_filter) > 0) {
-    subtitle_filters <- c(subtitle_filters, paste(spm_filter, collapse = ", "))
-  }
+if (length(spm_filter) > 0) {
+  subtitle_filters <- c(subtitle_filters, paste(spm_filter, collapse = ", "))
+}
 
-  base_location <- if (!identical(regionToggle.specialePlot, "Begge")) regionToggle.specialePlot else "Aarhus og Aalborg"
-  subtitle_text <- paste(unique(c(base_location, subtitle_filters)), collapse = " | ")
+subtitle_text <- paste(unique(c("Region Midtjylland", subtitle_filters)), collapse = " | ")
 
   # -----------------------------------------------------------------------------
   # 6. Plot (match provided plot, + title/subtitle, + legend toggle)
@@ -506,7 +531,7 @@ andre_color_message <- if (use_grey_for_andre) {
       panel.border = element_blank(),
 
       plot.title    = element_text(size = 16, hjust = 0.5, face = "bold"),
-      plot.subtitle = element_text(size = 12, hjust = 0.5),
+      plot.subtitle = ggtext::element_markdown(size = 12, hjust = 0.5),
       plot.margin   = margin(t = 10, r = 2, b = 2, l = 2, unit = "pt")
     )
 

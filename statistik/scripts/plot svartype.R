@@ -523,55 +523,46 @@ if (showTrendlineToggle) {
 x_title <- ""
 
 # -------------------------------------------------------------------------
-# Subtitle: "Aarhus og Aalborg" + Region + Speciale (no Sektor, no Svartype)
+# Subtitle: Always show "Region Midtjylland" (no "Aarhus og Aalborg")
+# + keep existing " | " filter logic (Region + Speciale)
+# + add footnote when Almindeligt svar/Kortsvar are part of what is plotted
 # -------------------------------------------------------------------------
 
 subtitle_filters <- character(0)
 
-# Add Region (without "Region:")
+# Keep Region filter logic in subtitle (after base text)
 if (!identical(regionToggle, "Begge")) {
   subtitle_filters <- c(subtitle_filters, regionToggle)
 }
 
-# Add Speciale (without "Speciale:")
+# Keep Speciale filter logic in subtitle
 if (!identical(specialeToggle, "Alle")) {
   subtitle_filters <- c(subtitle_filters, specialeToggle)
 }
 
-# Determine base location
-if (!identical(svartypeFilterToggle, "Alle") &&
-    svartypeFilterToggle %in% c("Medicingennemgang", "Generel forespørgsel", "Ibrugtagningssag")) {
+# Footnote condition: whenever "Almindeligt svar" and/or "Kortsvar" can be included
+needs_kfe_note <- identical(svartypeFilterToggle, "Alle") ||
+  identical(svartypeFilterToggle, "Klinisk rådgivning") ||
+  identical(svartypeFilterToggle, "Almindeligt svar") ||
+  identical(svartypeFilterToggle, "Kortsvar")
 
-  if (identical(regionToggle, "Nordjylland")) {
-    # For these svartyper with region = Nordjylland -> show only "Nordjylland"
-    base_location <- "Nordjylland"
+base_location <- if (isTRUE(needs_kfe_note)) "Region Midtjylland*" else "Region Midtjylland"
 
-  } else if (identical(regionToggle, "Begge")) {
-
-    # For region = Begge:
-    # - "Medicingennemgang" or "Ibrugtagningssag" -> keep "Midtjylland"
-    # - "Generel forespørgsel" -> fall back to default "Aarhus og Aalborg"
-    if (svartypeFilterToggle %in% c("Medicingennemgang", "Ibrugtagningssag")) {
-      base_location <- "Midtjylland"
-    } else {  # "Generel forespørgsel"
-      base_location <- "Aarhus og Aalborg"
-    }
-
-  } else {
-    # Other explicit regions (e.g. Midtjylland) -> "Midtjylland"
-    base_location <- "Midtjylland"
-  }
-
-} else {
-  # All other Svartype/region combinations -> default
-  base_location <- "Aarhus og Aalborg"
-}
-
-subtitle_text <- paste(
+subtitle_text_base <- paste(
   unique(c(base_location, subtitle_filters)),
   collapse = " | "
 )
 
+if (isTRUE(needs_kfe_note)) {
+  subtitle_text <- paste0(
+    subtitle_text_base,
+    "<br><span style='font-size:9pt'>",
+    "*Almindeligt svar og Kortsvar besvares også af Klinisk Farmakologisk Enhed, Aalborg",
+    "</span>"
+  )
+} else {
+  subtitle_text <- subtitle_text_base
+}
 # -------------------------------------------------------------------------
 # Legend labels: possibly include counts
 # -------------------------------------------------------------------------
@@ -799,7 +790,7 @@ p <- p +
     axis.ticks        = element_line(colour = "black", linewidth = 0.2),
 
     plot.title    = element_text(size = 16, hjust = 0.5, face = "bold"),
-    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 12, hjust = 0.5),
     plot.margin   = margin(t = 2, r = 2, b = -5, l = 2, unit = "pt")
   )
 

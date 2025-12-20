@@ -173,23 +173,23 @@ if (!identical(svartypeFilterToggle.spmPlot, "Alle")) {
 
 # Exclude activity types that should not be part of spørgsmaalskategori piechart
 filtered_data <- filtered_data %>%
-  dplyr::filter(!(`Svartype (*)` %in% c("Bivirkningsindberetning")))
+	dplyr::filter(!(`Svartype (*)` %in% c("Bivirkningsindberetning")))
 
 # Speciale (multi select; "Alle" = no filtering)
 spec_filter <- character(0)
 if (exists("specialeFilterToggle.spmPlot")) {
-  spec_filter <- as_filter_vec(specialeFilterToggle.spmPlot)
+	spec_filter <- as_filter_vec(specialeFilterToggle.spmPlot)
 }
 
 if (length(spec_filter) > 0) {
-  if (!("Speciale (*)" %in% names(filtered_data))) {
-    stop("Column 'Speciale (*)' not found in filtered_data, but specialeFilterToggle.spmPlot is set.")
-  }
+	if (!("Speciale (*)" %in% names(filtered_data))) {
+		stop("Column 'Speciale (*)' not found in filtered_data, but specialeFilterToggle.spmPlot is set.")
+	}
 
-  filtered_data <- filtered_data %>%
-    filter(`Speciale (*)` %in% spec_filter)
+	filtered_data <- filtered_data %>%
+		filter(`Speciale (*)` %in% spec_filter)
 
-  message("✓ Rows after speciale filter: ", nrow(filtered_data))
+	message("✓ Rows after speciale filter: ", nrow(filtered_data))
 }
 
 # -----------------------------------------------------------------------------
@@ -240,18 +240,27 @@ if (total_count == 0) {
 	p <- ggplot() +
 		annotate("text", x = 0.5, y = 0.5, label = "Ingen data",
 			    size = 24, fontface = "bold", color = "darkred") +
-		labs(
-			title = "Forespørgsler per spørgsmålstype",
-			subtitle = paste(
-				if (!identical(regionToggle.spmPlot, "Begge")) regionToggle.spmPlot else "Aarhus og Aalborg",
-				if (!identical(svartypeFilterToggle.spmPlot, "Alle")) svartypeFilterToggle.spmPlot,
-				sep = " | "
-			)
-		) +
+		# Subtitle (clean)
+		subtitle_filters <- character(0)
+
+	if (!identical(regionToggle.spmPlot, "Begge")) {
+		subtitle_filters <- c(subtitle_filters, regionToggle.spmPlot)
+	}
+
+	if (!identical(svartypeFilterToggle.spmPlot, "Alle")) {
+		subtitle_filters <- c(subtitle_filters, svartypeFilterToggle.spmPlot)
+	}
+
+	subtitle_text <- paste(unique(c("Region Midtjylland", subtitle_filters)), collapse = " | ")
+
+	labs(
+		title    = "Forespørgsler per spørgsmålstype",
+		subtitle = subtitle_text
+	) +
 		theme_void() +
 		theme(
 			plot.title = element_text(size = 16, hjust = 0.5, face = "bold"),
-			plot.subtitle = element_text(size = 12, hjust = 0.5),
+			plot.subtitle = ggtext::element_markdown(size = 12, hjust = 0.5),
 			panel.background = element_rect(fill = "white", color = NA),
 			plot.margin = margin(t = 10, r = 2, b = 2, l = 2, unit = "pt")
 		)
@@ -360,7 +369,8 @@ if (total_count == 0) {
 	message("✓ Pie chart order: Main categories start at 12 o'clock, 'Andre spørgsmål' at the end")
 
 	# -----------------------------------------------------------------------------
-	# 5. Subtitle (same style/logic pattern as prior plots)
+	# 5. Subtitle (clean): Always show "Region Midtjylland"
+	# + keep existing " | " filter logic (Region + Svartype)
 	# -----------------------------------------------------------------------------
 
 	subtitle_filters <- character(0)
@@ -373,8 +383,7 @@ if (total_count == 0) {
 		subtitle_filters <- c(subtitle_filters, svartypeFilterToggle.spmPlot)
 	}
 
-	base_location <- if (!identical(regionToggle.spmPlot, "Begge")) regionToggle.spmPlot else "Aarhus og Aalborg"
-	subtitle_text <- paste(unique(c(base_location, subtitle_filters)), collapse = " | ")
+	subtitle_text <- paste(unique(c("Region Midtjylland", subtitle_filters)), collapse = " | ")
 
 	# -----------------------------------------------------------------------------
 	# 6. Plot (match provided plot, + title/subtitle, + legend toggle)
@@ -433,7 +442,7 @@ if (total_count == 0) {
 			panel.border     = element_blank(),
 
 			plot.title    = element_text(size = 16, hjust = 0.5, face = "bold"),
-			plot.subtitle = element_text(size = 12, hjust = 0.5),
+			plot.subtitle = ggtext::element_markdown(size = 12, hjust = 0.5),
 			plot.margin   = margin(t = 10, r = 2, b = 2, l = 2, unit = "pt")
 		)
 

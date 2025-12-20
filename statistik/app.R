@@ -1589,27 +1589,26 @@ server <- function(input, output, session) {
 
   # ------------------- LOAD DATA FOR DROPDOWNS -------------------- #
 
-  observe({
-    newest <- get_newest_rds_file(data_dir)
-    if (is.null(newest)) return()
+observe({
+  # Ensure this re-runs after sync (update_last_sync() changes last_sync_time)
+  last_sync_time()
 
-    df <- tryCatch(
-      readRDS(newest),
-      error = function(e) NULL
-    )
-    if (is.null(df)) return()
-    if (!("Speciale (*)" %in% names(df))) return()
+  newest <- get_newest_rds_file(data_dir)
+  if (is.null(newest)) return()
 
-    # Build choices from Speciale (*) + add sector options (without storing specialeCorrected)
+  df <- tryCatch(readRDS(newest), error = function(e) NULL)
+  if (is.null(df)) return()
+
+  # ---- Speciale-based dropdowns (only if column exists) ----
+  if ("Speciale (*)" %in% names(df)) {
+
     specs_raw <- df$`Speciale (*)`
     specs_raw <- as.character(specs_raw)
     specs_raw <- trimws(specs_raw)
     specs_raw <- specs_raw[!is.na(specs_raw) & nzchar(specs_raw)]
 
-    # Specialties
     specs <- sort(unique(specs_raw))
 
-    # Add sector options explicitly
     priority <- c("Hospital", "Almen praksis")
     specs_ordered <- c(priority, setdiff(specs, priority))
 
@@ -1620,7 +1619,6 @@ server <- function(input, output, session) {
       selected = "Alle"
     )
 
-    # Specialefordeling: specialer multiselect (pie)
     pie_choices <- c("Andre specialer", specs_ordered)
 
     default_specialer <- c(
@@ -1645,7 +1643,6 @@ server <- function(input, output, session) {
       server   = TRUE
     )
 
-    # Spørgsmålstypefordeling: Speciale filter (multi select, default Alle)
     updateSelectizeInput(
       session,
       "specialeFilterToggle_spmPlot",
@@ -1654,7 +1651,40 @@ server <- function(input, output, session) {
       server   = TRUE
     )
   }
+
+  # ---- Spørgsmålskategori dropdown for Specialefordeling ----
+  spm_col <- dplyr::case_when(
+    "Spørgsmålskategori (*)" %in% names(df) ~ "Spørgsmålskategori (*)",
+    "Spørgsmålskategori"     %in% names(df) ~ "Spørgsmålskategori",
+    TRUE ~ NA_character_
   )
+
+  if (!is.na(spm_col)) {
+    spm_raw <- as.character(df[[spm_col]])
+    spm_raw <- trimws(spm_raw)
+    spm_raw <- spm_raw[!is.na(spm_raw) & nzchar(spm_raw)]
+
+    spm_choices <- sort(unique(spm_raw))
+    spm_choices <- setdiff(spm_choices, "Bivirkningsindberetning")
+
+    updateSelectizeInput(
+      session,
+      "spmKategoriFilterToggle_specialePlot",
+      choices  = c("Alle", spm_choices),
+      selected = "Alle",
+      server   = TRUE
+    )
+  } else {
+    # Fallback: keep at least "Alle"
+    updateSelectizeInput(
+      session,
+      "spmKategoriFilterToggle_specialePlot",
+      choices  = "Alle",
+      selected = "Alle",
+      server   = TRUE
+    )
+  }
+})
 
   # -------------------------- SVARTYPE PLOT (Tidligere aktiviteter) -------------------------- #
   # (UNCHANGED - below is identical to your current app)

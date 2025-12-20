@@ -459,38 +459,41 @@ if (timeGranularity.timePlot != "År" && !is.null(year_data)) {
 }
 
 # -----------------------------------------------------------------------------
-# 10. Subtitle (same logic/structure as reference, without speciale)
+# 10. Subtitle: Always show "Region Midtjylland" (no "Aarhus og Aalborg")
+# + keep existing " | " filter logic (Region)
+# + add footnote when Almindeligt svar/Kortsvar are part of what is plotted
 # -----------------------------------------------------------------------------
 
 subtitle_filters <- character(0)
 
+# Keep Region filter logic in subtitle (after base text)
 if (!identical(regionToggle.timePlot, "Begge")) {
   subtitle_filters <- c(subtitle_filters, regionToggle.timePlot)
 }
 
-if (!identical(svartypeFilterToggle.timePlot, "Alle") &&
-    svartypeFilterToggle.timePlot %in% c("Medicingennemgang", "Generel forespørgsel", "Ibrugtagningssag")) {
+# Footnote condition: whenever "Almindeligt svar" and/or "Kortsvar" can be included
+needs_kfe_note <- identical(svartypeFilterToggle.timePlot, "Alle") ||
+  identical(svartypeFilterToggle.timePlot, "Klinisk rådgivning") ||
+  identical(svartypeFilterToggle.timePlot, "Almindeligt svar") ||
+  identical(svartypeFilterToggle.timePlot, "Kortsvar")
 
-  if (identical(regionToggle.timePlot, "Nordjylland")) {
-    base_location <- "Nordjylland"
+base_location <- if (isTRUE(needs_kfe_note)) "Region Midtjylland*" else "Region Midtjylland"
 
-  } else if (identical(regionToggle.timePlot, "Begge")) {
+subtitle_text_base <- paste(
+  unique(c(base_location, subtitle_filters)),
+  collapse = " | "
+)
 
-    if (svartypeFilterToggle.timePlot %in% c("Medicingennemgang", "Ibrugtagningssag")) {
-      base_location <- "Midtjylland"
-    } else {
-      base_location <- "Aarhus og Aalborg"
-    }
-
-  } else {
-    base_location <- "Midtjylland"
-  }
-
+if (isTRUE(needs_kfe_note)) {
+  subtitle_text <- paste0(
+    subtitle_text_base,
+    "<br><span style='font-size:9pt'>",
+    "*Almindeligt svar og Kortsvar besvares også af Klinisk Farmakologisk Enhed, Aalborg",
+    "</span>"
+  )
 } else {
-  base_location <- "Aarhus og Aalborg"
+  subtitle_text <- subtitle_text_base
 }
-
-subtitle_text <- paste(unique(c(base_location, subtitle_filters)), collapse = " | ")
 
 # -----------------------------------------------------------------------------
 # 11. Plot
@@ -661,7 +664,7 @@ p <- p +
     axis.ticks        = element_line(colour = "black", linewidth = 0.2),
 
     plot.title    = element_text(size = 16, hjust = 0.5, face = "bold"),
-    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    plot.subtitle = ggtext::element_markdown(size = 12, hjust = 0.5),
     plot.margin   = margin(t = 2, r = 2, b = -5, l = 2, unit = "pt")
   )
 
