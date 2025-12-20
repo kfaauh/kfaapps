@@ -45,7 +45,7 @@ get_newest_rds_file <- function(directory_path) {
 }
 
 # Set up data directory
-data_dir <- here("statistik", "Data", "Azure data")
+data_dir <- here("statistik", "data", "Azure data")
 
 # Check if directory exists
 if (!dir.exists(data_dir)) {
