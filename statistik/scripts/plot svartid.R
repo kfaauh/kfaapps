@@ -71,6 +71,33 @@ if (!exists("data.lmraad_filtered")) {
 message("✓ Data found: ", nrow(data.lmraad_filtered), " rows")
 
 # -----------------------------------------------------------------------------
+# Ensure precomputed svartid columns exist and are numeric (days)
+# -----------------------------------------------------------------------------
+
+required_svartid_cols <- c(
+  "svartid.raw",
+  "svartid.NoWeekend",
+  "svartid.NoWeekendNoHolidays"
+)
+
+missing_svartid_cols <- setdiff(required_svartid_cols, names(data.lmraad_filtered))
+if (length(missing_svartid_cols) > 0) {
+  stop(
+    "Missing precomputed svartid column(s) in data.lmraad_filtered: ",
+    paste(missing_svartid_cols, collapse = ", ")
+  )
+}
+
+as_days_numeric <- function(x) {
+  if (inherits(x, "difftime")) return(as.numeric(x, units = "days"))
+  as.numeric(x)
+}
+
+data.lmraad_filtered <- data.lmraad_filtered %>%
+  mutate(across(all_of(required_svartid_cols), as_days_numeric))
+
+
+# -----------------------------------------------------------------------------
 # 2. Helpers
 # -----------------------------------------------------------------------------
 
@@ -312,6 +339,10 @@ if (timeGranularity.timePlot == "Uge") {
 binned <- binned %>%
   mutate(period_label = factor(period_label, levels = period_levels))
 
+# Use the already-precomputed svartid column (no calculation in this script)
+binned <- binned %>%
+  mutate(val = .data[[svartid_col]])
+
 # -----------------------------------------------------------------------------
 # 8. Percentile lines (Graf 1-3) + optional mean line
 # -----------------------------------------------------------------------------
@@ -339,16 +370,15 @@ if (nrow(series_specs) > 0) {
     p_here     <- series_specs$p_val[i]
     label_here <- as.character(series_specs$label[i])
 
-    tmp <- binned %>%
-      mutate(val = .data[[svartid_col]]) %>%
-      filter(!is.na(period_label)) %>%
-      filter(!is.na(val)) %>%  # NA drop before percentile calc
-      group_by(period_label) %>%
-      summarise(
-        value = as.numeric(stats::quantile(val, probs = p_here / 100, na.rm = TRUE, names = FALSE, type = 7)),
-        .groups = "drop"
-      ) %>%
-      mutate(series_label = label_here)
+tmp <- binned %>%
+  filter(!is.na(period_label)) %>%
+  filter(!is.na(val)) %>%  # NA drop before percentile calc
+  group_by(period_label) %>%
+  summarise(
+    value = as.numeric(stats::quantile(val, probs = p_here / 100, na.rm = TRUE, names = FALSE, type = 7)),
+    .groups = "drop"
+  ) %>%
+  mutate(series_label = label_here)
 
     tmp_full <- base_period_df %>%
       left_join(tmp, by = "period_label") %>%
@@ -361,7 +391,6 @@ if (nrow(series_specs) > 0) {
 # Mean
 if (isTRUE(showMeanToggle)) {
   mean_tmp <- binned %>%
-    mutate(val = .data[[svartid_col]]) %>%
     filter(!is.na(period_label)) %>%
     filter(!is.na(val)) %>%
     group_by(period_label) %>%

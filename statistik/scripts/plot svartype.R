@@ -52,11 +52,11 @@ vibrant_palette <- c(
   "Kortsvar"                = "#E02B35",
   "Generel forespørgsel"    = "#59A89C",
   "Klinisk forespørgsel"    = "#0083B8",
-  "Medicingennemgang"       = "#F0C571",
+  "Medicingennemgang"       = "#C97A2B",
   "Ibrugtagningssag"        = "#2E8B57",
+  "Bivirkningsindberetning" = "#F0C571"
   # "Psykiatrikonference"     = "#A559AA",
   # "Andre"                   = "#808080",
-  "Bivirkningsindberetning" = "#C96A2B"
 )
 
 if (any(duplicated(unname(vibrant_palette)))) {
@@ -67,12 +67,12 @@ if (effective_groupSvarToggle) {
   svar_levels_plot <- c(
     "Ibrugtagningssag",
     "Medicingennemgang",
-    "Generel forespørgsel",
+    "Bivirkningsindberetning",
     "Klinisk forespørgsel"
   )
   svar_levels_legend <- c(
     "Klinisk forespørgsel",
-    "Generel forespørgsel",
+    "Bivirkningsindberetning",
     "Medicingennemgang",
     "Ibrugtagningssag"
   )
@@ -80,6 +80,7 @@ if (effective_groupSvarToggle) {
   svar_levels_plot <- c(
     "Ibrugtagningssag",
     "Medicingennemgang",
+    "Bivirkningsindberetning",
     "Generel forespørgsel",
     "Almindeligt svar",
     "Kortsvar"
@@ -187,6 +188,7 @@ weekly_base <- filtered_data %>%
       `Svartype (*)` == "Kortsvar"             ~ "Kortsvar",
       `Svartype (*)` == "Generel forespørgsel" ~ "Generel forespørgsel",
       `Svartype (*)` == "Almindeligt svar"     ~ "Almindeligt svar",
+      `Svartype (*)` == "Bivirkningsindberetning" ~ "Bivirkningsindberetning",
       TRUE                                     ~ NA_character_
     )
   ) %>%
@@ -202,11 +204,10 @@ if (effective_groupSvarToggle) {
         # When we have specifically filtered to "Klinisk rådgivning",
         # group all three underlying types to a single category:
         identical(svartypeFilterToggle, "Klinisk rådgivning") &
-          svar_kategori %in% c("Kortsvar", "Almindeligt svar", "Generel forespørgsel") ~
-          "Klinisk forespørgsel",
+                  svar_kategori %in% c("Kortsvar", "Almindeligt svar", "Generel forespørgsel") ~ "Klinisk forespørgsel",
 
         # Otherwise (e.g. Svartype == "Alle"), keep the original grouping logic:
-        svar_kategori %in% c("Kortsvar", "Almindeligt svar") ~ "Klinisk forespørgsel",
+        svar_kategori %in% c("Kortsvar", "Almindeligt svar", "Generel forespørgsel") ~ "Klinisk forespørgsel",
 
         TRUE ~ svar_kategori
       )
