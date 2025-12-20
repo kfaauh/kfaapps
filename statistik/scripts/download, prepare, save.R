@@ -159,75 +159,45 @@ biv_items_df <- biv_items_df %>%
     "Færdig (*)" = as.Date(NA)
   )
 
+# Grundlæggende metadata til bivirkningsindberetninger
 biv_items_df <- biv_items_df %>%
   mutate(
     "Svartype (*)" = "Bivirkningsindberetning",
-    Status = NA_character_,
-    "Speciale (*)" = NA_character_,
-    "Hospital (*)" = NA_character_,
-    "Region (*)" = NA_character_,
-    "Forvagt*" = NA_character_,
-    "Bagvagt*" = NA_character_,
-    "Forvagt_x002a_" = NA_character_,
-    "Bagvagt_x002a_" = NA_character_,
-    Speciale = NA_character_,
-    FileRef = NA_character_
+    Year           = year(AdjustedDate),
+    Month          = month(AdjustedDate),
+    MonthDate      = floor_date(AdjustedDate, unit = "month"),
+    WeekNumber     = isoweek(AdjustedDate),
+    sektor         = "Hospital"
   )
 
+# Sæt Region (*) for bivirkningsdata, men undgå at skabe unødige NA-kolonner
 biv_items_df <- biv_items_df %>%
   mutate(
-    Year = year(AdjustedDate),
-    Month = month(AdjustedDate),
-    MonthDate = floor_date(AdjustedDate, unit = "month"),
-    WeekNumber = isoweek(AdjustedDate),
-    ugedag_modtaget = NA_character_,
-    ugedag_svaret = NA_character_,
-    sektor = "Hospital",
-    specialeCorrected = NA_character_,
-    svar_kategori = "Bivirkningsindberetning",
-    FaerdigDate = as.Date(NA)
+    "Region (*)" = "Midtjylland"
   )
 
-biv_items_df <- biv_items_df %>%
-  mutate(
-    age_adjusted = NA_integer_
-  )
-
+# Fjern alle de rene NA-hjælpekolonner (Forvagt*, Bagvagt* osv.)
+# og behold kun de relevante kolonner i data.bivirkninger
 biv_items_df <- biv_items_df %>%
   select(
     any_of("Id"),
     any_of("Svartype (*)"),
-    any_of("Forvagt*"),
-    any_of("Bagvagt*"),
     any_of("Modtaget (*)"),
     any_of("Færdig (*)"),
-    any_of("Speciale (*)"),
-    any_of("Speciale"),
-    any_of("Hospital (*)"),
-    any_of("Region (*)"),
-    any_of("Status"),
-    any_of("Forvagt_x002a_"),
-    any_of("Bagvagt_x002a_"),
     any_of("Year"),
     any_of("Month"),
     any_of("MonthDate"),
-    any_of("ugedag_modtaget"),
-    any_of("ugedag_svaret"),
     any_of("AdjustedDate"),
     any_of("WeekNumber"),
     any_of("sektor"),
-    any_of("specialeCorrected"),
-    any_of("svar_kategori"),
-    any_of("FaerdigDate"),
-    any_of("age_adjusted"),
+    any_of("Region (*)"),
     any_of("Lægemiddel (ATC)"),
     any_of("Primære Bivirkning"),
     any_of("Øvrige bivirkninger"),
     any_of("Matrikel"),
     any_of("Afdeling"),
     any_of("Alvorsgrad"),
-    any_of("Oprettet af"),
-    any_of("FileRef")
+    any_of("Oprettet af")
   )
 
 data.bivirkninger <- biv_items_df
@@ -695,6 +665,60 @@ data.lmraad_filtered <- data.lmraad_filtered %>%
          ugedag_modtaget, ugedag_svaret, MonthDate, everything())
 
 message("✓ Columns reorganized")
+
+# =============================================================================
+# 12B. APPEND BIVIRKNINGSINDBERETNING TIL HOVEDDATA
+# =============================================================================
+
+message("\nAppending Bivirkningsindberetning data to main dataset...")
+
+# Kolonner der skal være "synkroniseret" mellem data.bivirkninger og data.lmraad_filtered
+biv_sync_cols <- c(
+  "Id",
+  "Svartype (*)",
+  "Modtaget (*)",
+  "Year",
+  "Month",
+  "MonthDate",
+  "AdjustedDate",
+  "WeekNumber"
+)
+
+# Udgangspunkt: brug data.bivirkninger, og sørg for korrekt Id-type og Region
+biv_for_merge <- data.bivirkninger %>%
+  mutate(
+    Id = suppressWarnings(as.numeric(Id)),
+    `Region (*)` = "Midtjylland"
+  )
+
+# Sørg for at bivirkningsdata har præcis de samme kolonner som data.lmraad_filtered
+all_cols <- names(data.lmraad_filtered)
+
+# Tilføj manglende kolonner som NA
+missing_cols <- setdiff(all_cols, names(biv_for_merge))
+if (length(missing_cols) > 0) {
+  biv_for_merge[missing_cols] <- NA
+}
+
+# Behold kun kolonner, der findes i hovedsættet, og i samme rækkefølge
+biv_for_merge <- biv_for_merge %>%
+  dplyr::select(all_of(all_cols))
+
+# Alle andre kolonner end de 8 sync-kolonner + Region (*) skal være NA for bivirkninger
+cols_to_na <- setdiff(all_cols, c(biv_sync_cols, "Region (*)"))
+biv_for_merge[cols_to_na] <- NA
+
+# Bind rækkerne sammen
+data.lmraad_filtered <- dplyr::bind_rows(
+  data.lmraad_filtered,
+  biv_for_merge
+)
+
+message(
+  "✓ Bivirkningsindberetning data appended: ",
+  nrow(biv_for_merge), " records (total rows now: ",
+  nrow(data.lmraad_filtered), ")"
+)
 
 # =============================================================================
 # 13. DATA SAVING AND FILE CLEANING

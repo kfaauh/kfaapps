@@ -67,6 +67,9 @@ as_of_days <- seq(ref_date_cph - days(7), ref_date_cph, by = "day") |>
   (\(x) x[wday(x, week_start = 1) <= 5])() |>
   tail(5)
 
+# Number of days to look back and include cases
+backTrackDays <- 56
+
 # -----------------------------------------------------------------------------
 # Danish weekday labels for x-axis (locale-free)
 # -----------------------------------------------------------------------------
@@ -129,7 +132,7 @@ message("✓ Plot data prepared successfully!")
 
 message("Creating plots...")
 
-backlog_1_42_bySvar <- activity_plot_data %>%
+data_backlog_bySvar <- activity_plot_data %>%
   mutate(
     Status = case_when(
       Status %in% c("Modtaget", "Fordelt", "Startet", "Ved bagvagt") ~ Status,
@@ -148,8 +151,8 @@ backlog_1_42_bySvar <- activity_plot_data %>%
   filter(
     if_else(
       as_of == max(as_of_days),
-      dplyr::between(age, 0, 56),
-      dplyr::between(age, 1, 56)
+      dplyr::between(age, 0, backTrackDays),
+      dplyr::between(age, 1, backTrackDays)
     ),
     !is.na(svar_kategori)
   ) %>%
@@ -162,7 +165,7 @@ backlog_1_42_bySvar <- activity_plot_data %>%
   ) %>%
   mutate(as_of_f = factor(as_of, levels = as_of_days))
 
-y_top <- backlog_1_42_bySvar %>%
+y_top <- data_backlog_bySvar %>%
   group_by(as_of_f) %>%
   summarise(t = sum(n), .groups = "drop") %>%
   summarise(mx = max(t, na.rm = TRUE)) %>%
@@ -171,7 +174,7 @@ y_top <- backlog_1_42_bySvar %>%
 y_top6 <- max(6, ceiling(y_top / 6) * 6)
 pad <- max(0.3, 0.02 * y_top6)
 
-bars_df <- backlog_1_42_bySvar %>%
+bars_df <- data_backlog_bySvar %>%
   filter(n > 0) %>%
   mutate(
     day_index = as.integer(factor(as_of, levels = as_of_days)),
@@ -451,6 +454,7 @@ p_age_bottom <- ggplot() +
     axis.ticks.length.x = unit(0.1, "cm"),
     legend.position = c(0.98, 0.98),
     legend.justification = c(1, 1),
+    legend.key = element_rect(fill = NA, colour = NA),
     legend.background = element_rect(
       fill = scales::alpha("white", 0.25),
       colour = "black",
@@ -495,7 +499,7 @@ affiliation_issues <- data.lmraad_filtered %>%
     AdjustedDate <= max(as_of_days),
     (is.na(FaerdigDate) | FaerdigDate >= max(as_of_days)),
     `Svartype (*)` %in% c("Almindeligt svar", "Kortsvar"),
-    dplyr::between(as.integer(max(as_of_days) - AdjustedDate), 0, 42)
+    dplyr::between(as.integer(max(as_of_days) - AdjustedDate), 0, backTrackDays)
   ) %>%
   mutate(
     missing_kfe_kfa        = is.na(KFE_KFA),

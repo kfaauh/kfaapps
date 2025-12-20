@@ -558,7 +558,8 @@ ui <- fluidPage(
             "Kortsvar",
             "Generel forespørgsel",
             "Medicingennemgang",
-            "Ibrugtagningssag"
+            "Ibrugtagningssag",
+            "Bivirkningsindberetning"
           ),
           selected = "Alle",
           width = "190px"
