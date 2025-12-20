@@ -490,7 +490,7 @@ ui <- fluidPage(
       div(
         class = "download-links-activity",
         downloadButton("download_plot_png", "Download PNG", class = "small-button"),
-        downloadButton("download_plot_svg", "Download SVG", class = "small-button")
+        downloadButton("download_plot_pdf", "Download vector (pdf)", class = "small-button")
       )
     ),
 
@@ -615,7 +615,7 @@ div(
         div(
           class = "download-links-svartype",
           downloadButton("download_svartype_png", "Download PNG", class = "small-button"),
-          downloadButton("download_svartype_svg", "Download SVG", class = "small-button")
+          downloadButton("download_svartype_pdf", "Download vector (pdf)", class = "small-button")
         )
       ),
       div(style = "height: 0px;")
@@ -739,7 +739,7 @@ div(
         div(
           class = "download-links-svartider",
           downloadButton("download_svartider_png", "Download PNG", class = "small-button"),
-          downloadButton("download_svartider_svg", "Download SVG", class = "small-button")
+          downloadButton("download_svartider_pdf", "Download vector (pdf)", class = "small-button")
         )
       ),
       div(style = "height: 0px;")
@@ -906,7 +906,7 @@ div(
         div(
           class = "download-links-specialefordeling",
           downloadButton("download_specialefordeling_png", "Download PNG", class = "small-button"),
-          downloadButton("download_specialefordeling_svg", "Download SVG", class = "small-button")
+          downloadButton("download_specialefordeling_pdf", "Download vector (pdf)", class = "small-button")
         )
       ),
       div(style = "height: 0px;")
@@ -1060,7 +1060,7 @@ div(
         div(
           class = "download-links-spmfordeling",
           downloadButton("download_spmfordeling_png", "Download PNG", class = "small-button"),
-          downloadButton("download_spmfordeling_svg", "Download SVG", class = "small-button")
+          downloadButton("download_spmfordeling_pdf", "Download vector (pdf)", class = "small-button")
         )
       ),
       div(style = "height: 0px;")
@@ -1546,9 +1546,9 @@ server <- function(input, output, session) {
     }
   )
 
-  output$download_plot_svg <- downloadHandler(
+  output$download_plot_pdf <- downloadHandler(
     filename = function() {
-      paste0("activity_plot_", Sys.Date(), ".svg")
+      paste0("activity_plot_", Sys.Date(), ".pdf")
     },
     contentType = "image/svg+xml",
     content = function(file) {
@@ -1819,9 +1819,9 @@ observeEvent(
     }
   )
 
-  output$download_svartype_svg <- downloadHandler(
+  output$download_svartype_pdf <- downloadHandler(
     filename = function() {
-      paste0("svartype_plot_", Sys.Date(), ".svg")
+      paste0("svartype_plot_", Sys.Date(), ".pdf")
     },
     contentType = "image/svg+xml",
     content = function(file) {
@@ -2015,9 +2015,9 @@ observeEvent(
     }
   )
 
-  output$download_svartider_svg <- downloadHandler(
+  output$download_svartider_pdf <- downloadHandler(
     filename = function() {
-      paste0("svartider_plot_", Sys.Date(), ".svg")
+      paste0("svartider_plot_", Sys.Date(), ".pdf")
     },
     contentType = "image/svg+xml",
     content = function(file) {
@@ -2385,9 +2385,9 @@ observeEvent(
     }
   )
 
-  output$download_specialefordeling_svg <- downloadHandler(
+  output$download_specialefordeling_pdf <- downloadHandler(
     filename = function() {
-      paste0("specialefordeling_plot_", Sys.Date(), ".svg")
+      paste0("specialefordeling_plot_", Sys.Date(), ".pdf")
     },
     contentType = "image/svg+xml",
     content = function(file) {
@@ -2747,9 +2747,9 @@ observeEvent(
     }
   )
 
-  output$download_spmfordeling_svg <- downloadHandler(
+  output$download_spmfordeling_pdf <- downloadHandler(
     filename = function() {
-      paste0("spmfordeling_plot_", Sys.Date(), ".svg")
+      paste0("spmfordeling_plot_", Sys.Date(), ".pdf")
     },
     contentType = "image/svg+xml",
     content = function(file) {
