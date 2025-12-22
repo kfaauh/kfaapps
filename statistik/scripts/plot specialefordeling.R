@@ -116,6 +116,11 @@ resolve_date_col <- function(df) {
     if (sum(!is.na(d)) > 0) return(d)
   }
 
+  if ("MonthDate" %in% names(df)) {
+    d <- suppressWarnings(as.Date(df$MonthDate))
+    if (sum(!is.na(d)) > 0) return(d)
+  }
+
   if (all(c("Year", "Month") %in% names(df))) {
     y <- suppressWarnings(as.integer(df$Year))
     m <- suppressWarnings(as.integer(df$Month))
@@ -163,7 +168,7 @@ message("✓ Rows after date filter: ", nrow(filtered_data))
 # Always exclude "Bivirkningsindberetning" entirely (never included in this plot)
 if ("Spørgsmålskategori (*)" %in% names(filtered_data)) {
   filtered_data <- filtered_data %>%
-    filter(is.na(`Spørgsmålskategori (*)`) | `Spørgsmålskategori (*)` != "Bivirkningsindberetning")
+  dplyr::filter(!(`Svartype (*)` %in% c("Bivirkningsindberetning")))
   message("✓ Rows after excluding 'Bivirkningsindberetning': ", nrow(filtered_data))
 }
 

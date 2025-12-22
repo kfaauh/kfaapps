@@ -305,12 +305,12 @@ if (timeGranularity == "Uge") {
   ) %>%
     dplyr::distinct(iso_year, iso_week, .keep_all = TRUE)
 
-  counts <- weekly_filtered %>%
-    mutate(
-      iso_year = lubridate::isoyear(AdjustedDate),
-      iso_week = lubridate::isoweek(AdjustedDate)
-    ) %>%
-    count(iso_year, iso_week, svar_kategori, name = "n")
+counts <- weekly_filtered %>%
+  mutate(
+    iso_year = dplyr::coalesce(as.integer(ISOYear), lubridate::isoyear(AdjustedDate)),
+    iso_week = dplyr::coalesce(as.integer(WeekNumber), lubridate::isoweek(AdjustedDate))
+  ) %>%
+  count(iso_year, iso_week, svar_kategori, name = "n")
 
   plot_counts <- period_grid %>%
     left_join(counts, by = c("iso_year", "iso_week")) %>%

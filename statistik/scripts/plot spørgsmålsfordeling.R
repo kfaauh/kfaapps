@@ -200,10 +200,6 @@ if (length(spec_filter) > 0) {
 spmTyperAtPlotte <- as.character(spmTyperAtPlotte.spmPlot)
 spmTyperAtPlotte <- spmTyperAtPlotte[!is.na(spmTyperAtPlotte) & nzchar(spmTyperAtPlotte)]
 spmTyperAtPlotte <- unique(spmTyperAtPlotte)
-# Selection (which categories to show explicitly). Everything else goes to "Andre spørgsmål".
-spmTyperAtPlotte <- as.character(spmTyperAtPlotte.spmPlot)
-spmTyperAtPlotte <- spmTyperAtPlotte[!is.na(spmTyperAtPlotte) & nzchar(spmTyperAtPlotte)]
-spmTyperAtPlotte <- unique(spmTyperAtPlotte)
 
 # Ensure "Andre spørgsmål" is never treated as a selectable category
 spmTyperAtPlotte <- setdiff(spmTyperAtPlotte, "Andre spørgsmål")
@@ -235,37 +231,41 @@ yearly_counts_spm <- filtered_data %>%
 total_count <- sum(yearly_counts_spm$Count, na.rm = TRUE)
 
 if (total_count == 0) {
-	message("ⓘ Ingen data tilgængelig med de valgte filtre. Viser 'Ingen data' beskeder.")
+  message("ⓘ Ingen data tilgængelig med de valgte filtre. Viser 'Ingen data' beskeder.")
 
-	p <- ggplot() +
-		annotate("text", x = 0.5, y = 0.5, label = "Ingen data",
-			    size = 24, fontface = "bold", color = "darkred") +
-		# Subtitle (clean)
-		subtitle_filters <- character(0)
+  subtitle_filters <- character(0)
 
-	if (!identical(regionToggle.spmPlot, "Begge")) {
-		subtitle_filters <- c(subtitle_filters, regionToggle.spmPlot)
-	}
+  if (!identical(regionToggle.spmPlot, "Begge")) {
+    subtitle_filters <- c(subtitle_filters, regionToggle.spmPlot)
+  }
+  if (!identical(svartypeFilterToggle.spmPlot, "Alle")) {
+    subtitle_filters <- c(subtitle_filters, svartypeFilterToggle.spmPlot)
+  }
 
-	if (!identical(svartypeFilterToggle.spmPlot, "Alle")) {
-		subtitle_filters <- c(subtitle_filters, svartypeFilterToggle.spmPlot)
-	}
+  subtitle_text <- paste(unique(c("Region Midtjylland", subtitle_filters)), collapse = " | ")
 
-	subtitle_text <- paste(unique(c("Region Midtjylland", subtitle_filters)), collapse = " | ")
+  p <- ggplot() +
+    annotate(
+      "text",
+      x = 0.5, y = 0.5,
+      label = "Ingen data",
+      size = 24,
+      fontface = "bold",
+      color = "darkred"
+    ) +
+    labs(
+      title    = "Forespørgsler per spørgsmålstype",
+      subtitle = subtitle_text
+    ) +
+    theme_void() +
+    theme(
+      plot.title    = element_text(size = 16, hjust = 0.5, face = "bold"),
+      plot.subtitle = ggtext::element_markdown(size = 12, hjust = 0.5),
+      panel.background = element_rect(fill = "white", color = NA),
+      plot.margin = margin(t = 10, r = 2, b = 2, l = 2, unit = "pt")
+    )
 
-	labs(
-		title    = "Forespørgsler per spørgsmålstype",
-		subtitle = subtitle_text
-	) +
-		theme_void() +
-		theme(
-			plot.title = element_text(size = 16, hjust = 0.5, face = "bold"),
-			plot.subtitle = ggtext::element_markdown(size = 12, hjust = 0.5),
-			panel.background = element_rect(fill = "white", color = NA),
-			plot.margin = margin(t = 10, r = 2, b = 2, l = 2, unit = "pt")
-		)
-
-	plot(p)
+  print(p)
 } else {
 	# Move "Andre spørgsmål" to the end of the levels
 	current_levels <- levels(yearly_counts_spm$spm_kat)

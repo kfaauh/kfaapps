@@ -154,21 +154,27 @@ biv_items_df <- biv_items_df %>%
     ))
   )
 
-biv_items_df <- biv_items_df %>%
-  mutate(
-    AdjustedDate = `Modtaget (*)`,
-    "Færdig (*)" = as.Date(NA)
-  )
 
 # Grundlæggende metadata til bivirkningsindberetninger
 biv_items_df <- biv_items_df %>%
   mutate(
+    AdjustedDate = as.Date(`Modtaget (*)`),
+    AdjustedDate = case_when(
+      lubridate::wday(AdjustedDate, week_start = 1) == 6 ~ AdjustedDate + days(2), # Saturday -> Monday
+      lubridate::wday(AdjustedDate, week_start = 1) == 7 ~ AdjustedDate + days(1), # Sunday   -> Monday
+      TRUE ~ AdjustedDate
+    ),
+    "Færdig (*)" = as.Date(NA)
+  ) %>%
+  mutate(
     "Svartype (*)" = "Bivirkningsindberetning",
     Year           = year(AdjustedDate),
+    ISOYear        = isoyear(AdjustedDate),
     Month          = month(AdjustedDate),
     MonthDate      = floor_date(AdjustedDate, unit = "month"),
     WeekNumber     = isoweek(AdjustedDate),
-    sektor         = "Hospital"
+    sektor         = "Hospital",
+    "Region (*)"   = "Midtjylland"
   )
 
 # Sæt Region (*) for bivirkningsdata, men undgå at skabe unødige NA-kolonner
@@ -186,6 +192,7 @@ biv_items_df <- biv_items_df %>%
     any_of("Modtaget (*)"),
     any_of("Færdig (*)"),
     any_of("Year"),
+    any_of("ISOYear"),
     any_of("Month"),
     any_of("MonthDate"),
     any_of("AdjustedDate"),
@@ -495,60 +502,62 @@ transform_data <- function(data) {
       select(-any_of(c("prev_modtaget", "next_modtaget")))
   }
 
-  data <- data %>%
-    mutate(
-      Year      = year(`Modtaget (*)`),
-      Month     = month(`Modtaget (*)`),
-      MonthDate = floor_date(`Modtaget (*)`, unit = "month"),
-      `Svartype (*)` = case_when(
-        `Svartype (*)` %in% c("Medicingennemgang SDCA", "SDCA MGG MADS") ~ "Medicingennemgang",
-        TRUE ~ `Svartype (*)`
-      ),
-      `Svartype (*)` = replace_na(`Svartype (*)`, "Andre"),
-      `Region (*)`   = replace_na(`Region (*)`, "Andre"),
-      ugedag_modtaget = weekdays(as.Date(`Modtaget (*)`)),
-      ugedag_svaret   = weekdays(as.Date(`Færdig (*)`))
-    ) %>%
-    mutate(
-      AdjustedDate = case_when(
-        ugedag_modtaget == "Saturday" ~ as.Date(`Modtaget (*)`) + days(2),
-        ugedag_modtaget == "Sunday"   ~ as.Date(`Modtaget (*)`) + days(1),
-        TRUE ~ as.Date(`Modtaget (*)`)
-      ),
-      ugedag_modtaget = weekdays(AdjustedDate),
-      WeekNumber      = isoweek(AdjustedDate),
-      svartid.raw = as.Date(`Færdig (*)`) - AdjustedDate,
-      svartid.NoWeekend = bizdays::bizdays(
-        AdjustedDate,
-        as.Date(`Færdig (*)`),
-        cal = "DK_weekends_only"
-      ),
-      svartid.NoWeekendNoHolidays = bizdays::bizdays(
-        AdjustedDate,
-        as.Date(`Færdig (*)`),
-        cal = "DK_helligdage"
-      )
-    ) %>%
-  	mutate(
-  		ugedag_modtaget = unname(eng_to_dk[ugedag_modtaget]),
-  		ugedag_svaret   = unname(eng_to_dk[ugedag_svaret]),
-  		sektor = dplyr::case_when(
-  			`Speciale (*)` == "Almen medicin" ~ "Almen praksis",
-  			!is.na(`Hospital (*)`)           ~ "Hospital",
-  			TRUE                             ~ NA_character_
-  		),
-      AdjustedDate = as_date(AdjustedDate),
-      FaerdigDate  = as_date(`Færdig (*)`),
-      svar_kategori = case_when(
-        `Svartype (*)` == "Medicingennemgang"       ~ "Medicingennemgang",
-        `Svartype (*)` == "Ibrugtagningssag"        ~ "Ibrugtagningssag",
-        `Svartype (*)` == "Kortsvar"                ~ "Kortsvar",
-        `Svartype (*)` == "Generel forespørgsel"    ~ "Generel forespørgsel",
-        `Svartype (*)` == "Almindeligt svar"        ~ "Almindeligt svar",
-        `Svartype (*)` == "Bivirkningsindberetning" ~ "Bivirkningsindberetning",
-        TRUE ~ NA_character_
-      )
+ data <- data %>%
+  mutate(
+    `Svartype (*)` = case_when(
+      `Svartype (*)` %in% c("Medicingennemgang SDCA", "SDCA MGG MADS") ~ "Medicingennemgang",
+      TRUE ~ `Svartype (*)`
+    ),
+    `Svartype (*)` = replace_na(`Svartype (*)`, "Andre"),
+    `Region (*)`   = replace_na(`Region (*)`, "Andre"),
+
+    ModtagetDate = as.Date(`Modtaget (*)`),
+    FaerdigDate  = as.Date(`Færdig (*)`),
+
+    # Locale-robust weekday (Mon=1 ... Sun=7)
+    wday_modtaget = lubridate::wday(ModtagetDate, week_start = 1),
+
+    AdjustedDate = case_when(
+      wday_modtaget == 6 ~ ModtagetDate + days(2),  # Saturday -> Monday
+      wday_modtaget == 7 ~ ModtagetDate + days(1),  # Sunday   -> Monday
+      TRUE               ~ ModtagetDate
+    ),
+
+    # Now derive display weekdays (still fine to translate later if you want)
+    ugedag_modtaget = weekdays(AdjustedDate),
+    ugedag_svaret   = weekdays(FaerdigDate),
+
+    # AUTHORITATIVE time fields (all from AdjustedDate)
+    Year       = year(AdjustedDate),
+    ISOYear    = isoyear(AdjustedDate),
+    Month      = month(AdjustedDate),
+    MonthDate  = floor_date(AdjustedDate, unit = "month"),
+    WeekNumber = isoweek(AdjustedDate),
+
+    svartid.raw = FaerdigDate - AdjustedDate,
+    svartid.NoWeekend = bizdays::bizdays(AdjustedDate, FaerdigDate, cal = "DK_weekends_only"),
+    svartid.NoWeekendNoHolidays = bizdays::bizdays(AdjustedDate, FaerdigDate, cal = "DK_helligdage")
+  ) %>%
+  mutate(
+    ugedag_modtaget = unname(eng_to_dk[ugedag_modtaget]),
+    ugedag_svaret   = unname(eng_to_dk[ugedag_svaret]),
+    sektor = dplyr::case_when(
+      `Speciale (*)` == "Almen medicin" ~ "Almen praksis",
+      !is.na(`Hospital (*)`)           ~ "Hospital",
+      TRUE                             ~ NA_character_
+    ),
+    AdjustedDate = as_date(AdjustedDate),
+    FaerdigDate  = as_date(`Færdig (*)`),
+    svar_kategori = case_when(
+      `Svartype (*)` == "Medicingennemgang"       ~ "Medicingennemgang",
+      `Svartype (*)` == "Ibrugtagningssag"        ~ "Ibrugtagningssag",
+      `Svartype (*)` == "Kortsvar"                ~ "Kortsvar",
+      `Svartype (*)` == "Generel forespørgsel"    ~ "Generel forespørgsel",
+      `Svartype (*)` == "Almindeligt svar"        ~ "Almindeligt svar",
+      `Svartype (*)` == "Bivirkningsindberetning" ~ "Bivirkningsindberetning",
+      TRUE ~ NA_character_
     )
+  )
 
   data
 }
@@ -706,10 +715,12 @@ data.lmraad_filtered <- data.lmraad_filtered %>%
     Bagvagt_affiliation,
     `Speciale (*)`,
     `Region (*)`,
-     any_of("Kommune"),
+    any_of("Kommune"),
     `Hospital (*)`,
     `Spørgsmålskategori (*)`,
     AdjustedDate,
+    Year,
+    ISOYear,
     Month,
     WeekNumber,
     ugedag_modtaget,
@@ -732,6 +743,7 @@ biv_sync_cols <- c(
   "Svartype (*)",
   "Modtaget (*)",
   "Year",
+  "ISOYear",
   "Month",
   "MonthDate",
   "AdjustedDate",
@@ -758,7 +770,7 @@ if (length(missing_cols) > 0) {
 biv_for_merge <- biv_for_merge %>%
   dplyr::select(all_of(all_cols))
 
-# Alle andre kolonner end de 8 sync-kolonner + Region (*) skal være NA for bivirkninger
+# Alle andre kolonner end sync-kolonnerne + Region (*) skal være NA for bivirkninger
 cols_to_na <- setdiff(all_cols, c(biv_sync_cols, "Region (*)"))
 biv_for_merge[cols_to_na] <- NA
 

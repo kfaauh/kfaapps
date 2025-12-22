@@ -96,6 +96,22 @@ as_days_numeric <- function(x) {
 data.lmraad_filtered <- data.lmraad_filtered %>%
   mutate(across(all_of(required_svartid_cols), as_days_numeric))
 
+# -----------------------------------------------------------------------------
+# Ensure precomputed time columns exist (used instead of recalculating from AdjustedDate)
+# -----------------------------------------------------------------------------
+required_time_cols <- c("Year", "Month", "WeekNumber")
+missing_time_cols <- setdiff(required_time_cols, names(data.lmraad_filtered))
+if (length(missing_time_cols) > 0) {
+  stop(
+    "Missing required time column(s) in data.lmraad_filtered: ",
+    paste(missing_time_cols, collapse = ", ")
+  )
+}
+
+# ISOYear is required for correct weekly labeling - but allow fallback for older datasets
+if (!("ISOYear" %in% names(data.lmraad_filtered))) {
+  message("Warning: ISOYear column missing - weekly plots will fall back to isoyear(AdjustedDate).")
+}
 
 # -----------------------------------------------------------------------------
 # 2. Helpers
@@ -167,8 +183,15 @@ weekly_base <- filtered_data %>%
   mutate(
     AdjustedDate = as.Date(AdjustedDate),
 
-    year_adj  = lubridate::year(AdjustedDate),
-    month_num = lubridate::month(AdjustedDate),
+# Use ISO year for weekly granularity (week-year), calendar year otherwise
+year_adj = if (identical(timeGranularity.timePlot, "Uge")) {
+  dplyr::coalesce(as.integer(ISOYear), lubridate::isoyear(AdjustedDate))
+} else {
+  dplyr::coalesce(as.integer(Year), lubridate::year(AdjustedDate))
+},
+
+month_num = dplyr::coalesce(as.integer(Month), lubridate::month(AdjustedDate)),
+week_num  = dplyr::coalesce(as.integer(WeekNumber), lubridate::isoweek(AdjustedDate)),
 
     month_adj = factor(
       month_num,
@@ -177,7 +200,8 @@ weekly_base <- filtered_data %>%
                  "Jul", "Aug", "Sep", "Okt", "Nov", "Dec")
     ),
 
-    quarter_num = lubridate::quarter(AdjustedDate),
+    # Derive quarter from Month (not from AdjustedDate)
+    quarter_num = ((month_num - 1) %/% 3) + 1L,
     quarter_adj = factor(quarter_num, levels = 1:4, labels = c("K1", "K2", "K3", "K4"))
   ) %>%
   filter(!is.na(AdjustedDate))
@@ -209,17 +233,26 @@ if (timeGranularity.timePlot == "Uge") {
     by   = "week"
   )
 
-  iso_year_seq <- lubridate::isoyear(week_seq)
-  iso_week_seq <- lubridate::isoweek(week_seq)
+# Map each week-start (Monday) to the dataset’s week-year/week number (ISO for weekly plots)
+  week_lookup <- weekly_base %>%
+    transmute(
+      week_start_date = floor_date(AdjustedDate, "week", week_start = 1),
+      year_adj = year_adj,
+      week_num = week_num
+    ) %>%
+    distinct(week_start_date, .keep_all = TRUE)
 
-  period_grid <- tibble::tibble(
-    iso_year       = iso_year_seq,
-    iso_week       = iso_week_seq,
-    year_adj       = iso_year_seq,
-    period_label   = sprintf("%d-W%02d", iso_year_seq, iso_week_seq),
-    period_display = sprintf("%02d", iso_week_seq)
-  ) %>%
-    dplyr::distinct(iso_year, iso_week, .keep_all = TRUE)
+  period_grid <- tibble::tibble(week_start_date = week_seq) %>%
+    left_join(week_lookup, by = "week_start_date") %>%
+    mutate(
+      # For weeks with zero observations (no mapping), fall back to ISO week/year of the Monday
+      year_adj = dplyr::coalesce(year_adj, lubridate::isoyear(week_start_date)),
+      week_num = dplyr::coalesce(week_num, lubridate::isoweek(week_start_date)),
+
+      period_label   = sprintf("%d-W%02d", year_adj, week_num),
+      period_display = sprintf("%02d", week_num)
+    ) %>%
+    distinct(year_adj, week_num, .keep_all = TRUE)
 
 } else if (timeGranularity.timePlot == "Måned") {
   month_seq <- seq.Date(
@@ -244,8 +277,18 @@ if (timeGranularity.timePlot == "Uge") {
   )
 
 } else if (timeGranularity.timePlot == "Kvartal") {
-  start_quarter_date <- as.Date(paste(start_year.timePlot, ((start_month.timePlot - 1) %/% 3) * 3 + 1, 1, sep = "-"))
-  end_quarter_date   <- as.Date(paste(end_year.timePlot,   ((end_month.timePlot  - 1) %/% 3) * 3 + 1, 1, sep = "-"))
+  start_quarter_date <- as.Date(paste(
+    start_year.timePlot,
+    ((start_month.timePlot - 1) %/% 3) * 3 + 1,
+    1,
+    sep = "-"
+  ))
+  end_quarter_date <- as.Date(paste(
+    end_year.timePlot,
+    ((end_month.timePlot - 1) %/% 3) * 3 + 1,
+    1,
+    sep = "-"
+  ))
 
   quarter_seq <- seq.Date(start_quarter_date, end_quarter_date, by = "quarter")
 
@@ -271,6 +314,11 @@ if (timeGranularity.timePlot == "Uge") {
 
 } else {
   stop("Invalid timeGranularity.timePlot. Allowed: 'Uge', 'Måned', 'Kvartal', 'År'.")
+}
+
+# ---- Critical: period_levels must be defined before Section 7 uses it ----
+if (is.null(period_grid) || !("period_label" %in% names(period_grid))) {
+  stop("period_grid was not created correctly - cannot define period_levels.")
 }
 
 period_levels <- period_grid$period_label
@@ -311,7 +359,6 @@ if (timeGranularity.timePlot != "År") {
 } else {
   year_data <- NULL
 }
-
 # -----------------------------------------------------------------------------
 # 7. Bin observations to periods
 # -----------------------------------------------------------------------------
@@ -321,9 +368,8 @@ binned <- weekly_filtered
 if (timeGranularity.timePlot == "Uge") {
   binned <- binned %>%
     mutate(
-      iso_year     = lubridate::isoyear(AdjustedDate),
-      iso_week     = lubridate::isoweek(AdjustedDate),
-      period_label = sprintf("%d-W%02d", iso_year, iso_week)
+      # Use precomputed year/week from the data
+      period_label = sprintf("%d-W%02d", year_adj, week_num)
     )
 } else if (timeGranularity.timePlot == "Måned") {
   binned <- binned %>%
@@ -425,12 +471,34 @@ if (nrow(line_data) > 0) {
     mutate(series_label = factor(character(0)), value = numeric(0))
 }
 
-# NEW: Only add markers when some time bins are missing (i.e. NA after join)
+# Points logic:
+# - If bins are missing: show points for all non-missing values (your current behavior)
+# - Else if a series has only 1 point: show that point (geom_line would draw nothing)
+# - Else: no points
+
 has_missing_bins <- (nrow(line_data) > 0) && any(is.na(line_data$value))
+
 line_data_for_geom <- if (isTRUE(has_missing_bins)) {
   line_data %>% filter(!is.na(value))
 } else {
   line_data
+}
+
+single_point_series <- line_data %>%
+  filter(!is.na(value)) %>%
+  count(series_label, name = "n_pts") %>%
+  filter(n_pts == 1L) %>%
+  pull(series_label)
+
+has_single_point_series <- length(single_point_series) > 0L
+
+point_data_for_geom <- if (isTRUE(has_missing_bins)) {
+  line_data_for_geom
+} else if (isTRUE(has_single_point_series)) {
+  line_data %>%
+    filter(!is.na(value), series_label %in% single_point_series)
+} else {
+  NULL
 }
 
 # -----------------------------------------------------------------------------
@@ -561,21 +629,21 @@ p <- p +
     na.rm     = TRUE
   )
 
-# NEW: Markers only when there are missing bins
-if (isTRUE(has_missing_bins)) {
+# Points: when bins are missing OR when a series has only one point
+if (!is.null(point_data_for_geom) && nrow(point_data_for_geom) > 0) {
   p <- p +
     geom_point(
-      data = line_data_for_geom,
+      data = point_data_for_geom,
       aes(
         x     = period_label,
         y     = value,
         color = series_label,
         group = series_label
       ),
-      size  = 2.5,
-      alpha = 0.9,
+      size   = 2.5,
+      alpha  = 0.9,
       stroke = 0,
-      na.rm = TRUE
+      na.rm  = TRUE
     )
 }
 
