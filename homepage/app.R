@@ -93,6 +93,11 @@ ui <- fluidPage(
           href = "https://kfaapps.au.dk/bivirkninger/",
           class = "link-button",
           "Bivirkninger fra pro.medicin.dk"
+        ),
+         tags$a(
+          href = "https://kfaapps.au.dk/graviditet/",
+          class = "link-button",
+          "Graviditet og amning"
         )
     ),
 
