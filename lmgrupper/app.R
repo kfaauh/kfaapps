@@ -141,16 +141,14 @@ server <- function(input, output, session) {
   output$tableOutput <- renderDT({
     df <- filteredData()
     if (nrow(df) == 0) return(datatable(df))
-
+    
     filter_columns <- c("Indholdsstof", "Styrke", "Form", "Pakning", "Handelsnavn")
     df[filter_columns] <- lapply(df[filter_columns], as.factor)
-
-    col_vals <- df[["Pris pr. DDD"]]
-    brks <- quantile(col_vals, probs = seq(0, 1, 0.01), na.rm = TRUE)
-    base_clrs <- colorRampPalette(c("green","yellow","red"))(length(brks) + 1)
-    clrs <- sapply(base_clrs, function(x) adjustcolor(x, alpha.f = 0.5))
-
-    datatable(
+    
+    df[["Pris pr. DDD"]] <- suppressWarnings(as.numeric(df[["Pris pr. DDD"]]))
+    valid_vals <- df[["Pris pr. DDD"]][is.finite(df[["Pris pr. DDD"]])]
+    
+    dt <- datatable(
       df,
       rownames = FALSE,
       filter = "top",
@@ -174,11 +172,21 @@ server <- function(input, output, session) {
         )
       )
     ) %>%
-      formatStyle(
-        columns = c("Pris pr. DDD"),
-        backgroundColor = styleInterval(brks, clrs)
-      ) %>%
       formatRound("Pris pr. DDD", 2)
+    
+    if (length(valid_vals) > 0) {
+      brks <- quantile(valid_vals, probs = seq(0, 1, 0.01), na.rm = TRUE)
+      base_clrs <- colorRampPalette(c("green","yellow","red"))(length(brks) + 1)
+      clrs <- sapply(base_clrs, function(x) adjustcolor(x, alpha.f = 0.5))
+      
+      dt <- dt %>%
+        formatStyle(
+          columns = c("Pris pr. DDD"),
+          backgroundColor = styleInterval(brks, clrs)
+        )
+    }
+    
+    dt
   })
 }
 
