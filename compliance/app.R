@@ -7,323 +7,878 @@ credentials <- data.frame(
   stringsAsFactors = FALSE
 )
 
-ui <- secure_app(fluidPage(
-  
-  # Titel
-  titlePanel("Kør compliance-appen lokalt på egen computer"),
-  
-  # Introduktion
-  h3("Vejledning:"),
-  p("1) Installér R og RStudio via link nedenfor (husk at aktivere Heimdal Agent på AU-computere)"),
-  p("2) Download 'ListeOverGodkendteLaegemidler.xlsx' og gem første ark som UTF-8 CSV-fil med navnet 'ListeOverGodkendteLaegemidler'"),
-  p("3) Åbn RStudio og opret et nyt R script (Ctrl+Shift+N)"),
-  p("4) Kopiér scriptet nedenfor ind i det nye R script og gem scriptet som eks. 'Compliance-app'"),
-  p("5) Følg guiden inde i scriptet til at angive den korrekte fil-sti"),
-  p("6) Kør appen"),
-  
-  # Links
-h3("Links"),
-p("Links til at downloade R og RStudio samt at downloade 'ListeOverGodkendteLaegemidler.xlsx'"),
-
-tags$ul(
-  # RStudio-link
-  tags$li(
-    a("Download R og RStudio", 
-      href = "https://posit.co/download/rstudio-desktop/", 
-      target = "_blank")
+inner_app_code <- paste(
+  c(
+    "# Funktioner til at installere R-pakker (kan slettes efter pakkerne er installeret første gang)",
+    "install.packages('shiny')",
+    "install.packages('tidyverse')",
+    "install.packages('lubridate')",
+    "install.packages('readr')",
+    "install.packages('zoo')",
+    "",
+    "# Indlæs pakker",
+    "library(shiny)",
+    "library(tidyverse)",
+    "library(lubridate)",
+    "library(readr)",
+    "library(zoo)",
+    "",
+    "setwd(\"C:/Users/...\") # Indsæt sti til mappe hvor \"ListeOverGodkendteLaegemidler.csv\" ligger",
+    "                      # Guide:",
+    "                      # 1) Vælg \"Session\" -> \"Set Working Directory\" -> \"Choose Directory...\" (eller Ctrl+Shift+H)",
+    "                      # 2) Navigér til mappen og tryk \"Open\"",
+    "                      # 3) Funktionen der angiver stien kommer nu frem nede i \"Console\" som \"setwd(\\\"*Sti til mappen*\\\")\"",
+    "                      # 4) Kopiér funktionen og sæt ind i scriptet i stedet for den nuværende",
+    "                      # 5) Gem scriptet og tryk \"Run app\" eller tryk Alt+Ctrl+R",
+    "                      # 6) Ovenstående skal kun gøres første gang, efterfølgende kan man bare trykke \"Run app\" eller Alt+Ctrl+R",
+    "                      # 7) Hvis alt virker, som det skal, kan install.packages-linjerne slettes",
+    "",
+    "parse_decimal <- function(x) {",
+    "  x <- as.character(x)",
+    "  x <- str_replace_all(x, fixed(\",\"), \".\")",
+    "  suppressWarnings(as.numeric(x))",
+    "}",
+    "",
+    "format_key_number <- function(x) {",
+    "  if (length(x) == 0 || is.na(x)) return(NA_character_)",
+    "  formatC(x, digits = 12, format = \"fg\", flag = \"#\")",
+    "}",
+    "",
+    "canonical_strength_text <- function(x) {",
+    "  x %>%",
+    "    as.character() %>%",
+    "    str_to_lower() %>%",
+    "    str_replace_all(\"μ\", \"µ\") %>%",
+    "    str_replace_all(fixed(\",\"), \".\") %>%",
+    "    str_squish() %>%",
+    "    str_replace_all(\"\\\\s*/\\\\s*\", \"/\") %>%",
+    "    str_replace_all(\"\\\\s*%\", \"%\")",
+    "}",
+    "",
+    "normalize_unit <- function(unit) {",
+    "  if (length(unit) == 0 || all(is.na(unit))) return(NA_character_)",
+    "  unit_raw <- str_to_lower(str_squish(as.character(unit)))",
+    "  unit_raw <- str_replace_all(unit_raw, \"μ\", \"µ\")",
+    "",
+    "  case_when(",
+    "    is.na(unit_raw) | unit_raw == \"\" ~ NA_character_,",
+    "    unit_raw %in% c(\"mg\") ~ \"mg\",",
+    "    unit_raw %in% c(\"mikrogram\", \"microgram\", \"mcg\", \"µg\", \"ug\") ~ \"mikrogram\",",
+    "    unit_raw %in% c(\"g\") ~ \"g\",",
+    "    unit_raw %in% c(\"ml\") ~ \"ml\",",
+    "    unit_raw %in% c(\"l\", \"liter\", \"litre\") ~ \"l\",",
+    "    unit_raw %in% c(\"enhed\", \"enheder\", \"unit\", \"units\") ~ \"enheder\",",
+    "    unit_raw %in% c(\"ie\", \"iu\") ~ \"IE\",",
+    "    unit_raw %in% c(\"mol\") ~ \"mol\",",
+    "    unit_raw %in% c(\"mmol\") ~ \"mmol\",",
+    "    unit_raw %in% c(\"µmol\", \"umol\", \"mikromol\", \"micromol\") ~ \"µmol\",",
+    "    unit_raw %in% c(\"%\", \"procent\", \"percent\") ~ \"procent\",",
+    "    TRUE ~ unit_raw",
+    "  )",
+    "}",
+    "",
+    "normalize_base_unit <- function(unit_norm) {",
+    "  case_when(",
+    "    is.na(unit_norm) ~ NA_character_,",
+    "    unit_norm %in% c(\"mg\", \"mikrogram\", \"g\") ~ \"mg\",",
+    "    unit_norm %in% c(\"ml\", \"l\") ~ \"ml\",",
+    "    TRUE ~ unit_norm",
+    "  )",
+    "}",
+    "",
+    "convert_to_base_unit <- function(value, unit_norm) {",
+    "  case_when(",
+    "    is.na(value) | is.na(unit_norm) ~ NA_real_,",
+    "    unit_norm == \"mg\" ~ value,",
+    "    unit_norm == \"mikrogram\" ~ value / 1000,",
+    "    unit_norm == \"g\" ~ value * 1000,",
+    "    unit_norm == \"ml\" ~ value,",
+    "    unit_norm == \"l\" ~ value * 1000,",
+    "    TRUE ~ value",
+    "  )",
+    "}",
+    "",
+    "extract_first_word <- function(x) {",
+    "  x_clean <- x %>%",
+    "    as.character() %>%",
+    "    str_squish() %>%",
+    "    str_replace_all('\"[^\"]+\"', '')",
+    "",
+    "  out <- str_extract(x_clean, \"[[:alnum:][:alpha:]]+\")",
+    "  ifelse(is.na(out), \"\", out)",
+    "}",
+    "",
+    "make_strength_ratio_key <- function(x) {",
+    "  x_clean <- canonical_strength_text(x)",
+    "",
+    "  percent_match <- str_match(x_clean, \"(\\\\d+(?:[\\\\.,]\\\\d+)?)%\")",
+    "  if (!is.na(percent_match[1, 1])) {",
+    "    percent_value <- parse_decimal(percent_match[1, 2])",
+    "    mg_per_g <- percent_value * 10",
+    "    return(paste0(\"mg_per_g:\", format_key_number(mg_per_g)))",
+    "  }",
+    "",
+    "  ratio_match <- str_match(",
+    "    x_clean,",
+    "    \"(\\\\d+(?:[\\\\.,]\\\\d+)?)\\\\s*([[:alpha:]µ]+)\\\\s*/\\\\s*([[:alpha:]µ]+)\\\\b\"",
+    "  )",
+    "",
+    "  if (!is.na(ratio_match[1, 1])) {",
+    "    num_value <- parse_decimal(ratio_match[1, 2])",
+    "    num_unit <- normalize_unit(ratio_match[1, 3])",
+    "    den_unit <- normalize_unit(ratio_match[1, 4])",
+    "",
+    "    num_unit_base <- normalize_base_unit(num_unit)",
+    "    num_value_base <- convert_to_base_unit(num_value, num_unit)",
+    "",
+    "    den_base <- case_when(",
+    "      den_unit == \"l\" ~ \"ml\",",
+    "      den_unit %in% c(\"g\", \"ml\") ~ den_unit,",
+    "      TRUE ~ NA_character_",
+    "    )",
+    "",
+    "    den_factor <- case_when(",
+    "      den_unit == \"l\" ~ 1000,",
+    "      den_unit %in% c(\"g\", \"ml\") ~ 1,",
+    "      TRUE ~ NA_real_",
+    "    )",
+    "",
+    "    if (!is.na(num_value_base) && !is.na(num_unit_base) && !is.na(den_base) && !is.na(den_factor)) {",
+    "      ratio_value <- num_value_base / den_factor",
+    "      return(paste0(num_unit_base, \"_per_\", den_base, \":\", format_key_number(ratio_value)))",
+    "    }",
+    "  }",
+    "",
+    "  bare_numeric_match <- str_match(x_clean, \"^(\\\\d+(?:[\\\\.,]\\\\d+)?)$\")",
+    "  if (!is.na(bare_numeric_match[1, 1])) {",
+    "    bare_value <- parse_decimal(bare_numeric_match[1, 2])",
+    "    if (!is.na(bare_value) && bare_value > 0 && bare_value <= 1) {",
+    "      mg_per_g <- bare_value * 1000",
+    "      return(paste0(\"mg_per_g:\", format_key_number(mg_per_g)))",
+    "    }",
+    "  }",
+    "",
+    "  NA_character_",
+    "}",
+    "",
+    "parse_strength_one <- function(x) {",
+    "  x_original <- ifelse(is.na(x), \"\", as.character(x))",
+    "  x_clean <- canonical_strength_text(x_original)",
+    "  unit_pattern <- \"[[:alpha:]µ%]+\"",
+    "",
+    "  percent_match <- str_match(x_clean, \"(\\\\d+(?:[\\\\.,]\\\\d+)?)%\")",
+    "  if (!is.na(percent_match[1, 1])) {",
+    "    percent_value <- parse_decimal(percent_match[1, 2])",
+    "    return(tibble(",
+    "      dose_kind = \"percent\",",
+    "      strength_fraction = percent_value / 100,",
+    "      dose_first_raw = percent_value,",
+    "      dose_unit_input = \"procent\",",
+    "      dose_unit_base = NA_character_,",
+    "      dose_first_base = NA_real_,",
+    "      is_combination_strength = str_detect(x_clean, \"\\\\+\"),",
+    "      strength_parse_failed = FALSE",
+    "    ))",
+    "  }",
+    "",
+    "  bare_numeric_match <- str_match(x_clean, \"^(\\\\d+(?:[\\\\.,]\\\\d+)?)$\")",
+    "  if (!is.na(bare_numeric_match[1, 1])) {",
+    "    bare_value <- parse_decimal(bare_numeric_match[1, 2])",
+    "    if (!is.na(bare_value) && bare_value > 0 && bare_value <= 1) {",
+    "      return(tibble(",
+    "        dose_kind = \"percent\",",
+    "        strength_fraction = bare_value,",
+    "        dose_first_raw = bare_value * 100,",
+    "        dose_unit_input = \"procent\",",
+    "        dose_unit_base = NA_character_,",
+    "        dose_first_base = NA_real_,",
+    "        is_combination_strength = FALSE,",
+    "        strength_parse_failed = FALSE",
+    "      ))",
+    "    }",
+    "  }",
+    "",
+    "  shared_unit_match <- str_match(",
+    "    x_clean,",
+    "    paste0(\"(\\\\d+(?:[\\\\.,]\\\\d+)?)\\\\s*\\\\+\\\\s*\\\\d+(?:[\\\\.,]\\\\d+)?\\\\s*(\", unit_pattern, \")\\\\b\")",
+    "  )",
+    "",
+    "  standard_match <- str_match(",
+    "    x_clean,",
+    "    paste0(\"(\\\\d+(?:[\\\\.,]\\\\d+)?)\\\\s*(\", unit_pattern, \")\\\\b\")",
+    "  )",
+    "",
+    "  if (!is.na(shared_unit_match[1, 1])) {",
+    "    dose_value_raw <- parse_decimal(shared_unit_match[1, 2])",
+    "    unit_raw <- shared_unit_match[1, 3]",
+    "  } else if (!is.na(standard_match[1, 1])) {",
+    "    dose_value_raw <- parse_decimal(standard_match[1, 2])",
+    "    unit_raw <- standard_match[1, 3]",
+    "  } else {",
+    "    dose_value_raw <- NA_real_",
+    "    unit_raw <- NA_character_",
+    "  }",
+    "",
+    "  unit_input <- normalize_unit(unit_raw)",
+    "  unit_base <- normalize_base_unit(unit_input)",
+    "  dose_base_value <- convert_to_base_unit(dose_value_raw, unit_input)",
+    "",
+    "  tibble(",
+    "    dose_kind = \"absolute\",",
+    "    strength_fraction = NA_real_,",
+    "    dose_first_raw = dose_value_raw,",
+    "    dose_unit_input = unit_input,",
+    "    dose_unit_base = unit_base,",
+    "    dose_first_base = dose_base_value,",
+    "    is_combination_strength = str_detect(x_clean, \"\\\\+\"),",
+    "    strength_parse_failed = is.na(dose_base_value)",
+    "  )",
+    "}",
+    "",
+    "parse_pack_one <- function(x) {",
+    "  x_original <- ifelse(is.na(x), \"\", as.character(x))",
+    "  x_clean <- canonical_strength_text(x_original)",
+    "",
+    "  x_chain_match <- str_match(",
+    "    x_clean,",
+    "    \"((?:\\\\d+(?:[\\\\.,]\\\\d+)?\\\\s*[x×]\\\\s*)+\\\\d+(?:[\\\\.,]\\\\d+)?)\"",
+    "  )",
+    "",
+    "  if (!is.na(x_chain_match[1, 2])) {",
+    "    chain_text <- x_chain_match[1, 2]",
+    "    chain_numbers <- str_extract_all(chain_text, \"\\\\d+(?:[\\\\.,]\\\\d+)?\")[[1]]",
+    "    chain_numbers_num <- parse_decimal(chain_numbers)",
+    "    pack_value <- prod(chain_numbers_num)",
+    "    has_multiplier <- TRUE",
+    "  } else {",
+    "    numbers <- str_extract_all(x_clean, \"\\\\d+(?:[\\\\.,]\\\\d+)?\")[[1]]",
+    "    numbers_num <- parse_decimal(numbers)",
+    "    pack_value <- if (length(numbers_num) == 0) NA_real_ else numbers_num[1]",
+    "    has_multiplier <- FALSE",
+    "  }",
+    "",
+    "  unit_match <- str_match(",
+    "    x_clean,",
+    "    \"(?:(?:\\\\d+(?:[\\\\.,]\\\\d+)?\\\\s*[x×]\\\\s*)+\\\\d+(?:[\\\\.,]\\\\d+)?|\\\\d+(?:[\\\\.,]\\\\d+)?)\\\\s*([[:alpha:]µ]+)\\\\b\"",
+    "  )",
+    "",
+    "  pack_unit_input <- normalize_unit(unit_match[1, 2])",
+    "  pack_unit_base <- normalize_base_unit(pack_unit_input)",
+    "  pack_amount_base <- convert_to_base_unit(pack_value, pack_unit_input)",
+    "",
+    "  tibble(",
+    "    pack_numeric = pack_value,",
+    "    pack_unit_input = pack_unit_input,",
+    "    pack_unit_base = pack_unit_base,",
+    "    pack_amount_base = pack_amount_base,",
+    "    pack_has_multiplier = has_multiplier,",
+    "    pack_parse_failed = is.na(pack_value)",
+    "  )",
+    "}",
+    "",
+    "make_plot_id <- function(atc_code, unit = NULL) {",
+    "  if (is.null(unit) || length(unit) == 0 || is.na(unit) || identical(unit, \"\")) {",
+    "    unit <- \"ukendt_enhed\"",
+    "  }",
+    "",
+    "  paste0(",
+    "    \"plot_\",",
+    "    gsub(\"[^A-Za-z0-9]\", \"_\", atc_code),",
+    "    \"_\",",
+    "    gsub(\"[^A-Za-z0-9]\", \"_\", unit)",
+    "  )",
+    "}",
+    "",
+    "format_examples <- function(df, n = 5) {",
+    "  if (is.null(df) || nrow(df) == 0) return(NULL)",
+    "",
+    "  df %>%",
+    "    mutate(label = paste0(Lægemiddel, \" (\", Styrke, \")\")) %>%",
+    "    distinct(label) %>%",
+    "    pull(label) %>%",
+    "    head(n) %>%",
+    "    paste(collapse = \"; \")",
+    "}",
+    "",
+    "ui <- fluidPage(",
+    "  titlePanel(\"Effektueringer, dagligt forbrug og visualiseringer\"),",
+    "  sidebarLayout(",
+    "    sidebarPanel(",
+    "      fileInput(\"file\", \"Upload .csv-fil\", accept = \".csv\"),",
+    "      downloadButton(\"downloadData\", \"Download .csv-fil med processeret data\")",
+    "    ),",
+    "    mainPanel(",
+    "      div(",
+    "        style = \"background-color:#fff3cd; border:1px solid #ffe69c; padding:12px; margin-bottom:15px; border-radius:6px;\",",
+    "        tags$strong(\"Vigtigt: \"),",
+    "        \"Appen bygger på apoteksudleveringer og fanger derfor ikke lægemidler, der gives vederlagsfrit, som dosispakket medicin eller som hospitalsmedicin.\"",
+    "      ),",
+    "      div(",
+    "        style = \"background-color:#e8f4ff; border:1px solid #b6ddff; padding:12px; margin-bottom:15px; border-radius:6px;\",",
+    "        tags$strong(\"Fortolkning af styrker og pakninger: \"),",
+    "        \"Mikrogram og gram omregnes automatisk til mg før summering. Andre enheder som fx enheder, IE, mol og mmol bevares. Procentstyrker beregnes ud fra pakningsmængden, fx 0,1% af 30 g = 30 mg. Hvis samme ATC-kode findes med flere forskellige enheder, vises de separat. Kombinationspræparater med '+' medregnes kun med første dosisangivelse. Pakninger med 'x' tolkes multiplikativt, fx '5 x 3 ml' = 15 ml.\"",
+    "      ),",
+    "      uiOutput(\"warnings\"),",
+    "      uiOutput(\"table\"),",
+    "      verbatimTextOutput(\"message\"),",
+    "      uiOutput(\"plotLegend\"),",
+    "      uiOutput(\"plots\")",
+    "    )",
+    "  )",
+    ")",
+    "",
+    "server <- function(input, output, session) {",
+    "  processed_result <- reactive({",
+    "    req(input$file)",
+    "",
+    "    tryCatch({",
+    "      data <- read.csv(",
+    "        input$file$datapath,",
+    "        header = FALSE,",
+    "        sep = \";\",",
+    "        stringsAsFactors = FALSE,",
+    "        fileEncoding = \"ISO-8859-1\"",
+    "      ) %>%",
+    "        select(V1:V5) %>%",
+    "        rename(",
+    "          Dato = V1,",
+    "          Lægemiddel = V2,",
+    "          Styrke = V3,",
+    "          Pakkestørrelse = V4,",
+    "          Antal.pakker = V5",
+    "        ) %>%",
+    "        mutate(",
+    "          Dato = dmy(Dato),",
+    "          Lægemiddel = str_squish(gsub('\"[^\"]+\"', '', Lægemiddel)),",
+    "          first_word = extract_first_word(Lægemiddel),",
+    "          Antal.pakker_num = parse_decimal(Antal.pakker)",
+    "        )",
+    "",
+    "      strength_info <- purrr::map_dfr(data$Styrke, parse_strength_one)",
+    "      pack_info <- purrr::map_dfr(data$Pakkestørrelse, parse_pack_one)",
+    "",
+    "      data <- bind_cols(data, strength_info, pack_info) %>%",
+    "        mutate(",
+    "          strength_key_raw = canonical_strength_text(Styrke),",
+    "          strength_key_ratio = purrr::map_chr(Styrke, make_strength_ratio_key),",
+    "          result_unit = case_when(",
+    "            dose_kind == \"percent\" ~ pack_unit_base,",
+    "            TRUE ~ dose_unit_base",
+    "          ),",
+    "          row_total_amount = case_when(",
+    "            dose_kind == \"percent\" & !is.na(strength_fraction) & !is.na(pack_amount_base) & !is.na(Antal.pakker_num) ~ strength_fraction * pack_amount_base * Antal.pakker_num,",
+    "            dose_kind == \"absolute\" & !is.na(dose_first_base) & !is.na(pack_numeric) & !is.na(Antal.pakker_num) ~ dose_first_base * pack_numeric * Antal.pakker_num,",
+    "            TRUE ~ NA_real_",
+    "          )",
+    "        )",
+    "",
+    "      drugs <- read.csv2(",
+    "        \"ListeOverGodkendteLaegemidler.csv\",",
+    "        header = FALSE,",
+    "        sep = \";\",",
+    "        fileEncoding = \"ISO-8859-1\"",
+    "      ) %>%",
+    "        select(Lægemiddel = V2, Styrke = V4, ATC = V7) %>%",
+    "        filter(str_length(ATC) <= 7) %>%",
+    "        distinct(Lægemiddel, Styrke, ATC, .keep_all = TRUE) %>%",
+    "        mutate(",
+    "          Lægemiddel = str_squish(gsub('\"[^\"]+\"', '', Lægemiddel)),",
+    "          first_word = extract_first_word(Lægemiddel),",
+    "          strength_key_raw = canonical_strength_text(Styrke),",
+    "          strength_key_ratio = purrr::map_chr(Styrke, make_strength_ratio_key)",
+    "        )",
+    "",
+    "      data <- data %>%",
+    "        distinct(first_word, Styrke, Dato, Pakkestørrelse, Antal.pakker, .keep_all = TRUE)",
+    "",
+    "      drugs_raw_key <- drugs %>%",
+    "        filter(first_word != \"\", !is.na(strength_key_raw), strength_key_raw != \"\") %>%",
+    "        distinct(first_word, strength_key_raw, ATC)",
+    "",
+    "      drugs_ratio_key <- drugs %>%",
+    "        filter(first_word != \"\", !is.na(strength_key_ratio)) %>%",
+    "        distinct(first_word, strength_key_ratio, ATC)",
+    "",
+    "      drugs_firstword_fallback <- drugs %>%",
+    "        filter(first_word != \"\") %>%",
+    "        group_by(first_word) %>%",
+    "        summarize(",
+    "          ATC_firstword = if (n_distinct(ATC) == 1) dplyr::first(ATC) else NA_character_,",
+    "          .groups = \"drop\"",
+    "        )",
+    "",
+    "      atc_rows <- data %>%",
+    "        left_join(",
+    "          drugs_raw_key %>% rename(ATC_raw = ATC),",
+    "          by = c(\"first_word\", \"strength_key_raw\")",
+    "        ) %>%",
+    "        left_join(",
+    "          drugs_ratio_key %>% rename(ATC_ratio = ATC),",
+    "          by = c(\"first_word\", \"strength_key_ratio\")",
+    "        ) %>%",
+    "        left_join(",
+    "          drugs_firstword_fallback,",
+    "          by = \"first_word\"",
+    "        ) %>%",
+    "        mutate(",
+    "          ATC = coalesce(ATC_raw, ATC_ratio, ATC_firstword)",
+    "        )",
+    "",
+    "      combination_rows <- atc_rows %>%",
+    "        filter(is_combination_strength) %>%",
+    "        distinct(Lægemiddel, Styrke, ATC)",
+    "",
+    "      strength_fail_rows <- atc_rows %>%",
+    "        filter(strength_parse_failed) %>%",
+    "        distinct(Lægemiddel, Styrke, ATC)",
+    "",
+    "      pack_fail_rows <- atc_rows %>%",
+    "        filter(pack_parse_failed) %>%",
+    "        distinct(Lægemiddel, Styrke, Pakkestørrelse, ATC)",
+    "",
+    "      unmatched_atc_rows <- atc_rows %>%",
+    "        filter(is.na(ATC)) %>%",
+    "        distinct(Lægemiddel, Styrke)",
+    "",
+    "      microgram_rows <- atc_rows %>%",
+    "        filter(dose_unit_input == \"mikrogram\") %>%",
+    "        distinct(Lægemiddel, Styrke, ATC)",
+    "",
+    "      atcdata <- atc_rows %>%",
+    "        filter(!is.na(ATC), !is.na(result_unit), !is.na(Dato)) %>%",
+    "        group_by(ATC, Enhed = result_unit, Dato) %>%",
+    "        summarize(",
+    "          Lægemiddel = dplyr::last(Lægemiddel),",
+    "          `Total mængde` = sum(row_total_amount, na.rm = TRUE),",
+    "          antal_udeladte_linjer = sum(is.na(row_total_amount)),",
+    "          .groups = \"drop\"",
+    "        ) %>%",
+    "        arrange(ATC, Enhed, Dato) %>%",
+    "        group_by(ATC, Enhed) %>%",
+    "        mutate(",
+    "          periode_dage = abs(as.numeric(difftime(Dato, lead(Dato), units = \"days\"))),",
+    "          `Dagligt forbrug (gennemsnit for aktuelle periode)` = if_else(",
+    "            !is.na(periode_dage) & periode_dage > 0,",
+    "            round(`Total mængde` / periode_dage, 1),",
+    "            NA_real_",
+    "          ),",
+    "          `Rullende gennemsnit (sidste 3 perioder)` = zoo::rollmean(",
+    "            `Dagligt forbrug (gennemsnit for aktuelle periode)`,",
+    "            k = 3,",
+    "            fill = NA,",
+    "            align = \"right\"",
+    "          ),",
+    "          total_dosage = sum(`Total mængde`[Dato != max(Dato)], na.rm = TRUE),",
+    "          total_days = as.numeric(max(Dato) - min(Dato)),",
+    "          `Gennemsnit for hele perioden` = if_else(",
+    "            total_days > 0,",
+    "            round(total_dosage / total_days, 1),",
+    "            NA_real_",
+    "          ),",
+    "          Dato = format(Dato, \"%d-%m-%Y\")",
+    "        ) %>%",
+    "        ungroup() %>%",
+    "        select(",
+    "          Dato,",
+    "          Lægemiddel,",
+    "          Enhed,",
+    "          ATC,",
+    "          `Total mængde`,",
+    "          `Dagligt forbrug (gennemsnit for aktuelle periode)`,",
+    "          `Rullende gennemsnit (sidste 3 perioder)`,",
+    "          `Gennemsnit for hele perioden`",
+    "        )",
+    "",
+    "      list(",
+    "        data = atcdata,",
+    "        raw_rows = atc_rows,",
+    "        combination_rows = combination_rows,",
+    "        strength_fail_rows = strength_fail_rows,",
+    "        pack_fail_rows = pack_fail_rows,",
+    "        unmatched_atc_rows = unmatched_atc_rows,",
+    "        microgram_rows = microgram_rows,",
+    "        error = NULL",
+    "      )",
+    "    }, error = function(e) {",
+    "      list(",
+    "        data = NULL,",
+    "        raw_rows = NULL,",
+    "        combination_rows = NULL,",
+    "        strength_fail_rows = NULL,",
+    "        pack_fail_rows = NULL,",
+    "        unmatched_atc_rows = NULL,",
+    "        microgram_rows = NULL,",
+    "        error = e$message",
+    "      )",
+    "    })",
+    "  })",
+    "",
+    "  output$message <- renderText({",
+    "    res <- processed_result()",
+    "    if (!is.null(res$error)) paste(\"Error:\", res$error) else \"\"",
+    "  })",
+    "",
+    "  output$warnings <- renderUI({",
+    "    res <- processed_result()",
+    "    if (!is.null(res$error)) return(NULL)",
+    "",
+    "    warning_items <- list()",
+    "",
+    "    if (!is.null(res$microgram_rows) && nrow(res$microgram_rows) > 0) {",
+    "      warning_items <- append(warning_items, list(",
+    "        tags$li(",
+    "          tags$strong(\"Enhedsomregning: \"),",
+    "          sprintf(",
+    "            \"%s præparat(er) var angivet i mikrogram og er omregnet til mg før beregning.\",",
+    "            nrow(res$microgram_rows)",
+    "          )",
+    "        )",
+    "      ))",
+    "    }",
+    "",
+    "    if (!is.null(res$combination_rows) && nrow(res$combination_rows) > 0) {",
+    "      warning_items <- append(warning_items, list(",
+    "        tags$li(",
+    "          tags$strong(\"Kombinationspræparater: \"),",
+    "          sprintf(",
+    "            \"%s præparat(er) indeholdt '+' i styrken. Kun første dosisangivelse er medregnet. Eksempler: %s\",",
+    "            nrow(res$combination_rows),",
+    "            format_examples(res$combination_rows)",
+    "          )",
+    "        )",
+    "      ))",
+    "    }",
+    "",
+    "    if (!is.null(res$strength_fail_rows) && nrow(res$strength_fail_rows) > 0) {",
+    "      warning_items <- append(warning_items, list(",
+    "        tags$li(",
+    "          tags$strong(\"Styrke kunne ikke tolkes: \"),",
+    "          sprintf(",
+    "            \"%s præparat(er) kunne ikke fortolkes sikkert og er derfor udeladt fra dosisberegningen. Eksempler: %s\",",
+    "            nrow(res$strength_fail_rows),",
+    "            format_examples(res$strength_fail_rows)",
+    "          )",
+    "        )",
+    "      ))",
+    "    }",
+    "",
+    "    if (!is.null(res$pack_fail_rows) && nrow(res$pack_fail_rows) > 0) {",
+    "      pack_examples <- res$pack_fail_rows %>%",
+    "        mutate(label = paste0(Lægemiddel, \" (\", Pakkestørrelse, \")\")) %>%",
+    "        distinct(label) %>%",
+    "        pull(label) %>%",
+    "        head(5) %>%",
+    "        paste(collapse = \"; \")",
+    "",
+    "      warning_items <- append(warning_items, list(",
+    "        tags$li(",
+    "          tags$strong(\"Pakningsstørrelse kunne ikke tolkes: \"),",
+    "          sprintf(",
+    "            \"%s præparat(er) havde en pakningsangivelse, der ikke kunne omsættes til et tal, og er derfor udeladt fra dosisberegningen. Eksempler: %s\",",
+    "            nrow(res$pack_fail_rows),",
+    "            pack_examples",
+    "          )",
+    "        )",
+    "      ))",
+    "    }",
+    "",
+    "    if (!is.null(res$unmatched_atc_rows) && nrow(res$unmatched_atc_rows) > 0) {",
+    "      unmatched_examples <- res$unmatched_atc_rows %>%",
+    "        mutate(label = paste0(Lægemiddel, \" (\", Styrke, \")\")) %>%",
+    "        distinct(label) %>%",
+    "        pull(label) %>%",
+    "        head(5) %>%",
+    "        paste(collapse = \"; \")",
+    "",
+    "      warning_items <- append(warning_items, list(",
+    "        tags$li(",
+    "          tags$strong(\"ATC-kode ikke fundet: \"),",
+    "          sprintf(",
+    "            \"%s præparat(er) kunne ikke matches til ATC-listen og indgår derfor ikke i output. Eksempler: %s\",",
+    "            nrow(res$unmatched_atc_rows),",
+    "            unmatched_examples",
+    "          )",
+    "        )",
+    "      ))",
+    "    }",
+    "",
+    "    if (length(warning_items) == 0) return(NULL)",
+    "",
+    "    div(",
+    "      style = \"background-color:#f8d7da; border:1px solid #f1aeb5; padding:12px; margin-bottom:15px; border-radius:6px;\",",
+    "      tags$strong(\"Datavarsler\"),",
+    "      tags$ul(style = \"margin-top:8px;\", warning_items)",
+    "    )",
+    "  })",
+    "",
+    "  output$table <- renderUI({",
+    "    res <- processed_result()",
+    "    data <- res$data",
+    "    if (is.null(data) || nrow(data) == 0) return(NULL)",
+    "",
+    "    split_id <- paste(data$ATC, data$Enhed, sep = \"___\")",
+    "    groups <- split(data, split_id)",
+    "",
+    "    group_tables <- lapply(names(groups), function(group_name) {",
+    "      df <- groups[[group_name]]",
+    "      atc_value <- unique(df$ATC)[1]",
+    "      unit_value <- unique(df$Enhed)[1]",
+    "      df <- df[, !(names(df) %in% \"ATC\"), drop = FALSE]",
+    "",
+    "      header <- tags$h3(",
+    "        style = \"background-color: #f0f0f0; padding: 10px; margin: 0;\",",
+    "        paste0(atc_value, \" | Enhed: \", unit_value)",
+    "      )",
+    "",
+    "      table_header <- tags$tr(",
+    "        lapply(names(df), function(colname) {",
+    "          tags$th(colname, style = \"padding: 8px; border: 1px solid #ddd; background-color: #e0e0e0;\")",
+    "        })",
+    "      )",
+    "",
+    "      table_rows <- lapply(seq_len(nrow(df)), function(i) {",
+    "        tags$tr(",
+    "          lapply(df[i, ], function(cell) {",
+    "            tags$td(cell, style = \"padding: 8px; border: 1px solid #ddd;\")",
+    "          })",
+    "        )",
+    "      })",
+    "",
+    "      tags$div(",
+    "        style = \"margin-bottom: 20px;\",",
+    "        header,",
+    "        tags$table(",
+    "          style = \"width: 100%; border-collapse: collapse;\",",
+    "          table_header,",
+    "          table_rows",
+    "        )",
+    "      )",
+    "    })",
+    "",
+    "    do.call(tagList, group_tables)",
+    "  })",
+    "",
+    "  output$downloadData <- downloadHandler(",
+    "    filename = function() {",
+    "      paste(\"processeret_data_\", Sys.Date(), \".csv\", sep = \"\")",
+    "    },",
+    "    content = function(file) {",
+    "      res <- processed_result()",
+    "      write.csv2(res$data, file, row.names = FALSE)",
+    "    }",
+    "  )",
+    "",
+    "  output$plotLegend <- renderUI({",
+    "    res <- processed_result()",
+    "    data <- res$data",
+    "    if (is.null(data) || nrow(data) == 0) return(NULL)",
+    "",
+    "    div(",
+    "      style = \"margin-top: 20px; margin-bottom: 10px;\",",
+    "      tags$h4(\"Forklaring til graferne\"),",
+    "      tags$div(",
+    "        style = \"display: flex; align-items: center;\",",
+    "        tags$span(style = \"border-bottom: 2px solid black; width: 30px; height: 0px; display: inline-block; margin-right: 5px;\"),",
+    "        tags$span(\"Dagligt gennemsnit for perioden\")",
+    "      ),",
+    "      tags$div(",
+    "        style = \"display: flex; align-items: center; margin-top: 5px;\",",
+    "        tags$span(style = \"border-bottom: 2px dashed blue; width: 30px; height: 0px; display: inline-block; margin-right: 5px;\"),",
+    "        tags$span(\"Rullende gennemsnit for de sidste 3 perioder\")",
+    "      ),",
+    "      tags$div(",
+    "        style = \"display: flex; align-items: center; margin-top: 5px;\",",
+    "        tags$span(style = \"border-bottom: 2px solid red; width: 30px; height: 0px; display: inline-block; margin-right: 5px;\"),",
+    "        tags$span(\"Gennemsnit (totalt)\")",
+    "      )",
+    "    )",
+    "  })",
+    "",
+    "  output$plots <- renderUI({",
+    "    res <- processed_result()",
+    "    data <- res$data",
+    "    if (is.null(data) || nrow(data) == 0) return(NULL)",
+    "",
+    "    plot_groups <- data %>% distinct(ATC, Enhed)",
+    "",
+    "    tagList(",
+    "      lapply(seq_len(nrow(plot_groups)), function(i) {",
+    "        atc_code <- plot_groups$ATC[i]",
+    "        unit_value <- plot_groups$Enhed[i]",
+    "        plotOutput(make_plot_id(atc_code, unit_value), height = \"400px\")",
+    "      })",
+    "    )",
+    "  })",
+    "",
+    "  observe({",
+    "    res <- processed_result()",
+    "    data <- res$data",
+    "    req(!is.null(data), nrow(data) > 0)",
+    "",
+    "    plot_groups <- data %>% distinct(ATC, Enhed)",
+    "",
+    "    lapply(seq_len(nrow(plot_groups)), function(i) {",
+    "      local({",
+    "        code <- plot_groups$ATC[i]",
+    "        unit_value <- plot_groups$Enhed[i]",
+    "        plot_id <- make_plot_id(code, unit_value)",
+    "",
+    "        output[[plot_id]] <- renderPlot({",
+    "          plot_data <- data %>% filter(ATC == code, Enhed == unit_value)",
+    "",
+    "          if (nrow(plot_data) == 0 || all(is.na(plot_data$`Dagligt forbrug (gennemsnit for aktuelle periode)`))) {",
+    "            return(NULL)",
+    "          }",
+    "",
+    "          plot_data <- plot_data %>%",
+    "            mutate(",
+    "              plot_date = as.Date(Dato, format = \"%d-%m-%Y\"),",
+    "              filled_value = if_else(",
+    "                is.na(`Dagligt forbrug (gennemsnit for aktuelle periode)`),",
+    "                dplyr::lag(",
+    "                  `Dagligt forbrug (gennemsnit for aktuelle periode)`,",
+    "                  default = first(`Dagligt forbrug (gennemsnit for aktuelle periode)`)",
+    "                ),",
+    "                `Dagligt forbrug (gennemsnit for aktuelle periode)`",
+    "              )",
+    "            )",
+    "",
+    "          min_date <- min(plot_data$plot_date, na.rm = TRUE)",
+    "          max_date <- max(plot_data$plot_date, na.rm = TRUE)",
+    "          mid_date <- min_date + as.numeric(max_date - min_date) / 2",
+    "          total_mean <- unique(plot_data$`Gennemsnit for hele perioden`)[1]",
+    "          plot_unit <- unique(stats::na.omit(plot_data$Enhed))[1]",
+    "          if (length(plot_unit) == 0 || is.na(plot_unit)) plot_unit <- \"ukendt enhed\"",
+    "",
+    "          ymax <- max(",
+    "            c(",
+    "              plot_data$`Dagligt forbrug (gennemsnit for aktuelle periode)`,",
+    "              plot_data$`Rullende gennemsnit (sidste 3 perioder)`,",
+    "              total_mean",
+    "            ),",
+    "            na.rm = TRUE",
+    "          )",
+    "",
+    "          if (!is.finite(ymax) || ymax <= 0) ymax <- 1",
+    "",
+    "          handelsnavn <- dplyr::last(stats::na.omit(plot_data$Lægemiddel))",
+    "          if (length(handelsnavn) == 0) handelsnavn <- \"\"",
+    "",
+    "          ggplot(plot_data, aes(x = plot_date)) +",
+    "            geom_step(aes(y = filled_value), direction = \"hv\") +",
+    "            geom_point(aes(y = filled_value), size = 3) +",
+    "            geom_line(",
+    "              aes(y = `Rullende gennemsnit (sidste 3 perioder)`),",
+    "              color = \"blue\",",
+    "              size = 1.2,",
+    "              linetype = \"dashed\"",
+    "            ) +",
+    "            geom_hline(",
+    "              yintercept = total_mean,",
+    "              color = \"red\",",
+    "              size = 0.8,",
+    "              linetype = \"solid\"",
+    "            ) +",
+    "            geom_text(",
+    "              x = mid_date,",
+    "              y = total_mean,",
+    "              label = paste(total_mean, plot_unit),",
+    "              color = \"red\",",
+    "              hjust = 0.5,",
+    "              vjust = -0.5,",
+    "              size = 5",
+    "            ) +",
+    "            labs(",
+    "              title = paste(code, \"| Handelsnavn:\", handelsnavn, \"| Enhed:\", plot_unit),",
+    "              x = \"Dato\",",
+    "              y = paste0(\"Dagligt forbrug (\", plot_unit, \"/dag)\")",
+    "            ) +",
+    "            theme_minimal() +",
+    "            theme(",
+    "              text = element_text(size = 14),",
+    "              plot.title = element_text(size = 18, face = \"bold\"),",
+    "              axis.title = element_text(size = 16),",
+    "              axis.text = element_text(size = 16, face = \"bold\")",
+    "            ) +",
+    "            scale_y_continuous(",
+    "              expand = c(0.02, 0.02),",
+    "              limits = c(0, ymax * 1.1)",
+    "            ) +",
+    "            scale_x_date(date_labels = \"%Y-%m\")",
+    "        })",
+    "      })",
+    "    })",
+    "  })",
+    "}",
+    "",
+    "shinyApp(ui, server)"
   ),
-  # Excel-fil-link
-  tags$li(
-    a("Download Excel-fil", 
-      href = "https://laegemiddelstyrelsen.dk/LinkArchive.ashx?id=0BD4960F0D7744E3BABC951431681ECC&lang=da",
-      target = "_blank")
-  )
-),
+  collapse = "\n"
+)
 
-  # Boksen med script og 'Kopier script'-knap
-  wellPanel(
-    h4("Kopier dette script ind i RStudio:"),
-    tags$textarea(
-      id = "scriptContent",
-      style = "width:100%; height:300px;",
-      "# Funktioner til at installere R-pakker (kan slettes efter pakkerne er installeret første gang)
-install.packages('shiny')
-install.packages('tidyverse')
-install.packages('lubridate')
-install.packages('readr')
-install.packages('zoo')
-
-# Indlæs pakker
-library(shiny)
-library(tidyverse)
-library(lubridate)
-library(readr)
-library(zoo)
-
-setwd(\"C:/Users/...\") # Indsæt sti til mappe hvor \"ListeOverGodkendteLaegemidler.csv\" ligger
-                      # Guide: 
-                      # 1) Vælg \"Session\" -> \"Set Working Directory\" -> \"Choose Directory...\" (eller Ctrl+Shift+H)
-                      # 2) Navigér til mappen og tryk \"Open\"
-                      # 3) Funktionen der angiver stien kommer nu frem nede i \"Console\" som \"setwd(\"*Sti til mappen*\")\"
-                      # 4) Kopiér funktionen og sæt ind i sciptet i stedet for den nuværende
-                      # 5) Gem scriptet og tryk \"Run app\" eller tryk Alt+Ctrl+R
-                      # 6) Ovenstående skal kun gøres første gang, efterfølgende kan man bare trykke \"Run app\" eller Alt+Ctrl+R
-                      # 7) Hvis alt virker, som det skal, kan install.packages-linjerne slettes
-
-# Definér brugergrænsefladen
-ui <- fluidPage(
-  titlePanel(\"Effektueringer, dagligt forbrug og visualiseringer\"),
-  sidebarLayout(
-    sidebarPanel(
-      fileInput(\"file\", \"Upload .csv-fil\", accept = \".csv\"),
-      downloadButton(\"downloadData\", \"Download .csv-fil med processeret data\")
-    ),
-    mainPanel(
-      tableOutput(\"table\"),
-      verbatimTextOutput(\"message\"),
-      # Conditional panel to display the legend only when data is present
-      conditionalPanel(
-        condition = \"output.plots !== null\",
-        div(
-          style = \"margin-top: 20px;\",
-          tags$h4(\"Forklaring til graferne\"),
-          tags$div(style = \"display: flex; align-items: center;\",
-                   tags$span(style = \"border-bottom: 2px solid black; width: 30px; height: 0px; display: inline-block; margin-right: 5px;\"),
-                   tags$span(\"Dagligt gennemsnit for perioden\")
-          ),
-          tags$div(style = \"display: flex; align-items: center; margin-top: 5px;\",
-                   tags$span(style = \"border-bottom: 2px dashed blue; width: 30px; height: 0px; display: inline-block; margin-right: 5px;\"),
-                   tags$span(\"Rullende gennemsnit for de sidste 3 perioder\")
-          ),
-          tags$div(style = \"display: flex; align-items: center; margin-top: 5px;\",
-                   tags$span(style = \"border-bottom: 2px solid red; width: 30px; height: 0px; display: inline-block; margin-right: 5px;\"),
-                   tags$span(\"Gennemsnit (totalt)\")
-          )
+ui <- secure_app(
+  fluidPage(
+    titlePanel("Kør compliance-appen (version 3.0) lokalt på egen computer"),
+    
+    h3("Vejledning:"),
+    p("1) Installér R og RStudio via link nedenfor (husk at aktivere Heimdal Agent på AU-computere). På Region Nord-computere kan R og RStudie installeres via appen IT-Support under selvbetjening."),
+    p("2) Download 'ListeOverGodkendteLaegemidler.xlsx' og gem første ark som UTF-8 CSV-fil med navnet 'ListeOverGodkendteLaegemidler'."),
+    p("3) Åbn RStudio og opret et nyt R script (Ctrl+Shift+N)."),
+    p("4) Kopiér scriptet nedenfor ind i det nye R script og gem scriptet som fx 'Compliance-app'."),
+    p("5) Følg guiden inde i scriptet til at angive den korrekte fil-sti."),
+    p("6) Kør scriptet for at åbne appen i et nye vindue."),
+    
+    h3("Links"),
+    p("Links til at downloade R og RStudio samt at downloade 'ListeOverGodkendteLaegemidler.xlsx'"),
+    
+    tags$ul(
+      tags$li(
+        a(
+          "Download R og RStudio",
+          href = "https://posit.co/download/rstudio-desktop/",
+          target = "_blank"
         )
       ),
-      uiOutput(\"plots\") # Output for plots
-    )
-  )
-)
-
-
-# Definér serveren
-server <- function(input, output, session) {
-  # Indlæs og processér den indlæste fil
-  processed_data <- reactive({
-    req(input$file)
-    tryCatch({
-      # Læs den uploadede fil i ISO-8859-1-format
-      data <- read.csv(input$file$datapath, header = FALSE, sep = \";\", stringsAsFactors = FALSE, fileEncoding = \"ISO-8859-1\") %>%
-        select(V1:V5) %>%
-        rename(Dato = V1, Lægemiddel = V2, Styrke = V3, Pakkestørrelse = V4, Antal.pakker = V5) %>%
-        mutate(Dato = dmy(Dato)) %>%  # Konvertér datoformat
-        mutate(Lægemiddel = gsub(pattern = '\"[^\"]+\"|e$', replacement = '', x = Lægemiddel),
-               first_word = str_extract(Lægemiddel, \"\\\\w+\")) %>% # Første ord af drugname
-        mutate(pack_numeric = as.numeric(gsub(\",\", \".\", str_extract(Pakkestørrelse, \"\\\\d+,?\\\\d*\")))) # Håndter danske decimaler og konverter til numerisk
-      
-      # Læs listen over godkendte lægemidler, vælg relevante kolonner og rens kolonnen med lægemiddelnavne
-      drugs <- read.csv2(\"ListeOverGodkendteLaegemidler.csv\", header = FALSE, sep = \";\", fileEncoding = \"ISO-8859-1\") %>%
-        select(Lægemiddel = V2, Styrke = V4, ATC = V7) %>%
-        filter(str_length(ATC) <= 7) %>%
-        distinct(Lægemiddel, Styrke, ATC, .keep_all = TRUE) %>%
-        mutate(Lægemiddel = str_replace(Lægemiddel, pattern = '\"[^\"]+\"|e$', replacement = '')) %>%
-        mutate(first_word = str_extract(Lægemiddel, \"\\\\w+\")) # Udtræk det første ord af lægemiddelnavnet
-      
-      data <- data %>%
-        distinct(first_word, Styrke, Dato, .keep_all = TRUE) # Sikr at rækkerne i data er unikke
-      
-      drugs <- drugs %>%
-        distinct(first_word, Styrke, .keep_all = TRUE) # Sikr at rækkerne i 'drugs' er unikke
-      
-      # Sammenkobling at uploadet fil og godkendte lægemidler
-      atcdata <- left_join(data, drugs, by = c(\"first_word\", \"Styrke\")) %>%
-        rename(Lægemiddel = Lægemiddel.x) %>%
-        distinct(Dato, Lægemiddel, Styrke, Pakkestørrelse, Antal.pakker, ATC, pack_numeric, .keep_all = FALSE) %>% # Fjern duplikater efter join
-        group_by(ATC, Dato) %>%
-        summarize(
-          Lægemiddel = last(Lægemiddel), # Behold første lægemiddelnavn
-          `Total dosis` = sum(pack_numeric * as.numeric(Antal.pakker) * as.numeric(gsub(\",\", \".\", str_extract(Styrke, \"\\\\d+,?\\\\d*\"))), na.rm = TRUE) # Udregn totale dosis direkte
-        ) %>%
-        ungroup() %>%
-        arrange(ATC, Dato) %>%
-        group_by(ATC) %>% # Gruppér efter ATC-kode
-        mutate(
-          `Dagligt forbrug (gennemsnit for aktuelle periode)` = round(`Total dosis` / abs(as.numeric(difftime(Dato, lead(Dato), units = \"days\"))), digits = 1),
-          # Tilføj et rullende gennemsnit over tre perioder
-          `Rullende gennemsnit (sidste 3 perioder)` = zoo::rollmean(`Dagligt forbrug (gennemsnit for aktuelle periode)`, k = 3, fill = NA, align = \"right\"),
-          # Ekskluder sidste datos dosis fra udregningen
-          total_dosage = sum(`Total dosis`[Dato != max(Dato)], na.rm = TRUE),
-          # Og tæl antal dage fra første til sidste dosis
-          total_days   = as.numeric(max(Dato) - min(Dato)),
-          # Genudregn gennemsnit for hele perioden
-          `Gennemsnit for hele perioden` = round(total_dosage / total_days, digits = 1),
-          Dato = format(Dato, \"%d-%m-%Y\")
-        ) %>%
-        ungroup() %>%
-        select(Dato, Lægemiddel, ATC, `Total dosis`, `Dagligt forbrug (gennemsnit for aktuelle periode)`, `Rullende gennemsnit (sidste 3 perioder)`, `Gennemsnit for hele perioden`)
-      
-      
-      return(atcdata)
-    }, error = function(e) {
-      output$message <- renderPrint({
-        paste(\"Error:\", e$message)
-      })
-      return(NULL)
-    })
-  })
-  
-  
-  output$table <- renderUI({
-    data <- processed_data()
-    if (is.null(data)) return(NULL)
-    
-    # Split data efter ATC-code
-    groups <- split(data, data$ATC)
-    
-    # For hver ATC-gruppe, lav en overskrift og en tabel med kanter
-    group_tables <- lapply(names(groups), function(atc) {
-      df <- groups[[atc]]
-      
-      # Fjern ATC-kolonnen
-      df <- df[, !(names(df) %in% \"ATC\")]
-      
-      # Lav en overskrift for gruppen med en baggrundsfarve
-      header <- tags$h3(
-        style = \"background-color: #f0f0f0; padding: 10px; margin: 0;\",
-      paste(atc)
-    )
-
-# Lav en overskriftsrække uden ATC-kolonnen
-table_header <- tags$tr(
-  lapply(names(df), function(colname) {
-    tags$th(colname, style = \"padding: 8px; border: 1px solid #ddd; background-color: #e0e0e0;\")
-  })
-)
-
-# Generér data-rækkerne
-table_rows <- lapply(seq_len(nrow(df)), function(i) {
-  tags$tr(
-    lapply(df[i, ], function(cell) {
-      tags$td(cell, style = \"padding: 8px; border: 1px solid #ddd;\")
-    })
-  )
-})
-
-# Kombinér overskrifter og data i en tabel
-tags$div(
-  style = \"margin-bottom: 20px;\",
-  header,
-  tags$table(
-    style = \"width: 100%; border-collapse: collapse;\",
-    table_header,
-    table_rows
-  )
-)
-})
-
-do.call(tagList, group_tables)
-})
-
-# Stil en download-håndteringsfunktion til rådighed for de bearbejdede data
-output$downloadData <- downloadHandler(
-  filename = function() {
-    paste(\"processeret_data_\", Sys.Date(), \".csv\", sep = \"\")
-  },
-  content = function(file) {
-    # Write the CSV file with semicolons as separators
-    write.csv2(processed_data(), file, row.names = FALSE)
-  }
-)
-
-# Generér grafer for hver ATC-kode
-output$plots <- renderUI({
-  data <- processed_data()
-  if (is.null(data)) return(NULL)
-  
-  
-  
-  atc_list <- unique(data$ATC)
-  
-  plot_list <- lapply(atc_list, function(atc_code) {
-    plot_data <- data %>% filter(ATC == atc_code)
-    
-    # Create a new variable that fills NA with the previous non-NA value
-    plot_data <- plot_data %>%
-      mutate(filled_value = if_else(
-        is.na(`Dagligt forbrug (gennemsnit for aktuelle periode)`),
-        dplyr::lag(`Dagligt forbrug (gennemsnit for aktuelle periode)`, default = first(`Dagligt forbrug (gennemsnit for aktuelle periode)`)),
-        `Dagligt forbrug (gennemsnit for aktuelle periode)`
-      ))
-    # Calculate the minimum, maximum and midpoint dates for positioning the label
-    min_date <- min(as.Date(plot_data$Dato, format = \"%d-%m-%Y\"))
-    max_date <- max(as.Date(plot_data$Dato, format = \"%d-%m-%Y\"))
-    mid_date <- min_date + as.numeric(max_date - min_date) / 2
-    # Spring over, hvis alle værdier i Dagligt forbrug (gennemsnit) er NA, eller hvis der ikke er nogen datapunkter
-    if (nrow(plot_data) == 0 || all(is.na(plot_data$`Dagligt forbrug (gennemsnit for aktuelle periode)`))) return(NULL)
-    
-    # Sikr at total_mean er en enkelt værdi
-    total_mean <- unique(plot_data$`Gennemsnit for hele perioden`)[1] # Use the first unique value
-    
-    plot_output <- renderPlot({
-      ggplot(plot_data, aes(x = as.Date(Dato, format = \"%d-%m-%Y\"))) +
-        geom_step(aes(y = filled_value), direction = \"hv\") +
-        geom_point(aes(y = filled_value), size = 3) +
-        geom_line(aes(y = `Rullende gennemsnit (sidste 3 perioder)`), color = \"blue\", size = 1.2, linetype = \"dashed\") +
-        geom_hline(yintercept = total_mean, color = \"red\", size = 0.8, linetype = \"solid\") +
-        geom_text(x = mid_date, y = total_mean,
-                  label = paste(total_mean),
-                  color = \"red\", hjust = 0.5, vjust = -0.5, size = 5) +
-        labs(title = paste(atc_code, \"| Handelsnavn:\", last(plot_data$Lægemiddel)),
-             x = \"Dato\",
-             y = \"Dagligt forbrug\") +
-        theme_minimal() +
-        theme(
-          text = element_text(size = 14),
-          plot.title = element_text(size = 18, face = \"bold\"),
-          axis.title = element_text(size = 16),
-          axis.text = element_text(size = 16, face = \"bold\")
-        ) +
-        scale_y_continuous(expand = c(0.02, 0.02),
-                           limits = c(0, max(plot_data$`Dagligt forbrug (gennemsnit for aktuelle periode)`, na.rm = TRUE) * 1.1)) +
-        scale_x_date(date_labels = \"%Y-%m\")
-    })
-    plot_output
-  })
-  
-  # Filtrér plots uden data fra (dvs. dem uden data)
-  plot_list <- plot_list[!sapply(plot_list, is.null)]
-  
-  do.call(tagList, plot_list)
-})
-}
-
-# Kør appen
-shinyApp(ui, server)
-"
+      tags$li(
+        a(
+          "Download Excel-fil",
+          href = "https://laegemiddelstyrelsen.dk/LinkArchive.ashx?id=0BD4960F0D7744E3BABC951431681ECC&lang=da",
+          target = "_blank"
+        )
+      )
     ),
-  actionButton("copyBtn", "Kopier script")
-  ),
-
-# JavaScript der kopierer indholdet fra tekstfeltet
-tags$script("
-    document.getElementById('copyBtn').addEventListener('click', function() {
-      var copyText = document.getElementById('scriptContent');
-      copyText.select();
-      document.execCommand('copy');
-      alert('Script kopieret til udklipsholderen!');
-    });
-  "),
-
-
-
-# Yderligere tekst
-h3("Problemer?"),
-p("Tag fat i Frederik, eller skriv til frekra@biomed.au.dk"),
-))
+    
+    wellPanel(
+      h4("Kopier dette script ind i RStudio:"),
+      tags$textarea(
+        id = "scriptContent",
+        style = "width:100%; height:300px;",
+        inner_app_code
+      ),
+      actionButton("copyBtn", "Kopier script")
+    ),
+    
+    tags$script(HTML("
+      document.addEventListener('DOMContentLoaded', function() {
+        var copyBtn = document.getElementById('copyBtn');
+        if (copyBtn) {
+          copyBtn.addEventListener('click', function() {
+            var copyText = document.getElementById('scriptContent');
+            copyText.select();
+            document.execCommand('copy');
+            alert('Script kopieret til udklipsholderen!');
+          });
+        }
+      });
+    ")),
+    
+    h3("Problemer?"),
+    p("Tag fat i Frederik, eller skriv til frekra@biomed.au.dk")
+  )
+)
 
 server <- function(input, output, session) {
-   res_auth <- secure_server(
+  res_auth <- secure_server(
     check_credentials = check_credentials(credentials)
   )
 }
