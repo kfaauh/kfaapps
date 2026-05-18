@@ -492,7 +492,6 @@ if (length(mangler) > 0) {
   stop("Manglende kolonner! Ret kolonnenavnene i oenskede_kolonner.")
 }
 
-# *** NYT: valgfrie pakningsenheds-kolonner, hvis de findes i eksporten ***
 valgfrie_kolonner <- c(
   "Enhed, Pakningsstr.",
   "Enhed, Pakning",
@@ -503,7 +502,6 @@ for (nm in valgfrie_kolonner) {
   if (!nm %in% names(samlet)) samlet[[nm]] <- NA_character_
 }
 
-# *** ÆNDRET: bevarer også valgfrie kolonner, hvis de kan bruges til pakning ***
 samlet <- samlet[, c(oenskede_kolonner, valgfrie_kolonner)]
 
 xlsx_file <- file.path(out_dir, paste0("Taksten_", format(Sys.Date(), "%Y-%m-%d"), ".xlsx"))
@@ -558,6 +556,13 @@ clean_data2 <- samlet %>%
     # *** ÆNDRET: Styrke får enhed tilbage ***
     Styrke_med_enhed = make_styrke(Styrke, `Enhed, Styrke`),
     
+    # *** ÆNDRET: Pakningsenhed beregnes direkte her ***
+    Pakningsenhed_tmp = dplyr::coalesce(
+      `Enhed, Pakningsstr.`,
+      `Enhed, Pakning`,
+      Pakningsenhed
+    ),
+    
     # *** ÆNDRET: Pakning bevarer enhed/detaljer bedre ***
     Pakning_med_enhed = make_pakning(`Pakningsstr.`, Pakningsenhed_tmp)
   ) %>%
@@ -571,11 +576,9 @@ clean_data2 <- samlet %>%
     Firma = as.character(Firma),
     ATC = as.character(`ATC-kode`),
     
-    # ESP corresponds to AUP and is the price of interest.
     Pris = as_num(`ESP (kr.)`),
     Pris_pr_DDD = as_num(`Pris pr. DDD (kr.)`),
     
-    # *** ÆNDRET: tydeligere navn ***
     Tilskudssubstitutionsgruppe = as.character(`Substitutionsgrp.`),
     
     Kan_leveres = normalise_delivery(`Kan leveres (Leveringssvigt)`),
