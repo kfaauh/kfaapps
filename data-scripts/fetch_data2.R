@@ -5,6 +5,7 @@
 #   Rscript fetch_data2.R
 #   Rscript fetch_data2.R data "Alle lægemidler.xlsx"
 #
+#
 # Output:
 #   data/clean_data2.rds
 #   data/Taksten_YYYY-MM-DD.xlsx
@@ -64,6 +65,13 @@ normalise_delivery <- function(x) {
 
 email <- "kliniskfarmakologiskenhed@rn.dk"
 pw    <- "kfekfe"
+
+if (identical(email, "") || identical(pw, "")) {
+  stop(
+    "Missing credentials. Add MEDPRIS_EMAIL and MEDPRIS_PASSWORD to ~/.Renviron ",
+    "or to the environment used by cron/shiny-server."
+  )
+}
 
 # -----------------------------------------------------------------------------
 # 2) Configuration
