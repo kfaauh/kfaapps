@@ -38,13 +38,26 @@ clean_key <- function(x) {
     str_to_lower(locale = "da")
 }
 
+# *** ÆNDRET: robust tal-konvertering, der håndterer både dansk og engelsk format ***
 as_num <- function(x) {
   if (is.numeric(x)) return(x)
+  
   x <- as.character(x)
-  x <- str_squish(x)
+  x <- stringr::str_squish(x)
   x[x %in% c("", "-", "NA", "NaN")] <- NA_character_
-  x <- gsub("\\.", "", x)  # tolerate Danish thousands separator
-  x <- gsub(",", ".", x)   # tolerate Danish decimal comma
+  
+  x <- gsub("\\s", "", x)
+  
+  # Hvis både punktum og komma findes, antages punktum = tusindtalsseparator og komma = decimal
+  both <- grepl("\\.", x) & grepl(",", x)
+  x[both] <- gsub("\\.", "", x[both])
+  x[both] <- gsub(",", ".", x[both])
+  
+  # Hvis kun komma findes, antages komma = decimal
+  comma_only <- !both & grepl(",", x)
+  x[comma_only] <- gsub(",", ".", x[comma_only])
+  
+  # Hvis kun punktum findes, bevares det som decimalpunktum
   suppressWarnings(as.numeric(x))
 }
 
@@ -57,6 +70,57 @@ normalise_delivery <- function(x) {
     grepl("^nej$|ikke|leveringssvigt", x_chr, ignore.case = TRUE) ~ "Nej",
     TRUE ~ x_chr
   )
+}
+
+# *** NYT: rydder tekst uden at fjerne meningsfulde enheder/detaljer ***
+blank_to_na <- function(x) {
+  x <- as.character(x)
+  x <- stringr::str_squish(x)
+  x[x %in% c("", "-", "NA", "NaN")] <- NA_character_
+  x
+}
+
+# *** NYT: laver styrke med enhed, fx 250 + mg -> 250 mg ***
+make_styrke <- function(styrke, enhed) {
+  styrke <- blank_to_na(styrke)
+  enhed  <- blank_to_na(enhed)
+  
+  already_has_unit <- grepl("[[:alpha:]%µμ]", styrke)
+  
+  dplyr::case_when(
+    is.na(styrke) ~ NA_character_,
+    already_has_unit ~ styrke,
+    !is.na(enhed) ~ paste(styrke, enhed),
+    TRUE ~ styrke
+  )
+}
+
+# *** NYT: bevarer pakningsdetaljer, fx 250 mg eller 250 mg (blister) ***
+make_pakning <- function(pakning, pakningsenhed = NA_character_) {
+  pakning <- blank_to_na(pakning)
+  pakningsenhed <- blank_to_na(pakningsenhed)
+  
+  already_has_unit <- grepl("[[:alpha:]%µμ]", pakning)
+  
+  dplyr::case_when(
+    is.na(pakning) ~ NA_character_,
+    already_has_unit ~ pakning,
+    !is.na(pakningsenhed) ~ paste(pakning, pakningsenhed),
+    TRUE ~ pakning
+  )
+}
+
+# *** NYT: mere tolerant nøgle til styrke ved G-substitutions-join ***
+clean_strength_key <- function(x) {
+  x %>%
+    as.character() %>%
+    stringr::str_squish() %>%
+    stringr::str_to_lower(locale = "da") %>%
+    stringr::str_replace_all(",", ".") %>%
+    stringr::str_replace_all("mikrogram|microgram|mcg|μg", "µg") %>%
+    stringr::str_replace_all("\\s+", " ") %>%
+    stringr::str_replace_all("\\s*/\\s*", "/") %>%
+    stringr::str_replace_all("\\s*\\+\\s*", "+")
 }
 
 # -----------------------------------------------------------------------------
