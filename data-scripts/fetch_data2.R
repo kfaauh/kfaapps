@@ -492,7 +492,19 @@ if (length(mangler) > 0) {
   stop("Manglende kolonner! Ret kolonnenavnene i oenskede_kolonner.")
 }
 
-samlet <- samlet[, oenskede_kolonner]
+# *** NYT: valgfrie pakningsenheds-kolonner, hvis de findes i eksporten ***
+valgfrie_kolonner <- c(
+  "Enhed, Pakningsstr.",
+  "Enhed, Pakning",
+  "Pakningsenhed"
+)
+
+for (nm in valgfrie_kolonner) {
+  if (!nm %in% names(samlet)) samlet[[nm]] <- NA_character_
+}
+
+# *** ÆNDRET: bevarer også valgfrie kolonner, hvis de kan bruges til pakning ***
+samlet <- samlet[, c(oenskede_kolonner, valgfrie_kolonner)]
 
 xlsx_file <- file.path(out_dir, paste0("Taksten_", format(Sys.Date(), "%Y-%m-%d"), ".xlsx"))
 write_xlsx(samlet, xlsx_file)
@@ -522,29 +534,39 @@ if (length(missing_g_cols) > 0) {
   stop("G_Substitutionslisten mangler kolonner: ", paste(missing_g_cols, collapse = ", "))
 }
 
+# *** ÆNDRET: mere robust G-substitutions-join og ingen tab af multiple grupper ***
 g_subst_unique <- g_subst_data %>%
   mutate(
     join_lm = clean_key(Lægemiddel),
     join_form = clean_key(LægemiddelForm),
-    join_styrke = clean_key(Styrke)
+    join_styrke = clean_strength_key(Styrke),
+    SubstGruppe = as.character(SubstGruppe)
+  ) %>%
+  filter(
+    !is.na(join_lm), join_lm != "",
+    !is.na(join_form), join_form != "",
+    !is.na(join_styrke), join_styrke != ""
   ) %>%
   group_by(join_lm, join_form, join_styrke) %>%
-  slice(1) %>%
-  ungroup() %>%
-  transmute(
-    join_lm,
-    join_form,
-    join_styrke,
-    G_Substitutionsgruppe = as.character(SubstGruppe)
+  summarise(
+    Overordnet_substitutionsgruppe = paste(sort(unique(na.omit(SubstGruppe))), collapse = ", "),
+    .groups = "drop"
   )
 
 clean_data2 <- samlet %>%
+  mutate(
+    # *** ÆNDRET: Styrke får enhed tilbage ***
+    Styrke_med_enhed = make_styrke(Styrke, `Enhed, Styrke`),
+    
+    # *** ÆNDRET: Pakning bevarer enhed/detaljer bedre ***
+    Pakning_med_enhed = make_pakning(`Pakningsstr.`, Pakningsenhed_tmp)
+  ) %>%
   transmute(
     Lægemiddel = as.character(Lægemiddel),
     Varenummer = as.character(`Varenr.`),
-    Styrke = as.character(Styrke),
+    Styrke = Styrke_med_enhed,
     Form = as.character(Form),
-    Pakning = as.character(`Pakningsstr.`),
+    Pakning = Pakning_med_enhed,
     Indholdsstof = as.character(`Virksomt stof`),
     Firma = as.character(Firma),
     ATC = as.character(`ATC-kode`),
@@ -553,15 +575,15 @@ clean_data2 <- samlet %>%
     Pris = as_num(`ESP (kr.)`),
     Pris_pr_DDD = as_num(`Pris pr. DDD (kr.)`),
     
-    # The correct/current substitution group from erhverv.medicinpriser.dk.
-    Substitutionsgruppe = as.character(`Substitutionsgrp.`),
+    # *** ÆNDRET: tydeligere navn ***
+    Tilskudssubstitutionsgruppe = as.character(`Substitutionsgrp.`),
     
     Kan_leveres = normalise_delivery(`Kan leveres (Leveringssvigt)`),
     Udleveringsgruppe = as.character(Udleveringsgruppe),
     
     join_lm = clean_key(Lægemiddel),
     join_form = clean_key(Form),
-    join_styrke = clean_key(Styrke)
+    join_styrke = clean_strength_key(Styrke)
   ) %>%
   left_join(cat_data, by = "ATC", relationship = "many-to-one") %>%
   left_join(g_subst_unique, by = c("join_lm", "join_form", "join_styrke")) %>%
@@ -579,8 +601,8 @@ clean_data2 <- samlet %>%
     Varenummer,
     Pris,
     Pris_pr_DDD,
-    Substitutionsgruppe,
-    G_Substitutionsgruppe,
+    Tilskudssubstitutionsgruppe,
+    Overordnet_substitutionsgruppe,
     Kan_leveres,
     Udleveringsgruppe
   )
