@@ -519,6 +519,32 @@ cat_data <- read_excel(cat_file) %>%
   mutate(ATC = as.character(ATC)) %>%
   select(ATC, Kategori, Underkategori, ATCtekst)
 
+clean_atc_key <- function(x) {
+  x %>%
+    as.character() %>%
+    stringr::str_squish() %>%
+    stringr::str_to_upper()
+}
+
+clean_form_key <- function(x) {
+  x %>%
+    as.character() %>%
+    stringr::str_squish() %>%
+    stringr::str_to_lower(locale = "da")
+}
+
+clean_strength_key <- function(x) {
+  x %>%
+    as.character() %>%
+    stringr::str_squish() %>%
+    stringr::str_to_lower(locale = "da") %>%
+    stringr::str_replace_all(",", ".") %>%
+    stringr::str_replace_all("mikrogram|microgram|mcg|μg", "µg") %>%
+    stringr::str_replace_all("\\s+", " ") %>%
+    stringr::str_replace_all("\\s*/\\s*", "/") %>%
+    stringr::str_replace_all("\\s*\\+\\s*", "+")
+}
+
 url_g_subst <- "https://laegemiddelstyrelsen.dk/LinkArchive.ashx?id=23D846362C144111B63358E63C44E32C&lang=en"
 tmp_g_xls <- tempfile(fileext = ".xls")
 download.file(url_g_subst, tmp_g_xls, mode = "wb")
@@ -526,26 +552,26 @@ on.exit(unlink(tmp_g_xls), add = TRUE)
 
 g_subst_data <- read_excel(tmp_g_xls, sheet = 2)
 
-required_g_cols <- c("Lægemiddel", "LægemiddelForm", "Styrke", "SubstGruppe")
+required_g_cols <- c("Lægemiddel", "LægemiddelForm", "Styrke", "AtcKode", "SubstGruppe")
 missing_g_cols <- setdiff(required_g_cols, names(g_subst_data))
 if (length(missing_g_cols) > 0) {
   stop("G_Substitutionslisten mangler kolonner: ", paste(missing_g_cols, collapse = ", "))
 }
 
-# *** ÆNDRET: mere robust G-substitutions-join og ingen tab af multiple grupper ***
+# *** ÆNDRET: G-substitution matches på ATC + form + styrke ***
 g_subst_unique <- g_subst_data %>%
   mutate(
-    join_lm = clean_key(Lægemiddel),
-    join_form = clean_key(LægemiddelForm),
+    join_atc = clean_atc_key(AtcKode),
+    join_form = clean_form_key(LægemiddelForm),
     join_styrke = clean_strength_key(Styrke),
     SubstGruppe = as.character(SubstGruppe)
   ) %>%
   filter(
-    !is.na(join_lm), join_lm != "",
+    !is.na(join_atc), join_atc != "",
     !is.na(join_form), join_form != "",
     !is.na(join_styrke), join_styrke != ""
   ) %>%
-  group_by(join_lm, join_form, join_styrke) %>%
+  group_by(join_atc, join_form, join_styrke) %>%
   summarise(
     Overordnet_substitutionsgruppe = paste(sort(unique(na.omit(SubstGruppe))), collapse = ", "),
     .groups = "drop"
@@ -553,17 +579,14 @@ g_subst_unique <- g_subst_data %>%
 
 clean_data2 <- samlet %>%
   mutate(
-    # *** ÆNDRET: Styrke får enhed tilbage ***
     Styrke_med_enhed = make_styrke(Styrke, `Enhed, Styrke`),
     
-    # *** ÆNDRET: Pakningsenhed beregnes direkte her ***
     Pakningsenhed_tmp = dplyr::coalesce(
       `Enhed, Pakningsstr.`,
       `Enhed, Pakning`,
       Pakningsenhed
     ),
     
-    # *** ÆNDRET: Pakning bevarer enhed/detaljer bedre ***
     Pakning_med_enhed = make_pakning(`Pakningsstr.`, Pakningsenhed_tmp)
   ) %>%
   transmute(
@@ -584,12 +607,16 @@ clean_data2 <- samlet %>%
     Kan_leveres = normalise_delivery(`Kan leveres (Leveringssvigt)`),
     Udleveringsgruppe = as.character(Udleveringsgruppe),
     
-    join_lm = clean_key(Lægemiddel),
-    join_form = clean_key(Form),
-    join_styrke = clean_strength_key(Styrke)
+    # *** ÆNDRET: G-join på ATC + form + styrke ***
+    join_atc = clean_atc_key(`ATC-kode`),
+    join_form = clean_form_key(Form),
+    join_styrke = clean_strength_key(Styrke_med_enhed)
   ) %>%
   left_join(cat_data, by = "ATC", relationship = "many-to-one") %>%
-  left_join(g_subst_unique, by = c("join_lm", "join_form", "join_styrke")) %>%
+  left_join(
+    g_subst_unique,
+    by = c("join_atc", "join_form", "join_styrke")
+  ) %>%
   select(
     Kategori,
     Underkategori,
