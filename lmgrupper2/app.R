@@ -23,13 +23,26 @@ credentials <- data.frame(
 # Helpers
 # -----------------------------------------------------------------------------
 
+# *** ÆNDRET: robust tal-konvertering, der håndterer både dansk og engelsk format ***
 as_num <- function(x) {
   if (is.numeric(x)) return(x)
+  
   x <- as.character(x)
-  x <- trimws(x)
+  x <- stringr::str_squish(x)
   x[x %in% c("", "-", "NA", "NaN")] <- NA_character_
-  x <- gsub("\\.", "", x)
-  x <- gsub(",", ".", x)
+  
+  x <- gsub("\\s", "", x)
+  
+  # Hvis både punktum og komma findes, antages punktum = tusindtalsseparator og komma = decimal
+  both <- grepl("\\.", x) & grepl(",", x)
+  x[both] <- gsub("\\.", "", x[both])
+  x[both] <- gsub(",", ".", x[both])
+  
+  # Hvis kun komma findes, antages komma = decimal
+  comma_only <- !both & grepl(",", x)
+  x[comma_only] <- gsub(",", ".", x[comma_only])
+  
+  # Hvis kun punktum findes, bevares det som decimalpunktum
   suppressWarnings(as.numeric(x))
 }
 
