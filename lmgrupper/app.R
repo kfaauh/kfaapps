@@ -14,6 +14,38 @@ credentials <- data.frame(
 
 clean_data <- readRDS("data/clean_data.rds")
 
+# Vis numeriske procenttal med %-tegn uden at ødelægge numerisk sortering
+percent_column_defs <- function(df, digits = 1) {
+  pct_cols <- which(names(df) == "14-dages prisændring (%)") - 1
+  
+  if (length(pct_cols) == 0) {
+    return(list())
+  }
+  
+  list(
+    list(
+      targets = pct_cols,
+      render = JS(sprintf(
+        "function(data, type, row, meta) {
+           if (data === null || data === undefined || data === '' || isNaN(parseFloat(data))) {
+             return '';
+           }
+           if (type === 'display') {
+             return parseFloat(data).toLocaleString('da-DK', {
+               minimumFractionDigits: %s,
+               maximumFractionDigits: %s
+             }) + ' %%';
+           }
+           return data;
+         }",
+        digits,
+        digits
+      ))
+    )
+  )
+}
+
+
 valid_categories <- unique(clean_data$Kategori)
 valid_categories <- valid_categories[!is.na(valid_categories) & valid_categories != "unknown"]
 
@@ -84,7 +116,7 @@ ui <- secure_app(
               tags$p("Priserne er hentet fra 14-dages medicinpriser fra esundhed.dk, der publiceres hver 14. dag."),
               tags$p("WHO defineret døgndosis (DDD) er defineret som den formodede gennemsnitlige vedligeholdelsesdosis pr. døgn for et lægemiddel anvendt til dets primære indikation. Formålet er at kunne sammenligne lægemidler på tværs af forskellige doseringer. DDD er ikke defineret for alle præparater, fx kan det ikke defineres for kombinationspræparater."),
               tags$p("Substitutionsgruppen er en gruppe af synonyme lægemidler. Apoteket har pligt til at udlevere det billigste lægemiddel inden for en given substitutionsgruppe med mindre recepten specificerer andet."),
-              tags$p("I avanceret visning vises 14-dages prisændring som procentvis ændring i AUP siden forrige prisperiode. Prisvariation er standardafvigelsen i AUP over de seneste 12 måneder.")
+              tags$p("I avanceret visning vises 14-dages prisændring (%) som procentvis ændring i AUP siden forrige prisperiode. 12-måneders prisvariation (SD) er standardafvigelsen i AUP over de seneste 12 måneder.")
             )
           ),
           
@@ -187,8 +219,8 @@ server <- function(input, output, session) {
       select(
         `DDD` = DDD,
         `Substitutionsgruppe` = SubstGruppe,
-        `14-dages prisændring` = `14-dages prisændring`,
-        `Prisvariation` = Prisvariation
+        `14-dages prisændring (%)` = `14-dages prisændring`,
+        `12-måneders prisvariation (SD)` = Prisvariation
       )
     
     bind_cols(simple_df, advanced_df)
@@ -220,8 +252,8 @@ server <- function(input, output, session) {
         `Pris per DDD` = AUP_pr_DDD,
         `DDD` = DDD,
         `Substitutionsgruppe` = SubstGruppe,
-        `14-dages prisændring` = `14-dages prisændring`,
-        `Prisvariation` = Prisvariation
+        `14-dages prisændring (%)` = `14-dages prisændring`,
+        `12-måneders prisvariation (SD)` = Prisvariation
       )
   })
   
@@ -256,6 +288,7 @@ server <- function(input, output, session) {
       options = list(
         order = list(list(0, "asc")),
         orderClasses = TRUE,
+        columnDefs = percent_column_defs(df),
         lengthMenu = list(c(-1, 10, 50, 100), c("Alle", "10", "50", "100")),
         language = list(
           lengthMenu = "Vis _MENU_ rækker",
@@ -275,7 +308,7 @@ server <- function(input, output, session) {
     )
     
     numeric_cols <- intersect(
-      c("Pris", "Pris per DDD", "DDD", "14-dages prisændring", "Prisvariation"),
+      c("Pris", "Pris per DDD", "DDD", "12-måneders prisvariation (SD)"),
       names(df)
     )
     
@@ -321,8 +354,9 @@ server <- function(input, output, session) {
       rownames = FALSE,
       filter = "top",
       options = list(
-        order = list(list(which(names(df) == "14-dages prisændring") - 1, "desc")),
+        order = list(list(which(names(df) == "14-dages prisændring (%)") - 1, "desc")),
         orderClasses = TRUE,
+        columnDefs = percent_column_defs(df),
         pageLength = 50,
         lengthMenu = list(c(25, 50, 100, -1), c("25", "50", "100", "Alle")),
         language = list(
@@ -343,12 +377,37 @@ server <- function(input, output, session) {
     )
     
     numeric_cols <- intersect(
-      c("Pris", "Pris per DDD", "DDD", "14-dages prisændring", "Prisvariation"),
+      c("Pris", "Pris per DDD", "DDD", "12-måneders prisvariation (SD)"),
       names(df)
     )
     
     if (length(numeric_cols) > 0) {
       dt <- dt %>% formatRound(numeric_cols, 2)
+    }
+    
+    # NYT: Farveskala for 14-dages prisændring (%) i Prisadvarsler-tabellen
+    # Tabellen er allerede filtreret til prisstigninger >= 20 %, så lavere positive
+    # stigninger bliver grøn/gul, mens de største prishop bliver røde.
+    if ("14-dages prisændring (%)" %in% names(df)) {
+      valid_vals <- df[["14-dages prisændring (%)"]][
+        is.finite(df[["14-dages prisændring (%)"]])
+      ]
+      
+      if (length(valid_vals) > 0) {
+        brks <- quantile(valid_vals, probs = seq(0, 1, 0.01), na.rm = TRUE)
+        brks <- unique(brks)
+        
+        if (length(brks) > 1) {
+          base_clrs <- colorRampPalette(c("green", "yellow", "red"))(length(brks) + 1)
+          clrs <- sapply(base_clrs, function(x) adjustcolor(x, alpha.f = 0.5))
+          
+          dt <- dt %>%
+            formatStyle(
+              columns = c("14-dages prisændring (%)"),
+              backgroundColor = styleInterval(brks, clrs)
+            )
+        }
+      }
     }
     
     dt
