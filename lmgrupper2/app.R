@@ -23,13 +23,26 @@ credentials <- data.frame(
 # Helpers
 # -----------------------------------------------------------------------------
 
+# *** ÆNDRET: robust tal-konvertering, der håndterer både dansk og engelsk format ***
 as_num <- function(x) {
   if (is.numeric(x)) return(x)
+  
   x <- as.character(x)
-  x <- trimws(x)
+  x <- stringr::str_squish(x)
   x[x %in% c("", "-", "NA", "NaN")] <- NA_character_
-  x <- gsub("\\.", "", x)
-  x <- gsub(",", ".", x)
+  
+  x <- gsub("\\s", "", x)
+  
+  # Hvis både punktum og komma findes, antages punktum = tusindtalsseparator og komma = decimal
+  both <- grepl("\\.", x) & grepl(",", x)
+  x[both] <- gsub("\\.", "", x[both])
+  x[both] <- gsub(",", ".", x[both])
+  
+  # Hvis kun komma findes, antages komma = decimal
+  comma_only <- !both & grepl(",", x)
+  x[comma_only] <- gsub(",", ".", x[comma_only])
+  
+  # Hvis kun punktum findes, bevares det som decimalpunktum
   suppressWarnings(as.numeric(x))
 }
 
@@ -41,7 +54,7 @@ clean_data <- readRDS("data/clean_data2.rds") %>%
   mutate(
     across(
       c(Kategori, Underkategori, ATCtekst, ATC, Indholdsstof, Styrke, Form, Pakning,
-        Lægemiddel, Firma, Varenummer, Substitutionsgruppe, G_Substitutionsgruppe,
+        Lægemiddel, Firma, Varenummer, Tilskudssubstitutionsgruppe, Overordnet_substitutionsgruppe,
         Kan_leveres, Udleveringsgruppe),
       as.character
     ),
@@ -116,7 +129,7 @@ ui <- secure_app(
           ),
           tags$p("Priserne er hentet fra erhverv.medicinpriser.dk. ESP svarer her til AUP og anvendes som pris i tabellen."),
           tags$p("WHO defineret døgndosis (DDD) er defineret som den formodede gennemsnitlige vedligeholdelsesdosis pr. døgn for et lægemiddel anvendt til dets primære indikation. Formålet er at kunne sammenligne lægemidler på tværs af forskellige doseringer. DDD er ikke defineret for alle præparater, fx kan det ikke defineres for kombinationspræparater."),
-          tags$p("Substitutionsgruppen er den aktuelle substitutionsgruppe fra erhverv.medicinpriser.dk. G-Substitutionsgruppe stammer fra G_Substitutionslisten.")
+          tags$p("Tilskudssubstitutionsgruppe er den aktuelle substitutionsgruppe fra erhverv.medicinpriser.dk. Overordnet substitutionsgruppe stammer fra G_Substitutionslisten.")
         )
       ),
       mainPanel(
@@ -188,8 +201,8 @@ server <- function(input, output, session) {
           `Handelsnavn` = Lægemiddel,
           `Pris` = Pris,
           `Pris pr. DDD` = Pris_pr_DDD,
-          `Substitutionsgruppe` = Substitutionsgruppe,
-          `G-Substitutionsgruppe` = G_Substitutionsgruppe,
+          `Tilskudssubstitutionsgruppe` = Tilskudssubstitutionsgruppe,
+          `Overordnet substitutionsgruppe` = Overordnet_substitutionsgruppe,
           `Kan leveres?` = Kan_leveres
         )
     } else {
