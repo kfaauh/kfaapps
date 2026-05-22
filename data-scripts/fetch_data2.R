@@ -616,26 +616,63 @@ canonical_colname <- function(x) {
     stringr::str_squish()
 }
 
-get_first_col <- function(df, candidates) {
+get_first_col <- function(df, candidates, label = candidates[1]) {
   nm <- names(df)
+  
+  # 1) Prøv først helt eksakt match. Det fanger den aktuelle eksport, hvor kolonnen hedder "TSP (kr.)".
+  exact_hit <- candidates[candidates %in% nm]
+  if (length(exact_hit) > 0) {
+    message("   Bruger kolonne '", exact_hit[1], "' for '", label, "'")
+    return(df[[exact_hit[1]]])
+  }
+  
+  # 2) Fallback: normaliser punktummer, linjeskift, NBSP og mellemrum.
   nm_can <- canonical_colname(nm)
   cand_can <- canonical_colname(candidates)
   hit <- match(cand_can, nm_can, nomatch = 0)
   hit <- hit[hit > 0]
+  
   if (length(hit) == 0) {
-    message("   ADVARSEL: Fandt ikke kolonne blandt: ", paste(candidates, collapse = " | "))
+    message("   ADVARSEL: Fandt ikke kolonne for '", label, "'. Forsøgte: ", paste(candidates, collapse = " | "))
+    message("   Tilgængelige kolonner: ", paste(nm, collapse = " | "))
     return(rep(NA_real_, nrow(df)))
   }
-  message("   Bruger kolonne '", nm[hit[1]], "' for '", candidates[1], "'")
+  
+  message("   Bruger kolonne '", nm[hit[1]], "' for '", label, "'")
   df[[hit[1]]]
 }
 
-# *** ÆNDRET: robuste prisberegninger med flere mulige rå kolonnenavne ***
-samlet$ESP_tmp_calc <- as_num(get_first_col(samlet, c("ESP (kr.)", "ESP kr.", "ESP")))
-samlet$ESP_pr_DDD_tmp_calc <- as_num(get_first_col(samlet, c("Pris pr. DDD (kr.)", "Pris pr DDD (kr.)", "Pris pr. DDD", "Pris pr DDD")))
-samlet$Tilskudspris_tmp_calc <- as_num(get_first_col(samlet, c("TSP (kr.)", "TSK (kr.)", "TSP kr.", "TSK kr.", "TSP", "TSK", "Tilskudspris (kr.)")))
+# *** ÆNDRET: robuste prisberegninger med eksplicit TSP-match ***
+# OBS: I eksporten fra erhverv.medicinpriser.dk hedder tilskudsprisen "TSP (kr.)" — ikke "TSK (kr.)".
+samlet$ESP_tmp_calc <- as_num(get_first_col(
+  samlet,
+  c("ESP (kr.)", "ESP kr.", "ESP", "Ekspeditionspris (kr.)"),
+  label = "Ekspeditionspris"
+))
+
+samlet$ESP_pr_DDD_tmp_calc <- as_num(get_first_col(
+  samlet,
+  c("Pris pr. DDD (kr.)", "Pris pr DDD (kr.)", "Pris pr. DDD", "Pris pr DDD",
+    "Ekspeditionspris pr. DDD (kr.)"),
+  label = "Ekspeditionspris pr. DDD"
+))
+
+samlet$Tilskudspris_tmp_calc <- as_num(get_first_col(
+  samlet,
+  c("TSP (kr.)", "TSP kr.", "TSP", "Tilskudspris (kr.)",
+    "TSK (kr.)", "TSK kr.", "TSK"),
+  label = "Tilskudspris"
+))
+
 samlet$DDD_tmp_calc <- safe_divide(samlet$ESP_tmp_calc, samlet$ESP_pr_DDD_tmp_calc)
 samlet$Tilskudspris_pr_DDD_tmp_calc <- safe_divide(samlet$Tilskudspris_tmp_calc, samlet$DDD_tmp_calc)
+
+# *** NYT: tydelig advarsel hvis TSP-kolonnen findes, men ikke ender i clean_data2 ***
+if ("TSP (kr.)" %in% names(samlet) &&
+    sum(!is.na(as_num(samlet[["TSP (kr.)"]]))) > 0 &&
+    sum(!is.na(samlet$Tilskudspris_tmp_calc)) == 0) {
+  stop("TSP (kr.) findes i rådata og har værdier, men Tilskudspris_tmp_calc blev tom. Tjek kolonnematch/as_num.")
+}
 
 message("   Ikke-tomme prisfelter efter beregning:")
 message("     Ekspeditionspris: ", sum(!is.na(samlet$ESP_tmp_calc)))
