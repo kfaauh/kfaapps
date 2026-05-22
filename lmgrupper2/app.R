@@ -73,8 +73,23 @@ if ("Pris_pr_DDD" %in% names(clean_data) && !"Ekspeditionspris pr. DDD (kr.)" %i
     rename(`Ekspeditionspris pr. DDD (kr.)` = Pris_pr_DDD)
 }
 
-for (nm in c("DDD", "Tilskudspris (kr.)", "Tilskudspris pr. DDD (kr.)")) {
-  if (!nm %in% names(clean_data)) clean_data[[nm]] <- NA_real_
+# *** ÆNDRET: fallback beregner DDD, hvis clean_data2.rds endnu ikke er regenereret ***
+if (!"DDD" %in% names(clean_data)) {
+  clean_data[["DDD"]] <- safe_divide(
+    clean_data[["Ekspeditionspris (kr.)"]],
+    clean_data[["Ekspeditionspris pr. DDD (kr.)"]]
+  )
+}
+
+if (!"Tilskudspris (kr.)" %in% names(clean_data)) {
+  clean_data[["Tilskudspris (kr.)"]] <- NA_real_
+}
+
+if (!"Tilskudspris pr. DDD (kr.)" %in% names(clean_data)) {
+  clean_data[["Tilskudspris pr. DDD (kr.)"]] <- safe_divide(
+    clean_data[["Tilskudspris (kr.)"]],
+    clean_data[["DDD"]]
+  )
 }
 
 clean_data <- clean_data %>%
@@ -89,8 +104,27 @@ clean_data <- clean_data %>%
     DDD = as_num(DDD),
     `Ekspeditionspris pr. DDD (kr.)` = as_num(`Ekspeditionspris pr. DDD (kr.)`),
     `Tilskudspris (kr.)` = as_num(`Tilskudspris (kr.)`),
-    `Tilskudspris pr. DDD (kr.)` = as_num(`Tilskudspris pr. DDD (kr.)`)
+    `Tilskudspris pr. DDD (kr.)` = as_num(`Tilskudspris pr. DDD (kr.)`),
+    DDD = dplyr::if_else(
+      is.na(DDD),
+      safe_divide(`Ekspeditionspris (kr.)`, `Ekspeditionspris pr. DDD (kr.)`),
+      DDD
+    ),
+    `Tilskudspris pr. DDD (kr.)` = dplyr::if_else(
+      is.na(`Tilskudspris pr. DDD (kr.)`),
+      safe_divide(`Tilskudspris (kr.)`, DDD),
+      `Tilskudspris pr. DDD (kr.)`
+    )
   )
+
+# *** NYT: startdiagnostik i loggen, så tomme beregnede kolonner opdages tidligt ***
+message("Ikke-tomme felter i clean_data2.rds:")
+for (nm in intersect(
+  c("Ekspeditionspris (kr.)", "DDD", "Ekspeditionspris pr. DDD (kr.)", "Tilskudspris (kr.)", "Tilskudspris pr. DDD (kr.)"),
+  names(clean_data)
+)) {
+  message("  ", nm, ": ", sum(!is.na(clean_data[[nm]])))
+}
 
 valid_categories <- unique(clean_data$Kategori)
 valid_categories <- valid_categories[!is.na(valid_categories) & valid_categories != "unknown" & valid_categories != ""]
@@ -247,10 +281,7 @@ server <- function(input, output, session) {
           `Pakning` = Pakning,
           `Handelsnavn` = Lægemiddel,
           `Ekspeditionspris (kr.)` = `Ekspeditionspris (kr.)`,
-          `DDD` = DDD,
-          `Ekspeditionspris pr. DDD (kr.)` = `Ekspeditionspris pr. DDD (kr.)`,
-          `Tilskudspris (kr.)` = `Tilskudspris (kr.)`,
-          `Tilskudspris pr. DDD (kr.)` = `Tilskudspris pr. DDD (kr.)`
+          `Ekspeditionspris pr. DDD (kr.)` = `Ekspeditionspris pr. DDD (kr.)`
         )
     }
   })

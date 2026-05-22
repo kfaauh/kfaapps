@@ -90,6 +90,16 @@ blank_to_na <- function(x) {
   x
 }
 
+
+# *** NYT: normaliserer kolonnenavne fra Excel robust ***
+normalise_colnames <- function(x) {
+  x %>%
+    as.character() %>%
+    stringr::str_replace_all("\\u00A0", " ") %>%
+    stringr::str_replace_all("[\\r\\n\\t]+", " ") %>%
+    stringr::str_squish()
+}
+
 # *** NYT: laver styrke med enhed, fx 250 + mg -> 250 mg ***
 make_styrke <- function(styrke, enhed) {
   styrke <- blank_to_na(styrke)
@@ -179,6 +189,7 @@ pris_kolonner <- c(
   "ESP pr. enhed (kr.)",
   "ESP (kr.)",
   "TSP (kr.)",
+  "TSK (kr.)",
   "Pris pr. DDD (kr.)",
   "Pris for sygehusleverancer (kr.)",
   "Pris pr. enhed (D) (kr.)",
@@ -268,6 +279,7 @@ parse_xls_response <- function(resp, gruppe) {
   
   for (s in sheets) {
     df <- read_xls(tmp, sheet = s, col_types = "text")
+    names(df) <- normalise_colnames(names(df))
     
     if (nrow(df) > 0) {
       col_renames <- c("Cannabisprodukter" = "Lægemiddel")
@@ -450,6 +462,7 @@ for (nm in names(alle_data)) {
 }
 
 samlet <- bind_rows(alle_data)
+names(samlet) <- normalise_colnames(names(samlet))
 rownames(samlet) <- NULL
 message("   Samlet (raat): ", nrow(samlet), " raekker x ", ncol(samlet), " kolonner")
 
@@ -458,6 +471,11 @@ message("   Samlet (raat): ", nrow(samlet), " raekker x ", ncol(samlet), " kolon
 # -----------------------------------------------------------------------------
 
 message("== TRIN 6: Validerer kolonner ==")
+
+# *** NYT: håndterer eventuel navnevariant TSK (kr.) som TSP (kr.) ***
+if (!"TSP (kr.)" %in% names(samlet) && "TSK (kr.)" %in% names(samlet)) {
+  samlet[["TSP (kr.)"]] <- samlet[["TSK (kr.)"]]
+}
 
 oenskede_kolonner <- c(
   "Lægemiddel",
@@ -587,6 +605,44 @@ g_subst_unique <- g_subst_data %>%
     .groups = "drop"
   )
 
+
+# *** NYT: henter første eksisterende kolonne blandt mulige navne, robust over for mellemrum/punktum/linjeskift ***
+canonical_colname <- function(x) {
+  x %>%
+    normalise_colnames() %>%
+    stringr::str_to_lower(locale = "da") %>%
+    stringr::str_replace_all("\\.", "") %>%
+    stringr::str_replace_all("\\s+", " ") %>%
+    stringr::str_squish()
+}
+
+get_first_col <- function(df, candidates) {
+  nm <- names(df)
+  nm_can <- canonical_colname(nm)
+  cand_can <- canonical_colname(candidates)
+  hit <- match(cand_can, nm_can, nomatch = 0)
+  hit <- hit[hit > 0]
+  if (length(hit) == 0) {
+    message("   ADVARSEL: Fandt ikke kolonne blandt: ", paste(candidates, collapse = " | "))
+    return(rep(NA_real_, nrow(df)))
+  }
+  message("   Bruger kolonne '", nm[hit[1]], "' for '", candidates[1], "'")
+  df[[hit[1]]]
+}
+
+# *** ÆNDRET: robuste prisberegninger med flere mulige rå kolonnenavne ***
+samlet$ESP_tmp_calc <- as_num(get_first_col(samlet, c("ESP (kr.)", "ESP kr.", "ESP")))
+samlet$ESP_pr_DDD_tmp_calc <- as_num(get_first_col(samlet, c("Pris pr. DDD (kr.)", "Pris pr DDD (kr.)", "Pris pr. DDD", "Pris pr DDD")))
+samlet$Tilskudspris_tmp_calc <- as_num(get_first_col(samlet, c("TSP (kr.)", "TSK (kr.)", "TSP kr.", "TSK kr.", "TSP", "TSK", "Tilskudspris (kr.)")))
+samlet$DDD_tmp_calc <- safe_divide(samlet$ESP_tmp_calc, samlet$ESP_pr_DDD_tmp_calc)
+samlet$Tilskudspris_pr_DDD_tmp_calc <- safe_divide(samlet$Tilskudspris_tmp_calc, samlet$DDD_tmp_calc)
+
+message("   Ikke-tomme prisfelter efter beregning:")
+message("     Ekspeditionspris: ", sum(!is.na(samlet$ESP_tmp_calc)))
+message("     Ekspeditionspris pr. DDD: ", sum(!is.na(samlet$ESP_pr_DDD_tmp_calc)))
+message("     DDD: ", sum(!is.na(samlet$DDD_tmp_calc)))
+message("     Tilskudspris: ", sum(!is.na(samlet$Tilskudspris_tmp_calc)))
+message("     Tilskudspris pr. DDD: ", sum(!is.na(samlet$Tilskudspris_pr_DDD_tmp_calc)))
 clean_data2 <- samlet %>%
   mutate(
     Styrke_med_enhed = make_styrke(Styrke, `Enhed, Styrke`),
@@ -609,11 +665,11 @@ clean_data2 <- samlet %>%
     Firma = as.character(Firma),
     ATC = as.character(`ATC-kode`),
     
-    `Ekspeditionspris (kr.)` = as_num(`ESP (kr.)`),
-    DDD = safe_divide(`ESP (kr.)`, `Pris pr. DDD (kr.)`),
-    `Ekspeditionspris pr. DDD (kr.)` = as_num(`Pris pr. DDD (kr.)`),
-    `Tilskudspris (kr.)` = as_num(`TSP (kr.)`),
-    `Tilskudspris pr. DDD (kr.)` = safe_divide(`TSP (kr.)`, safe_divide(`ESP (kr.)`, `Pris pr. DDD (kr.)`)),
+    `Ekspeditionspris (kr.)` = ESP_tmp_calc,
+    DDD = DDD_tmp_calc,
+    `Ekspeditionspris pr. DDD (kr.)` = ESP_pr_DDD_tmp_calc,
+    `Tilskudspris (kr.)` = Tilskudspris_tmp_calc,
+    `Tilskudspris pr. DDD (kr.)` = Tilskudspris_pr_DDD_tmp_calc,
     
     Tilskudssubstitutionsgruppe = as.character(`Substitutionsgrp.`),
     
