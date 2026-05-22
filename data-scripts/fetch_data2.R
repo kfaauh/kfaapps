@@ -61,6 +61,16 @@ as_num <- function(x) {
   suppressWarnings(as.numeric(x))
 }
 
+# *** NYT: sikker division, så 0/NA ikke giver Inf/NaN i output ***
+safe_divide <- function(numerator, denominator) {
+  numerator <- as_num(numerator)
+  denominator <- as_num(denominator)
+  
+  out <- numerator / denominator
+  out[!is.finite(out) | is.na(denominator) | denominator == 0] <- NA_real_
+  out
+}
+
 normalise_delivery <- function(x) {
   x_chr <- str_squish(as.character(x))
   dplyr::case_when(
@@ -599,8 +609,11 @@ clean_data2 <- samlet %>%
     Firma = as.character(Firma),
     ATC = as.character(`ATC-kode`),
     
-    Pris = as_num(`ESP (kr.)`),
-    Pris_pr_DDD = as_num(`Pris pr. DDD (kr.)`),
+    `Ekspeditionspris (kr.)` = as_num(`ESP (kr.)`),
+    DDD = safe_divide(`ESP (kr.)`, `Pris pr. DDD (kr.)`),
+    `Ekspeditionspris pr. DDD (kr.)` = as_num(`Pris pr. DDD (kr.)`),
+    `Tilskudspris (kr.)` = as_num(`TSP (kr.)`),
+    `Tilskudspris pr. DDD (kr.)` = safe_divide(`TSP (kr.)`, safe_divide(`ESP (kr.)`, `Pris pr. DDD (kr.)`)),
     
     Tilskudssubstitutionsgruppe = as.character(`Substitutionsgrp.`),
     
@@ -629,8 +642,11 @@ clean_data2 <- samlet %>%
     Lægemiddel,
     Firma,
     Varenummer,
-    Pris,
-    Pris_pr_DDD,
+    `Ekspeditionspris (kr.)`,
+    DDD,
+    `Ekspeditionspris pr. DDD (kr.)`,
+    `Tilskudspris (kr.)`,
+    `Tilskudspris pr. DDD (kr.)`,
     Tilskudssubstitutionsgruppe,
     Overordnet_substitutionsgruppe,
     Kan_leveres,

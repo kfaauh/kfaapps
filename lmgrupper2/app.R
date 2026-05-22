@@ -46,11 +46,38 @@ as_num <- function(x) {
   suppressWarnings(as.numeric(x))
 }
 
+# *** NYT: sikker division, så 0/NA ikke giver Inf/NaN i output ***
+safe_divide <- function(numerator, denominator) {
+  numerator <- as_num(numerator)
+  denominator <- as_num(denominator)
+  
+  out <- numerator / denominator
+  out[!is.finite(out) | is.na(denominator) | denominator == 0] <- NA_real_
+  out
+}
+
 # -----------------------------------------------------------------------------
 # Load preprocessed data
 # -----------------------------------------------------------------------------
 
-clean_data <- readRDS("data/clean_data2.rds") %>%
+clean_data <- readRDS("data/clean_data2.rds")
+
+# *** NYT: bagudkompatibel håndtering, hvis datafilen endnu ikke er genkørt ***
+if ("Pris" %in% names(clean_data) && !"Ekspeditionspris (kr.)" %in% names(clean_data)) {
+  clean_data <- clean_data %>%
+    rename(`Ekspeditionspris (kr.)` = Pris)
+}
+
+if ("Pris_pr_DDD" %in% names(clean_data) && !"Ekspeditionspris pr. DDD (kr.)" %in% names(clean_data)) {
+  clean_data <- clean_data %>%
+    rename(`Ekspeditionspris pr. DDD (kr.)` = Pris_pr_DDD)
+}
+
+for (nm in c("DDD", "Tilskudspris (kr.)", "Tilskudspris pr. DDD (kr.)")) {
+  if (!nm %in% names(clean_data)) clean_data[[nm]] <- NA_real_
+}
+
+clean_data <- clean_data %>%
   mutate(
     across(
       c(Kategori, Underkategori, ATCtekst, ATC, Indholdsstof, Styrke, Form, Pakning,
@@ -58,8 +85,11 @@ clean_data <- readRDS("data/clean_data2.rds") %>%
         Kan_leveres, Udleveringsgruppe),
       as.character
     ),
-    Pris = as_num(Pris),
-    Pris_pr_DDD = as_num(Pris_pr_DDD)
+    `Ekspeditionspris (kr.)` = as_num(`Ekspeditionspris (kr.)`),
+    DDD = as_num(DDD),
+    `Ekspeditionspris pr. DDD (kr.)` = as_num(`Ekspeditionspris pr. DDD (kr.)`),
+    `Tilskudspris (kr.)` = as_num(`Tilskudspris (kr.)`),
+    `Tilskudspris pr. DDD (kr.)` = as_num(`Tilskudspris pr. DDD (kr.)`)
   )
 
 valid_categories <- unique(clean_data$Kategori)
@@ -127,7 +157,7 @@ ui <- secure_app(
             tags$li("Brug filtrene over hver kolonne for at indsnævre søgningen."),
             tags$li("Sortér efter en kolonne ved at klikke på overskriften.")
           ),
-          tags$p("Priserne er hentet fra erhverv.medicinpriser.dk. ESP svarer her til AUP og anvendes som pris i tabellen."),
+          tags$p("Priserne er hentet fra erhverv.medicinpriser.dk. Ekspeditionspris svarer til ESP/AUP. DDD beregnes som Ekspeditionspris divideret med Ekspeditionspris pr. DDD."),
           tags$p("WHO defineret døgndosis (DDD) er defineret som den formodede gennemsnitlige vedligeholdelsesdosis pr. døgn for et lægemiddel anvendt til dets primære indikation. Formålet er at kunne sammenligne lægemidler på tværs af forskellige doseringer. DDD er ikke defineret for alle præparater, fx kan det ikke defineres for kombinationspræparater."),
           tags$p("Tilskudssubstitutionsgruppe er den aktuelle substitutionsgruppe fra erhverv.medicinpriser.dk. Overordnet substitutionsgruppe stammer fra G_Substitutionslisten.")
         )
@@ -199,8 +229,11 @@ server <- function(input, output, session) {
           `Form` = Form,
           `Pakning` = Pakning,
           `Handelsnavn` = Lægemiddel,
-          `Pris` = Pris,
-          `Pris pr. DDD` = Pris_pr_DDD,
+          `Ekspeditionspris (kr.)` = `Ekspeditionspris (kr.)`,
+          `DDD` = DDD,
+          `Ekspeditionspris pr. DDD (kr.)` = `Ekspeditionspris pr. DDD (kr.)`,
+          `Tilskudspris (kr.)` = `Tilskudspris (kr.)`,
+          `Tilskudspris pr. DDD (kr.)` = `Tilskudspris pr. DDD (kr.)`,
           `Tilskudssubstitutionsgruppe` = Tilskudssubstitutionsgruppe,
           `Overordnet substitutionsgruppe` = Overordnet_substitutionsgruppe,
           `Kan leveres?` = Kan_leveres
@@ -213,8 +246,11 @@ server <- function(input, output, session) {
           `Form` = Form,
           `Pakning` = Pakning,
           `Handelsnavn` = Lægemiddel,
-          `Pris` = Pris,
-          `Pris pr. DDD` = Pris_pr_DDD
+          `Ekspeditionspris (kr.)` = `Ekspeditionspris (kr.)`,
+          `DDD` = DDD,
+          `Ekspeditionspris pr. DDD (kr.)` = `Ekspeditionspris pr. DDD (kr.)`,
+          `Tilskudspris (kr.)` = `Tilskudspris (kr.)`,
+          `Tilskudspris pr. DDD (kr.)` = `Tilskudspris pr. DDD (kr.)`
         )
     }
   })
@@ -238,10 +274,10 @@ server <- function(input, output, session) {
     )
     df[filter_columns] <- lapply(df[filter_columns], as.factor)
     
-    numeric_cols <- intersect(c("Pris", "Pris pr. DDD"), names(df))
+    numeric_cols <- intersect(c("Ekspeditionspris (kr.)", "DDD", "Ekspeditionspris pr. DDD (kr.)", "Tilskudspris (kr.)", "Tilskudspris pr. DDD (kr.)"), names(df))
     df[numeric_cols] <- lapply(df[numeric_cols], as_num)
     
-    valid_vals <- df[["Pris pr. DDD"]][is.finite(df[["Pris pr. DDD"]])]
+    valid_vals <- df[["Ekspeditionspris pr. DDD (kr.)"]][is.finite(df[["Ekspeditionspris pr. DDD (kr.)"]])]
     
     dt <- datatable(
       df,
@@ -269,7 +305,7 @@ server <- function(input, output, session) {
         )
       )
     ) %>%
-      formatRound(intersect(c("Pris", "Pris pr. DDD"), names(df)), 2)
+      formatRound(numeric_cols, 2)
     
     if (length(valid_vals) > 0) {
       brks <- unique(quantile(valid_vals, probs = seq(0, 1, 0.01), na.rm = TRUE))
@@ -280,7 +316,7 @@ server <- function(input, output, session) {
         
         dt <- dt %>%
           formatStyle(
-            columns = "Pris pr. DDD",
+            columns = "Ekspeditionspris pr. DDD (kr.)",
             backgroundColor = styleInterval(brks, clrs)
           )
       }
