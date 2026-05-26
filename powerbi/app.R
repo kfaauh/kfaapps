@@ -32,7 +32,7 @@ options(shiny.maxRequestSize = 200 * 1024^2)
 
 normalise_atc_input <- function(x) {
   if (is.null(x) || !nzchar(x)) return(character(0))
-
+  
   x |>
     str_split("[\\r\\n,;]+") |>
     unlist(use.names = FALSE) |>
@@ -50,9 +50,9 @@ clean_atc_code_for_mapping <- function(x) {
 
 read_mapping_file <- function(path) {
   if (is.null(path) || !file.exists(path)) return(NULL)
-
+  
   ext <- tolower(tools::file_ext(path))
-
+  
   dat <- switch(
     ext,
     "csv" = readr::read_csv(path, show_col_types = FALSE, locale = locale(encoding = "UTF-8")),
@@ -60,17 +60,17 @@ read_mapping_file <- function(path) {
     "tsv" = readr::read_tsv(path, show_col_types = FALSE, locale = locale(encoding = "UTF-8")),
     stop("Mapping-filen skal være csv, txt eller tsv.")
   )
-
+  
   nms <- names(dat)
   nms_low <- tolower(nms)
-
+  
   atc_col <- nms[match(TRUE, nms_low %in% c("atc", "atc_kode", "atckode", "atc_code"))]
   pbi_col <- nms[match(TRUE, nms_low %in% c("atc5_kode_tekst", "powerbi_atc", "powerbi", "atc5", "atc5tekst"))]
-
+  
   if (is.na(atc_col) || is.na(pbi_col)) {
     stop("Mapping-filen skal indeholde kolonnerne ATC og ATC5_Kode_Tekst.")
   }
-
+  
   dat |>
     transmute(
       ATC = toupper(str_trim(as.character(.data[[atc_col]]))),
@@ -82,14 +82,14 @@ read_mapping_file <- function(path) {
 
 apply_atc_mapping <- function(atc_values, mapping = NULL) {
   if (length(atc_values) == 0) return(character(0))
-
+  
   already_powerbi <- str_detect(atc_values, "\\(.+\\)")
   raw_codes <- clean_atc_code_for_mapping(atc_values)
-
+  
   if (is.null(mapping) || nrow(mapping) == 0) {
     return(unique(ifelse(already_powerbi, atc_values, raw_codes)))
   }
-
+  
   mapped <- tibble(
     input = atc_values,
     ATC = raw_codes,
@@ -104,7 +104,7 @@ apply_atc_mapping <- function(atc_values, mapping = NULL) {
       )
     ) |>
     pull(powerbi_atc)
-
+  
   unique(mapped[!is.na(mapped) & mapped != ""])
 }
 
@@ -122,11 +122,11 @@ generate_js <- function(atc_powerbi, metrics, regions, years, split_by_year) {
   regions_js <- js_string_array(regions)
   years_js <- js_numeric_array(years)
   split_js <- if (isTRUE(split_by_year)) "true" else "false"
-
+  
   # JavaScript-template er base64-indlejret for at undgå R/editor-problemer med
   # anførselstegn, backslashes, regulære udtryk og klammer i en stor JS-string.
   js_b64 <- paste0(
-"Ci8vIFBvd2VyIEJJIE1lZGljaW5zYWxnIGkgcHJpbcOmcnNla3RvcmVuIC0gZGlyZWt0ZSBDU1Yt",
+    "Ci8vIFBvd2VyIEJJIE1lZGljaW5zYWxnIGkgcHJpbcOmcnNla3RvcmVuIC0gZGlyZWt0ZSBDU1Yt",
     "ZXhwb3J0Ci8vIEvDuHIgaSBDaHJvbWUgRGV2VG9vbHMgQ29uc29sZSwgbWVucyBQb3dlciBCSS1y",
     "YXBwb3J0ZW4gZXIgw6ViZW4uCi8vIE91dHB1dCBkb3dubG9hZGVzIHNvbSBlbiBlbGxlciBmbGVy",
     "ZSBmaWxlcjogbWVkaWNpbnNhbGdfcGFyc2VkX3BhcnRfMDAxLmNzdiwgLi4uICsgbWVkaWNpbnNh",
@@ -141,76 +141,90 @@ generate_js <- function(atc_powerbi, metrics, regions, years, split_by_year) {
     "w7huc2tldC4KICBjb25zdCBtYXhSb3dzUGVyQ3N2ID0gNTAwMDA7CgogIGNvbnN0IG1ldHJpY01h",
     "cCA9IHsKICAgICJNw6ZuZ2RlZm9yYnJ1ZyI6ICJBbnRhbCBEREQiLAogICAgIlJlZ2lvbmFsdCB0",
     "aWxza3VkIjogIlRpbHNrdWRzYmVsw7hiIC0gUmVnaW9uYWx0IiwKICAgICJPbXPDpnRuaW5nIjog",
-    "IkVrc3BlZGl0aW9uc2JlbMO4YiIKICB9OwoKICBjb25zdCBoZWFkZXJzID0gWwogICAgIkFUQywg",
-    "Tml2ZWF1IDUsIGtvZGUgJiB0ZWtzdCIsCiAgICAiVmFyZW51bW1lciIsCiAgICAiTmF2biAoUHLD",
-    "pnBhcmF0KSIsCiAgICAiRm9ybSIsCiAgICAiU3R5cmtlIiwKICAgICJQYWtuaW5nc3N0w7hycmVs",
-    "c2UiLAogICAgIsOFciIsCiAgICAiTcOlbmVkIiwKICAgICJZZGVydHlwZSIsCiAgICAiQm9ww6Zs",
-    "c3JlZ2lvbiIsCiAgICAibsO4Z2xldGFsX291dHB1dCIsCiAgICAidmFsdWUiLAogICAgImF0Y19m",
-    "aWx0ZXIiLAogICAgInJlZ2lvbl9maWx0ZXIiLAogICAgInllYXJfZmlsdGVyIiwKICAgICJvcGdv",
-    "ZXJlbHNlIiwKICAgICJzdGF0dXMiLAogICAgInJvd0NvdW50TWFya2VyIiwKICAgICJoYXNSZXN0",
-    "YXJ0VG9rZW4iLAogICAgImV4cG9ydF9lcnJvciIKICBdOwoKICBmdW5jdGlvbiBsaXRlcmFsVmFs",
-    "dWUodikgewogICAgaWYgKHR5cGVvZiB2ID09PSAibnVtYmVyIikgcmV0dXJuIGAke3Z9TGA7CiAg",
-    "ICBjb25zdCBzID0gU3RyaW5nKHYpLnJlcGxhY2VBbGwoIlxcIiwgIlxcXFwiKS5yZXBsYWNlQWxs",
-    "KCInIiwgIlxcJyIpOwogICAgcmV0dXJuIGAnJHtzfSdgOwogIH0KCiAgZnVuY3Rpb24gaW5GaWx0",
-    "ZXIoc291cmNlLCBwcm9wZXJ0eSwgdmFsdWVzKSB7CiAgICByZXR1cm4gewogICAgICBDb25kaXRp",
-    "b246IHsKICAgICAgICBJbjogewogICAgICAgICAgRXhwcmVzc2lvbnM6IFt7IENvbHVtbjogeyBF",
-    "eHByZXNzaW9uOiB7IFNvdXJjZVJlZjogeyBTb3VyY2U6IHNvdXJjZSB9IH0sIFByb3BlcnR5OiBw",
-    "cm9wZXJ0eSB9IH1dLAogICAgICAgICAgVmFsdWVzOiB2YWx1ZXMubWFwKHYgPT4gW3sgTGl0ZXJh",
-    "bDogeyBWYWx1ZTogbGl0ZXJhbFZhbHVlKHYpIH0gfV0pCiAgICAgICAgfQogICAgICB9CiAgICB9",
-    "OwogIH0KCiAgZnVuY3Rpb24gc3RhcnRzV2l0aEZpbHRlcihzb3VyY2UsIHByb3BlcnR5LCB2YWx1",
-    "ZSkgewogICAgcmV0dXJuIHsKICAgICAgQ29uZGl0aW9uOiB7CiAgICAgICAgU3RhcnRzV2l0aDog",
-    "ewogICAgICAgICAgTGVmdDogeyBDb2x1bW46IHsgRXhwcmVzc2lvbjogeyBTb3VyY2VSZWY6IHsg",
-    "U291cmNlOiBzb3VyY2UgfSB9LCBQcm9wZXJ0eTogcHJvcGVydHkgfSB9LAogICAgICAgICAgUmln",
-    "aHQ6IHsgTGl0ZXJhbDogeyBWYWx1ZTogbGl0ZXJhbFZhbHVlKHZhbHVlKSB9IH0KICAgICAgICB9",
-    "CiAgICAgIH0KICAgIH07CiAgfQoKICBmdW5jdGlvbiBhdGNUZXh0RmlsdGVyKHNvdXJjZSwgcHJv",
-    "cGVydHksIHZhbHVlKSB7CiAgICBjb25zdCBzID0gU3RyaW5nKHZhbHVlIHx8ICIiKS50cmltKCk7",
-    "CiAgICAvLyBGdWxkIFBvd2VyIEJJLXbDpnJkaTogZWtzYWt0IG1hdGNoLiBSZW4gQVRDLWtvZGU6",
-    "IHByZWZpeC1tYXRjaCBww6UgQVRDNV9Lb2RlX1Rla3N0LgogICAgaWYgKHMuaW5jbHVkZXMoIigi",
-    "KSAmJiBzLmluY2x1ZGVzKCIpIikpIHJldHVybiBpbkZpbHRlcihzb3VyY2UsIHByb3BlcnR5LCBb",
-    "c10pOwogICAgcmV0dXJuIHN0YXJ0c1dpdGhGaWx0ZXIoc291cmNlLCBwcm9wZXJ0eSwgcy50b1Vw",
-    "cGVyQ2FzZSgpKTsKICB9CgogIGZ1bmN0aW9uIGJ1aWxkUGF5bG9hZCh7IGF0Y1ZhbHVlLCBtZXRy",
-    "aWNWYWx1ZXMsIHJlZ2lvblZhbHVlcywgeWVhclZhbHVlcyB9KSB7CiAgICByZXR1cm4gewogICAg",
-    "ICB2ZXJzaW9uOiAiMS4wLjAiLAogICAgICBxdWVyaWVzOiBbewogICAgICAgIFF1ZXJ5OiB7CiAg",
-    "ICAgICAgICBDb21tYW5kczogW3sKICAgICAgICAgICAgU2VtYW50aWNRdWVyeURhdGFTaGFwZUNv",
-    "bW1hbmQ6IHsKICAgICAgICAgICAgICBRdWVyeTogewogICAgICAgICAgICAgICAgVmVyc2lvbjog",
-    "MiwKICAgICAgICAgICAgICAgIEZyb206IFsKICAgICAgICAgICAgICAgICAgeyBOYW1lOiAiIyIs",
-    "IEVudGl0eTogIiMgTWVhc3VyZXMiLCBUeXBlOiAwIH0sCiAgICAgICAgICAgICAgICAgIHsgTmFt",
-    "ZTogImxtIiwgRW50aXR5OiAiRGltTGFlZ2VtaWRkZWwiLCBUeXBlOiAwIH0sCiAgICAgICAgICAg",
-    "ICAgICAgIHsgTmFtZTogImRhdG8iLCBFbnRpdHk6ICJEaW1EYXRvIiwgVHlwZTogMCB9LAogICAg",
-    "ICAgICAgICAgICAgICB7IE5hbWU6ICJ1ZCIsIEVudGl0eTogIkRpbVVkc3RlZGVyVHlwZSIsIFR5",
-    "cGU6IDAgfSwKICAgICAgICAgICAgICAgICAgeyBOYW1lOiAib3BnIiwgRW50aXR5OiAiT3Bnw7hy",
-    "ZWxzZSIsIFR5cGU6IDAgfSwKICAgICAgICAgICAgICAgICAgeyBOYW1lOiAia3JvbiIsIEVudGl0",
-    "eTogIktyb25pc2tlIHN5Z2RvbW1lIiwgVHlwZTogMCB9LAogICAgICAgICAgICAgICAgICB7IE5h",
-    "bWU6ICJnZW8iLCBFbnRpdHk6ICJEaW1Cb3JnZXJEZW1vZ3JhZmkiLCBUeXBlOiAwIH0sCiAgICAg",
-    "ICAgICAgICAgICAgIHsgTmFtZTogInZvbCIsIEVudGl0eTogIkRpbVZvbHVtZSIsIFR5cGU6IDAg",
-    "fQogICAgICAgICAgICAgICAgXSwKICAgICAgICAgICAgICAgIFNlbGVjdDogWwogICAgICAgICAg",
-    "ICAgICAgICB7IENvbHVtbjogeyBFeHByZXNzaW9uOiB7IFNvdXJjZVJlZjogeyBTb3VyY2U6ICJs",
-    "bSIgfSB9LCBQcm9wZXJ0eTogIkFUQzVfS29kZV9UZWtzdCIgfSwgTmFtZTogIkRpbUxhZWdlbWlk",
-    "ZGVsLkFUQzVfS29kZV9UZWtzdCIgfSwKICAgICAgICAgICAgICAgICAgeyBDb2x1bW46IHsgRXhw",
-    "cmVzc2lvbjogeyBTb3VyY2VSZWY6IHsgU291cmNlOiAibG0iIH0gfSwgUHJvcGVydHk6ICJMYWVn",
-    "ZW1pZGRlbHRla3N0X3NhbWxldF91bmF2bmUiIH0sIE5hbWU6ICJEaW1MYWVnZW1pZGRlbC5MYWVn",
-    "ZW1pZGRlbHRla3N0X3NhbWxldF91bmF2bmUiIH0sCiAgICAgICAgICAgICAgICAgIHsgQ29sdW1u",
-    "OiB7IEV4cHJlc3Npb246IHsgU291cmNlUmVmOiB7IFNvdXJjZTogImRhdG8iIH0gfSwgUHJvcGVy",
-    "dHk6ICLDhXJfSUQiIH0sIE5hbWU6ICJEaW1EYXRvLsOFcl9JRCIgfSwKICAgICAgICAgICAgICAg",
-    "ICAgeyBDb2x1bW46IHsgRXhwcmVzc2lvbjogeyBTb3VyY2VSZWY6IHsgU291cmNlOiAiZGF0byIg",
-    "fSB9LCBQcm9wZXJ0eTogIk3DpW5lZMOFciIgfSwgTmFtZTogIkRpbURhdG8uTcOlbmVkw4VyIiB9",
-    "LAogICAgICAgICAgICAgICAgICB7IENvbHVtbjogeyBFeHByZXNzaW9uOiB7IFNvdXJjZVJlZjog",
-    "eyBTb3VyY2U6ICJ1ZCIgfSB9LCBQcm9wZXJ0eTogIlVkc3RlZGVyX3R5cGUiIH0sIE5hbWU6ICJE",
-    "aW1VZHN0ZWRlclR5cGUuVWRzdGVkZXJfdHlwZSIgfSwKICAgICAgICAgICAgICAgICAgeyBDb2x1",
-    "bW46IHsgRXhwcmVzc2lvbjogeyBTb3VyY2VSZWY6IHsgU291cmNlOiAiZ2VvIiB9IH0sIFByb3Bl",
-    "cnR5OiAiQm9ww6Zsc3JlZ2lvbiIgfSwgTmFtZTogIkRpbUJvcmdlckRlbW9ncmFmaS5Cb3DDpmxz",
-    "cmVnaW9uIiB9LAogICAgICAgICAgICAgICAgICB7IE1lYXN1cmU6IHsgRXhwcmVzc2lvbjogeyBT",
-    "b3VyY2VSZWY6IHsgU291cmNlOiAiIyIgfSB9LCBQcm9wZXJ0eTogIlNlbGVjdE1lYXN1cmUxIiB9",
-    "LCBOYW1lOiAiIyBNZWFzdXJlcy5TZWxlY3RNZWFzdXJlMSIgfQogICAgICAgICAgICAgICAgXSwK",
-    "ICAgICAgICAgICAgICAgIFdoZXJlOiBbCiAgICAgICAgICAgICAgICAgIGluRmlsdGVyKCJ2b2wi",
-    "LCAiVm9sdW1lX3Rla3N0X2dycCIsIFsiREREIl0pLAogICAgICAgICAgICAgICAgICBpbkZpbHRl",
-    "cigib3BnIiwgIkNhbGN1bGF0aW9uSXRlbUNvbHVtbiAxIiwgbWV0cmljVmFsdWVzKSwKICAgICAg",
-    "ICAgICAgICAgICAgaW5GaWx0ZXIoImRhdG8iLCAiw4VyX0lEIiwgeWVhclZhbHVlcyksCiAgICAg",
-    "ICAgICAgICAgICAgIGluRmlsdGVyKCJrcm9uIiwgIkNhbGN1bGF0aW9uSXRlbUNvbHVtbiAxIiwg",
-    "WyJJbmdlbiB2YWxnIl0pLAogICAgICAgICAgICAgICAgICBpbkZpbHRlcigiZ2VvIiwgIkJvcMOm",
-    "bHNyZWdpb24iLCByZWdpb25WYWx1ZXMpLAogICAgICAgICAgICAgICAgICBhdGNUZXh0RmlsdGVy",
-    "KCJsbSIsICJBVEM1X0tvZGVfVGVrc3QiLCBhdGNWYWx1ZSksCiAgICAgICAgICAgICAgICAgIGlu",
-    "RmlsdGVyKCJsbSIsICJGbGFnX1QzIiwgWyJKYSJdKQogICAgICAgICAgICAgICAgXSwKICAgICAg",
+    "IkVrc3BlZGl0aW9uc2JlbMO4YiIKICB9OwoKICBjb25zdCBub3JtYWxpc2F0aW9uT3B0aW9ucyA9",
+    "IFsKICAgIHsgdmFsdWU6ICJJbmdlbiB2YWxnIiwgc3VmZml4OiAiIiB9LAogICAgeyB2YWx1ZTog",
+    "IkFudGFsIHByLiAxLjAwMCIsIHN1ZmZpeDogIiBwci4gMS4wMDAgYm9yZ2VyZSIgfQogIF07Cgog",
+    "IGZ1bmN0aW9uIG91dHB1dE1ldHJpY05hbWUob3Bnb2VyZWxzZSwgbm9ybWFsaXNlcmluZykgewog",
+    "ICAgY29uc3QgYmFzZSA9IG1ldHJpY01hcFtvcGdvZXJlbHNlXSB8fCBvcGdvZXJlbHNlOwogICAg",
+    "Y29uc3Qgb3B0ID0gbm9ybWFsaXNhdGlvbk9wdGlvbnMuZmluZCh4ID0+IHgudmFsdWUgPT09IG5v",
+    "cm1hbGlzZXJpbmcpOwogICAgcmV0dXJuIGJhc2UgKyAob3B0ID8gb3B0LnN1ZmZpeCA6ICIiKTsK",
+    "ICB9CgogIGNvbnN0IGhlYWRlcnMgPSBbCiAgICAiQVRDLCBOaXZlYXUgNSwga29kZSAmIHRla3N0",
+    "IiwKICAgICJWYXJlbnVtbWVyIiwKICAgICJOYXZuIChQcsOmcGFyYXQpIiwKICAgICJGb3JtIiwK",
+    "ICAgICJTdHlya2UiLAogICAgIlBha25pbmdzc3TDuHJyZWxzZSIsCiAgICAiw4VyIiwKICAgICJN",
+    "w6VuZWQiLAogICAgIllkZXJ0eXBlIiwKICAgICJCb3DDpmxzcmVnaW9uIiwKICAgICJuw7hnbGV0",
+    "YWxfb3V0cHV0IiwKICAgICJ2YWx1ZSIsCiAgICAiYXRjX2ZpbHRlciIsCiAgICAicmVnaW9uX2Zp",
+    "bHRlciIsCiAgICAieWVhcl9maWx0ZXIiLAogICAgIm9wZ29lcmVsc2UiLAogICAgIm5vcm1hbGlz",
+    "ZXJpbmciLAogICAgInN0YXR1cyIsCiAgICAicm93Q291bnRNYXJrZXIiLAogICAgImhhc1Jlc3Rh",
+    "cnRUb2tlbiIsCiAgICAiZXhwb3J0X2Vycm9yIgogIF07CgogIGZ1bmN0aW9uIGxpdGVyYWxWYWx1",
+    "ZSh2KSB7CiAgICBpZiAodHlwZW9mIHYgPT09ICJudW1iZXIiKSByZXR1cm4gYCR7dn1MYDsKICAg",
+    "IGNvbnN0IHMgPSBTdHJpbmcodikucmVwbGFjZUFsbCgiXFwiLCAiXFxcXCIpLnJlcGxhY2VBbGwo",
+    "IiciLCAiXFwnIik7CiAgICByZXR1cm4gYCcke3N9J2A7CiAgfQoKICBmdW5jdGlvbiBpbkZpbHRl",
+    "cihzb3VyY2UsIHByb3BlcnR5LCB2YWx1ZXMpIHsKICAgIHJldHVybiB7CiAgICAgIENvbmRpdGlv",
+    "bjogewogICAgICAgIEluOiB7CiAgICAgICAgICBFeHByZXNzaW9uczogW3sgQ29sdW1uOiB7IEV4",
+    "cHJlc3Npb246IHsgU291cmNlUmVmOiB7IFNvdXJjZTogc291cmNlIH0gfSwgUHJvcGVydHk6IHBy",
+    "b3BlcnR5IH0gfV0sCiAgICAgICAgICBWYWx1ZXM6IHZhbHVlcy5tYXAodiA9PiBbeyBMaXRlcmFs",
+    "OiB7IFZhbHVlOiBsaXRlcmFsVmFsdWUodikgfSB9XSkKICAgICAgICB9CiAgICAgIH0KICAgIH07",
+    "CiAgfQoKICBmdW5jdGlvbiBzdGFydHNXaXRoRmlsdGVyKHNvdXJjZSwgcHJvcGVydHksIHZhbHVl",
+    "KSB7CiAgICByZXR1cm4gewogICAgICBDb25kaXRpb246IHsKICAgICAgICBTdGFydHNXaXRoOiB7",
+    "CiAgICAgICAgICBMZWZ0OiB7IENvbHVtbjogeyBFeHByZXNzaW9uOiB7IFNvdXJjZVJlZjogeyBT",
+    "b3VyY2U6IHNvdXJjZSB9IH0sIFByb3BlcnR5OiBwcm9wZXJ0eSB9IH0sCiAgICAgICAgICBSaWdo",
+    "dDogeyBMaXRlcmFsOiB7IFZhbHVlOiBsaXRlcmFsVmFsdWUodmFsdWUpIH0gfQogICAgICAgIH0K",
+    "ICAgICAgfQogICAgfTsKICB9CgogIGZ1bmN0aW9uIGF0Y1RleHRGaWx0ZXIoc291cmNlLCBwcm9w",
+    "ZXJ0eSwgdmFsdWUpIHsKICAgIGNvbnN0IHMgPSBTdHJpbmcodmFsdWUgfHwgIiIpLnRyaW0oKTsK",
+    "ICAgIC8vIEZ1bGQgUG93ZXIgQkktdsOmcmRpOiBla3Nha3QgbWF0Y2guIFJlbiBBVEMta29kZTog",
+    "cHJlZml4LW1hdGNoIHDDpSBBVEM1X0tvZGVfVGVrc3QuCiAgICBpZiAocy5pbmNsdWRlcygiKCIp",
+    "ICYmIHMuaW5jbHVkZXMoIikiKSkgcmV0dXJuIGluRmlsdGVyKHNvdXJjZSwgcHJvcGVydHksIFtz",
+    "XSk7CiAgICByZXR1cm4gc3RhcnRzV2l0aEZpbHRlcihzb3VyY2UsIHByb3BlcnR5LCBzLnRvVXBw",
+    "ZXJDYXNlKCkpOwogIH0KCiAgZnVuY3Rpb24gYnVpbGRQYXlsb2FkKHsgYXRjVmFsdWUsIG1ldHJp",
+    "Y1ZhbHVlcywgcmVnaW9uVmFsdWVzLCB5ZWFyVmFsdWVzLCBub3JtYWxpc2F0aW9uVmFsdWUgfSkg",
+    "ewogICAgY29uc3QgaXNQcjEwMDAgPSBub3JtYWxpc2F0aW9uVmFsdWUgPT09ICJBbnRhbCBwci4g",
+    "MS4wMDAiOwoKICAgIC8vIFZpZ3RpZ3Q6ICJBbnRhbCBwci4gMS4wMDAiIGVyIGVuIHNlcGFyYXQg",
+    "Y2FsY3VsYXRpb24tZ3JvdXAvdGFibGUgaSBQb3dlciBCSS4KICAgIC8vIEh2aXMgdGFiZWxsZW4g",
+    "IkFudGFsIHByICAxIDAwMCIgbWVkdGFnZXMvZmlsdHJlcmVzIHZlZCB0b3RhbHbDpnJkaWVyLCBr",
+    "YW4gZGUgYWJzb2x1dHRlCiAgICAvLyBuw7hnbGV0YWwgZW5kZSBzb20gMC4gRGVyZm9yIGJydWdl",
+    "cyBzb3VyY2UgImEiIGt1biB2ZWQgcHIuIDEuMDAwLWthbGQuCiAgICBjb25zdCBmcm9tSXRlbXMg",
+    "PSBbCiAgICAgIHsgTmFtZTogIiMiLCBFbnRpdHk6ICIjIE1lYXN1cmVzIiwgVHlwZTogMCB9LAog",
+    "ICAgICB7IE5hbWU6ICJsbSIsIEVudGl0eTogIkRpbUxhZWdlbWlkZGVsIiwgVHlwZTogMCB9LAog",
+    "ICAgICB7IE5hbWU6ICJkYXRvIiwgRW50aXR5OiAiRGltRGF0byIsIFR5cGU6IDAgfSwKICAgICAg",
+    "eyBOYW1lOiAidWQiLCBFbnRpdHk6ICJEaW1VZHN0ZWRlclR5cGUiLCBUeXBlOiAwIH0sCiAgICAg",
+    "IHsgTmFtZTogIm9wZyIsIEVudGl0eTogIk9wZ8O4cmVsc2UiLCBUeXBlOiAwIH0sCiAgICAgIHsg",
+    "TmFtZTogImtyb24iLCBFbnRpdHk6ICJLcm9uaXNrZSBzeWdkb21tZSIsIFR5cGU6IDAgfSwKICAg",
+    "ICAgeyBOYW1lOiAiZ2VvIiwgRW50aXR5OiAiRGltQm9yZ2VyRGVtb2dyYWZpIiwgVHlwZTogMCB9",
+    "LAogICAgICB7IE5hbWU6ICJ2b2wiLCBFbnRpdHk6ICJEaW1Wb2x1bWUiLCBUeXBlOiAwIH0KICAg",
+    "IF07CgogICAgY29uc3Qgd2hlcmVJdGVtcyA9IFsKICAgICAgaW5GaWx0ZXIoInZvbCIsICJWb2x1",
+    "bWVfdGVrc3RfZ3JwIiwgWyJEREQiXSksCiAgICAgIGluRmlsdGVyKCJvcGciLCAiQ2FsY3VsYXRp",
+    "b25JdGVtQ29sdW1uIDEiLCBtZXRyaWNWYWx1ZXMpLAogICAgICBpbkZpbHRlcigiZGF0byIsICLD",
+    "hXJfSUQiLCB5ZWFyVmFsdWVzKSwKICAgICAgaW5GaWx0ZXIoImtyb24iLCAiQ2FsY3VsYXRpb25J",
+    "dGVtQ29sdW1uIDEiLCBbIkluZ2VuIHZhbGciXSksCiAgICAgIGluRmlsdGVyKCJnZW8iLCAiQm9w",
+    "w6Zsc3JlZ2lvbiIsIHJlZ2lvblZhbHVlcyksCiAgICAgIGF0Y1RleHRGaWx0ZXIoImxtIiwgIkFU",
+    "QzVfS29kZV9UZWtzdCIsIGF0Y1ZhbHVlKSwKICAgICAgaW5GaWx0ZXIoImxtIiwgIkZsYWdfVDMi",
+    "LCBbIkphIl0pCiAgICBdOwoKICAgIGlmIChpc1ByMTAwMCkgewogICAgICBmcm9tSXRlbXMucHVz",
+    "aCh7IE5hbWU6ICJhIiwgRW50aXR5OiAiQW50YWwgcHIgIDEgMDAwIiwgVHlwZTogMCB9KTsKICAg",
+    "ICAgd2hlcmVJdGVtcy5zcGxpY2UoMywgMCwgaW5GaWx0ZXIoImEiLCAiQ2FsY3VsYXRpb25JdGVt",
+    "Q29sdW1uIDEiLCBbIkFudGFsIHByLiAxLjAwMCJdKSk7CiAgICB9CgogICAgcmV0dXJuIHsKICAg",
+    "ICAgdmVyc2lvbjogIjEuMC4wIiwKICAgICAgcXVlcmllczogW3sKICAgICAgICBRdWVyeTogewog",
+    "ICAgICAgICAgQ29tbWFuZHM6IFt7CiAgICAgICAgICAgIFNlbWFudGljUXVlcnlEYXRhU2hhcGVD",
+    "b21tYW5kOiB7CiAgICAgICAgICAgICAgUXVlcnk6IHsKICAgICAgICAgICAgICAgIFZlcnNpb246",
+    "IDIsCiAgICAgICAgICAgICAgICBGcm9tOiBmcm9tSXRlbXMsCiAgICAgICAgICAgICAgICBTZWxl",
+    "Y3Q6IFsKICAgICAgICAgICAgICAgICAgeyBDb2x1bW46IHsgRXhwcmVzc2lvbjogeyBTb3VyY2VS",
+    "ZWY6IHsgU291cmNlOiAibG0iIH0gfSwgUHJvcGVydHk6ICJBVEM1X0tvZGVfVGVrc3QiIH0sIE5h",
+    "bWU6ICJEaW1MYWVnZW1pZGRlbC5BVEM1X0tvZGVfVGVrc3QiIH0sCiAgICAgICAgICAgICAgICAg",
+    "IHsgQ29sdW1uOiB7IEV4cHJlc3Npb246IHsgU291cmNlUmVmOiB7IFNvdXJjZTogImxtIiB9IH0s",
+    "IFByb3BlcnR5OiAiTGFlZ2VtaWRkZWx0ZWtzdF9zYW1sZXRfdW5hdm5lIiB9LCBOYW1lOiAiRGlt",
+    "TGFlZ2VtaWRkZWwuTGFlZ2VtaWRkZWx0ZWtzdF9zYW1sZXRfdW5hdm5lIiB9LAogICAgICAgICAg",
+    "ICAgICAgICB7IENvbHVtbjogeyBFeHByZXNzaW9uOiB7IFNvdXJjZVJlZjogeyBTb3VyY2U6ICJk",
+    "YXRvIiB9IH0sIFByb3BlcnR5OiAiw4VyX0lEIiB9LCBOYW1lOiAiRGltRGF0by7DhXJfSUQiIH0s",
+    "CiAgICAgICAgICAgICAgICAgIHsgQ29sdW1uOiB7IEV4cHJlc3Npb246IHsgU291cmNlUmVmOiB7",
+    "IFNvdXJjZTogImRhdG8iIH0gfSwgUHJvcGVydHk6ICJNw6VuZWTDhXIiIH0sIE5hbWU6ICJEaW1E",
+    "YXRvLk3DpW5lZMOFciIgfSwKICAgICAgICAgICAgICAgICAgeyBDb2x1bW46IHsgRXhwcmVzc2lv",
+    "bjogeyBTb3VyY2VSZWY6IHsgU291cmNlOiAidWQiIH0gfSwgUHJvcGVydHk6ICJVZHN0ZWRlcl90",
+    "eXBlIiB9LCBOYW1lOiAiRGltVWRzdGVkZXJUeXBlLlVkc3RlZGVyX3R5cGUiIH0sCiAgICAgICAg",
+    "ICAgICAgICAgIHsgQ29sdW1uOiB7IEV4cHJlc3Npb246IHsgU291cmNlUmVmOiB7IFNvdXJjZTog",
+    "ImdlbyIgfSB9LCBQcm9wZXJ0eTogIkJvcMOmbHNyZWdpb24iIH0sIE5hbWU6ICJEaW1Cb3JnZXJE",
+    "ZW1vZ3JhZmkuQm9ww6Zsc3JlZ2lvbiIgfSwKICAgICAgICAgICAgICAgICAgeyBNZWFzdXJlOiB7",
+    "IEV4cHJlc3Npb246IHsgU291cmNlUmVmOiB7IFNvdXJjZTogIiMiIH0gfSwgUHJvcGVydHk6ICJT",
+    "ZWxlY3RNZWFzdXJlMSIgfSwgTmFtZTogIiMgTWVhc3VyZXMuU2VsZWN0TWVhc3VyZTEiIH0KICAg",
+    "ICAgICAgICAgICAgIF0sCiAgICAgICAgICAgICAgICBXaGVyZTogd2hlcmVJdGVtcywKICAgICAg",
     "ICAgICAgICAgIE9yZGVyQnk6IFsKICAgICAgICAgICAgICAgICAgeyBEaXJlY3Rpb246IDEsIEV4",
     "cHJlc3Npb246IHsgQ29sdW1uOiB7IEV4cHJlc3Npb246IHsgU291cmNlUmVmOiB7IFNvdXJjZTog",
     "ImxtIiB9IH0sIFByb3BlcnR5OiAiQVRDNV9Lb2RlX1Rla3N0IiB9IH0gfSwKICAgICAgICAgICAg",
@@ -352,120 +366,125 @@ generate_js <- function(atc_powerbi, metrics, regions, years, split_by_year) {
     "IiIpLnJlcGxhY2UoL0QkL2csICIiKSwKICAgICAgICAiTcOlbmVkIjogbm9ybWFsaXNlTW9udGhM",
     "YWJlbChjdXJyZW50WzNdKSwKICAgICAgICAiWWRlcnR5cGUiOiBub3JtYWxpc2VZZGVydHlwZShj",
     "dXJyZW50WzRdKSwKICAgICAgICAiQm9ww6Zsc3JlZ2lvbiI6IGN1cnJlbnRbNV0sCiAgICAgICAg",
-    "Im7DuGdsZXRhbF9vdXRwdXQiOiBtZXRyaWNNYXBbbWV0YS5vcGdvZXJlbHNlXSB8fCBtZXRhLm9w",
-    "Z29lcmVsc2UsCiAgICAgICAgInZhbHVlIjogcGFyc2VQYmlOdW1iZXIoY3VycmVudFs2XSksCiAg",
-    "ICAgICAgImF0Y19maWx0ZXIiOiBtZXRhLmF0YywKICAgICAgICAicmVnaW9uX2ZpbHRlciI6IG1l",
-    "dGEucmVnaW9uLAogICAgICAgICJ5ZWFyX2ZpbHRlciI6IEFycmF5LmlzQXJyYXkobWV0YS55ZWFy",
-    "KSA/IG1ldGEueWVhci5qb2luKCIsICIpIDogU3RyaW5nKG1ldGEueWVhciksCiAgICAgICAgIm9w",
-    "Z29lcmVsc2UiOiBtZXRhLm9wZ29lcmVsc2UsCiAgICAgICAgInN0YXR1cyI6IG1ldGEuc3RhdHVz",
-    "LAogICAgICAgICJyb3dDb3VudE1hcmtlciI6IG1ldGEucm93Q291bnRNYXJrZXIsCiAgICAgICAg",
-    "Imhhc1Jlc3RhcnRUb2tlbiI6IG1ldGEuaGFzUmVzdGFydFRva2VuLAogICAgICAgICJleHBvcnRf",
-    "ZXJyb3IiOiBtZXRhLmVycm9yIHx8ICIiCiAgICAgIH0pOwogICAgfQogICAgcmV0dXJuIG91dDsK",
-    "ICB9CgogIGZ1bmN0aW9uIGNzdkVzY2FwZSh2KSB7CiAgICBpZiAodiA9PSBudWxsKSByZXR1cm4g",
-    "IiI7CiAgICBpZiAodHlwZW9mIHYgPT09ICJudW1iZXIiKSB2ID0gU3RyaW5nKHYpLnJlcGxhY2Uo",
-    "Ii4iLCAiLCIpOwogICAgZWxzZSB2ID0gU3RyaW5nKHYpOwogICAgaWYgKC9bIjtcclxuXS8udGVz",
-    "dCh2KSkgdiA9ICciJyArIHYucmVwbGFjZUFsbCgnIicsICciIicpICsgJyInOwogICAgcmV0dXJu",
-    "IHY7CiAgfQoKICBmdW5jdGlvbiByb3dzVG9Dc3Yocm93cykgewogICAgY29uc3QgbGluZXMgPSBb",
-    "aGVhZGVycy5tYXAoY3N2RXNjYXBlKS5qb2luKCI7IildOwogICAgZm9yIChjb25zdCByIG9mIHJv",
-    "d3MpIGxpbmVzLnB1c2goaGVhZGVycy5tYXAoaCA9PiBjc3ZFc2NhcGUocltoXSkpLmpvaW4oIjsi",
-    "KSk7CiAgICByZXR1cm4gIlx1ZmVmZiIgKyBsaW5lcy5qb2luKCJcclxuIik7CiAgfQoKICBmdW5j",
-    "dGlvbiBkb3dubG9hZFRleHQoZmlsZW5hbWUsIHRleHQsIHR5cGUpIHsKICAgIGNvbnN0IGJsb2Ig",
-    "PSBuZXcgQmxvYihbdGV4dF0sIHsgdHlwZTogdHlwZSB8fCAidGV4dC9wbGFpbjtjaGFyc2V0PXV0",
-    "Zi04IiB9KTsKICAgIGNvbnN0IGEgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KCJhIik7CiAgICBh",
-    "LmhyZWYgPSBVUkwuY3JlYXRlT2JqZWN0VVJMKGJsb2IpOwogICAgYS5kb3dubG9hZCA9IGZpbGVu",
-    "YW1lOwogICAgZG9jdW1lbnQuYm9keS5hcHBlbmRDaGlsZChhKTsKICAgIGEuY2xpY2soKTsKICAg",
-    "IGEucmVtb3ZlKCk7CiAgICBzZXRUaW1lb3V0KCgpID0+IFVSTC5yZXZva2VPYmplY3RVUkwoYS5o",
-    "cmVmKSwgNTAwMCk7CiAgfQoKICBhc3luYyBmdW5jdGlvbiBydW5PbmUoeyBhdGMsIHJlZ2lvbiwg",
-    "eWVhciwgb3Bnb2VyZWxzZSB9KSB7CiAgICBjb25zdCB5ZWFyVmFsdWVzID0gQXJyYXkuaXNBcnJh",
-    "eSh5ZWFyKSA/IHllYXIgOiBbeWVhcl07CiAgICBjb25zdCBwYXlsb2FkID0gYnVpbGRQYXlsb2Fk",
-    "KHsgYXRjVmFsdWU6IGF0YywgbWV0cmljVmFsdWVzOiBbb3Bnb2VyZWxzZV0sIHJlZ2lvblZhbHVl",
-    "czogW3JlZ2lvbl0sIHllYXJWYWx1ZXMgfSk7CiAgICBsZXQgc3RhdHVzID0gbnVsbCwgdGV4dCA9",
-    "ICIiLCBwYXJzZWRKc29uID0gbnVsbCwgZXJyb3IgPSBudWxsOwogICAgdHJ5IHsKICAgICAgY29u",
-    "c3QgcmVzcG9uc2UgPSBhd2FpdCBmZXRjaCh1cmwsIHsKICAgICAgICBtZXRob2Q6ICJQT1NUIiwK",
-    "ICAgICAgICBjcmVkZW50aWFsczogImluY2x1ZGUiLAogICAgICAgIGhlYWRlcnM6IHsKICAgICAg",
-    "ICAgICJhY2NlcHQiOiAiYXBwbGljYXRpb24vanNvbiwgdGV4dC9wbGFpbiwgKi8qIiwKICAgICAg",
-    "ICAgICJjb250ZW50LXR5cGUiOiAiYXBwbGljYXRpb24vanNvbjtjaGFyc2V0PVVURi04IiwKICAg",
-    "ICAgICAgICJ4LXBvd2VyYmktcmVzb3VyY2VrZXkiOiAiYW55IgogICAgICAgIH0sCiAgICAgICAg",
-    "Ym9keTogSlNPTi5zdHJpbmdpZnkocGF5bG9hZCkKICAgICAgfSk7CiAgICAgIHN0YXR1cyA9IHJl",
-    "c3BvbnNlLnN0YXR1czsKICAgICAgdGV4dCA9IGF3YWl0IHJlc3BvbnNlLnRleHQoKTsKICAgICAg",
-    "dHJ5IHsgcGFyc2VkSnNvbiA9IEpTT04ucGFyc2UodGV4dCk7IH0gY2F0Y2goZSkgeyBlcnJvciA9",
-    "ICJLdW5uZSBpa2tlIEpTT04tcGFyc2UgcmVzcG9uc2U6ICIgKyBlLm1lc3NhZ2U7IH0KICAgIH0g",
-    "Y2F0Y2goZSkgewogICAgICBlcnJvciA9ICJGZXRjaC1mZWpsOiAiICsgZS5tZXNzYWdlOwogICAg",
-    "fQoKICAgIGNvbnN0IHJvd0NvdW50TWFya2VyID0gdGV4dC5zcGxpdCgnIkMiOlsnKS5sZW5ndGgg",
-    "LSAxOwogICAgY29uc3QgaGFzUmVzdGFydFRva2VuID0gdGV4dC5pbmNsdWRlcygnIlJUIicpOwog",
-    "ICAgY29uc3QgbWV0YSA9IHsgYXRjLCByZWdpb24sIHllYXIsIG9wZ29lcmVsc2UsIHN0YXR1cywg",
-    "cm93Q291bnRNYXJrZXIsIGhhc1Jlc3RhcnRUb2tlbiwgZXJyb3IgfTsKICAgIGNvbnN0IHJvd3Mg",
-    "PSBwYXJzZVJlc3BvbnNlVG9Sb3dzKHBhcnNlZEpzb24sIG1ldGEpOwogICAgcmV0dXJuIHsgbWV0",
-    "YTogeyAuLi5tZXRhLCBwYXJzZWRSb3dzOiByb3dzLmxlbmd0aCB9LCByb3dzIH07CiAgfQoKICBj",
-    "b25zdCB0b3RhbCA9IHNlbGVjdGVkQXRjLmxlbmd0aCAqIHNlbGVjdGVkUmVnaW9ucy5sZW5ndGgg",
-    "KiBzZWxlY3RlZE1ldHJpY3MubGVuZ3RoICogKHNwbGl0QnlZZWFyID8gc2VsZWN0ZWRZZWFycy5s",
-    "ZW5ndGggOiAxKTsKICBjb25zdCBzdW1tYXJ5ID0gW107CiAgbGV0IGRvbmUgPSAwOwogIGxldCBw",
-    "YXJ0Tm8gPSAxOwogIGxldCBidWZmZXIgPSBbXTsKCiAgZnVuY3Rpb24gZmx1c2goZm9yY2UpIHsK",
-    "ICAgIGlmIChidWZmZXIubGVuZ3RoID09PSAwKSByZXR1cm47CiAgICBpZiAoIWZvcmNlICYmIGJ1",
-    "ZmZlci5sZW5ndGggPCBtYXhSb3dzUGVyQ3N2KSByZXR1cm47CiAgICBjb25zdCBmaWxlbmFtZSA9",
-    "IGBtZWRpY2luc2FsZ19wYXJzZWRfcGFydF8ke1N0cmluZyhwYXJ0Tm8pLnBhZFN0YXJ0KDMsICIw",
-    "Iil9LmNzdmA7CiAgICBkb3dubG9hZFRleHQoZmlsZW5hbWUsIHJvd3NUb0NzdihidWZmZXIpLCAi",
-    "dGV4dC9jc3Y7Y2hhcnNldD11dGYtOCIpOwogICAgY29uc29sZS5sb2coYERvd25sb2FkZWRlICR7",
-    "ZmlsZW5hbWV9IG1lZCAke2J1ZmZlci5sZW5ndGh9IHLDpmtrZXJgKTsKICAgIHBhcnRObyArPSAx",
-    "OwogICAgYnVmZmVyID0gW107CiAgfQoKICBmb3IgKGNvbnN0IGF0YyBvZiBzZWxlY3RlZEF0Yykg",
-    "ewogICAgZm9yIChjb25zdCByZWdpb24gb2Ygc2VsZWN0ZWRSZWdpb25zKSB7CiAgICAgIGZvciAo",
-    "Y29uc3Qgb3Bnb2VyZWxzZSBvZiBzZWxlY3RlZE1ldHJpY3MpIHsKICAgICAgICBpZiAoc3BsaXRC",
-    "eVllYXIpIHsKICAgICAgICAgIGZvciAoY29uc3QgeWVhciBvZiBzZWxlY3RlZFllYXJzKSB7CiAg",
-    "ICAgICAgICAgIGRvbmUrKzsKICAgICAgICAgICAgY29uc29sZS5sb2coYFske2RvbmV9LyR7dG90",
-    "YWx9XSBIZW50ZXJgLCB7IGF0YywgcmVnaW9uLCBvcGdvZXJlbHNlLCB5ZWFyIH0pOwogICAgICAg",
-    "ICAgICBjb25zdCByZXMgPSBhd2FpdCBydW5PbmUoeyBhdGMsIHJlZ2lvbiwgb3Bnb2VyZWxzZSwg",
-    "eWVhciB9KTsKICAgICAgICAgICAgc3VtbWFyeS5wdXNoKHJlcy5tZXRhKTsKICAgICAgICAgICAg",
-    "YnVmZmVyLnB1c2goLi4ucmVzLnJvd3MpOwogICAgICAgICAgICBmbHVzaChmYWxzZSk7CiAgICAg",
-    "ICAgICB9CiAgICAgICAgfSBlbHNlIHsKICAgICAgICAgIGRvbmUrKzsKICAgICAgICAgIGNvbnNv",
-    "bGUubG9nKGBbJHtkb25lfS8ke3RvdGFsfV0gSGVudGVyYCwgeyBhdGMsIHJlZ2lvbiwgb3Bnb2Vy",
-    "ZWxzZSwgeWVhcjogc2VsZWN0ZWRZZWFycyB9KTsKICAgICAgICAgIGNvbnN0IHJlcyA9IGF3YWl0",
-    "IHJ1bk9uZSh7IGF0YywgcmVnaW9uLCBvcGdvZXJlbHNlLCB5ZWFyOiBzZWxlY3RlZFllYXJzIH0p",
-    "OwogICAgICAgICAgc3VtbWFyeS5wdXNoKHJlcy5tZXRhKTsKICAgICAgICAgIGJ1ZmZlci5wdXNo",
-    "KC4uLnJlcy5yb3dzKTsKICAgICAgICAgIGZsdXNoKGZhbHNlKTsKICAgICAgICB9CiAgICAgIH0K",
-    "ICAgIH0KICB9CgogIGZsdXNoKHRydWUpOwogIGRvd25sb2FkVGV4dCgibWVkaWNpbnNhbGdfZXhw",
-    "b3J0X3N1bW1hcnkuanNvbiIsIEpTT04uc3RyaW5naWZ5KHN1bW1hcnksIG51bGwsIDIpLCAiYXBw",
-    "bGljYXRpb24vanNvbjtjaGFyc2V0PXV0Zi04Iik7CgogIGNvbnN0IHRvdGFsUm93cyA9IHN1bW1h",
-    "cnkucmVkdWNlKChzLCB4KSA9PiBzICsgKHgucGFyc2VkUm93cyB8fCAwKSwgMCk7CiAgY29uc3Qg",
-    "dHJ1bmNhdGVkID0gc3VtbWFyeS5maWx0ZXIoeCA9PiB4Lmhhc1Jlc3RhcnRUb2tlbiB8fCBOdW1i",
-    "ZXIoeC5yb3dDb3VudE1hcmtlcikgPj0gMjkwMDApOwogIGNvbnNvbGUubG9nKGBGw6ZyZGlnLiBQ",
-    "YXJzZWRlICR7dG90YWxSb3dzfSByw6Zra2VyIGZvcmRlbHQgcMOlICR7cGFydE5vIC0gMX0gQ1NW",
-    "LWZpbChlcikuYCwgc3VtbWFyeSk7CiAgaWYgKHRydW5jYXRlZC5sZW5ndGggPiAwKSBjb25zb2xl",
-    "Lndhcm4oIk11bGlndCBhZmtvcnRlZGUgUG93ZXIgQkktc3ZhcjoiLCB0cnVuY2F0ZWQpOwp9KSgp",
-    "Ow=="
+    "Im7DuGdsZXRhbF9vdXRwdXQiOiBvdXRwdXRNZXRyaWNOYW1lKG1ldGEub3Bnb2VyZWxzZSwgbWV0",
+    "YS5ub3JtYWxpc2VyaW5nKSwKICAgICAgICAidmFsdWUiOiBwYXJzZVBiaU51bWJlcihjdXJyZW50",
+    "WzZdKSwKICAgICAgICAiYXRjX2ZpbHRlciI6IG1ldGEuYXRjLAogICAgICAgICJyZWdpb25fZmls",
+    "dGVyIjogbWV0YS5yZWdpb24sCiAgICAgICAgInllYXJfZmlsdGVyIjogQXJyYXkuaXNBcnJheSht",
+    "ZXRhLnllYXIpID8gbWV0YS55ZWFyLmpvaW4oIiwgIikgOiBTdHJpbmcobWV0YS55ZWFyKSwKICAg",
+    "ICAgICAib3Bnb2VyZWxzZSI6IG1ldGEub3Bnb2VyZWxzZSwKICAgICAgICAibm9ybWFsaXNlcmlu",
+    "ZyI6IG1ldGEubm9ybWFsaXNlcmluZywKICAgICAgICAic3RhdHVzIjogbWV0YS5zdGF0dXMsCiAg",
+    "ICAgICAgInJvd0NvdW50TWFya2VyIjogbWV0YS5yb3dDb3VudE1hcmtlciwKICAgICAgICAiaGFz",
+    "UmVzdGFydFRva2VuIjogbWV0YS5oYXNSZXN0YXJ0VG9rZW4sCiAgICAgICAgImV4cG9ydF9lcnJv",
+    "ciI6IG1ldGEuZXJyb3IgfHwgIiIKICAgICAgfSk7CiAgICB9CiAgICByZXR1cm4gb3V0OwogIH0K",
+    "CiAgZnVuY3Rpb24gY3N2RXNjYXBlKHYpIHsKICAgIGlmICh2ID09IG51bGwpIHJldHVybiAiIjsK",
+    "ICAgIGlmICh0eXBlb2YgdiA9PT0gIm51bWJlciIpIHYgPSBTdHJpbmcodikucmVwbGFjZSgiLiIs",
+    "ICIsIik7CiAgICBlbHNlIHYgPSBTdHJpbmcodik7CiAgICBpZiAoL1siO1xyXG5dLy50ZXN0KHYp",
+    "KSB2ID0gJyInICsgdi5yZXBsYWNlQWxsKCciJywgJyIiJykgKyAnIic7CiAgICByZXR1cm4gdjsK",
+    "ICB9CgogIGZ1bmN0aW9uIHJvd3NUb0Nzdihyb3dzKSB7CiAgICBjb25zdCBsaW5lcyA9IFtoZWFk",
+    "ZXJzLm1hcChjc3ZFc2NhcGUpLmpvaW4oIjsiKV07CiAgICBmb3IgKGNvbnN0IHIgb2Ygcm93cykg",
+    "bGluZXMucHVzaChoZWFkZXJzLm1hcChoID0+IGNzdkVzY2FwZShyW2hdKSkuam9pbigiOyIpKTsK",
+    "ICAgIHJldHVybiAiXHVmZWZmIiArIGxpbmVzLmpvaW4oIlxyXG4iKTsKICB9CgogIGZ1bmN0aW9u",
+    "IGRvd25sb2FkVGV4dChmaWxlbmFtZSwgdGV4dCwgdHlwZSkgewogICAgY29uc3QgYmxvYiA9IG5l",
+    "dyBCbG9iKFt0ZXh0XSwgeyB0eXBlOiB0eXBlIHx8ICJ0ZXh0L3BsYWluO2NoYXJzZXQ9dXRmLTgi",
+    "IH0pOwogICAgY29uc3QgYSA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoImEiKTsKICAgIGEuaHJl",
+    "ZiA9IFVSTC5jcmVhdGVPYmplY3RVUkwoYmxvYik7CiAgICBhLmRvd25sb2FkID0gZmlsZW5hbWU7",
+    "CiAgICBkb2N1bWVudC5ib2R5LmFwcGVuZENoaWxkKGEpOwogICAgYS5jbGljaygpOwogICAgYS5y",
+    "ZW1vdmUoKTsKICAgIHNldFRpbWVvdXQoKCkgPT4gVVJMLnJldm9rZU9iamVjdFVSTChhLmhyZWYp",
+    "LCA1MDAwKTsKICB9CgogIGFzeW5jIGZ1bmN0aW9uIHJ1bk9uZSh7IGF0YywgcmVnaW9uLCB5ZWFy",
+    "LCBvcGdvZXJlbHNlLCBub3JtYWxpc2VyaW5nIH0pIHsKICAgIGNvbnN0IHllYXJWYWx1ZXMgPSBB",
+    "cnJheS5pc0FycmF5KHllYXIpID8geWVhciA6IFt5ZWFyXTsKICAgIGNvbnN0IHBheWxvYWQgPSBi",
+    "dWlsZFBheWxvYWQoeyBhdGNWYWx1ZTogYXRjLCBtZXRyaWNWYWx1ZXM6IFtvcGdvZXJlbHNlXSwg",
+    "cmVnaW9uVmFsdWVzOiBbcmVnaW9uXSwgeWVhclZhbHVlcywgbm9ybWFsaXNhdGlvblZhbHVlOiBu",
+    "b3JtYWxpc2VyaW5nIH0pOwogICAgbGV0IHN0YXR1cyA9IG51bGwsIHRleHQgPSAiIiwgcGFyc2Vk",
+    "SnNvbiA9IG51bGwsIGVycm9yID0gbnVsbDsKICAgIHRyeSB7CiAgICAgIGNvbnN0IHJlc3BvbnNl",
+    "ID0gYXdhaXQgZmV0Y2godXJsLCB7CiAgICAgICAgbWV0aG9kOiAiUE9TVCIsCiAgICAgICAgY3Jl",
+    "ZGVudGlhbHM6ICJpbmNsdWRlIiwKICAgICAgICBoZWFkZXJzOiB7CiAgICAgICAgICAiYWNjZXB0",
+    "IjogImFwcGxpY2F0aW9uL2pzb24sIHRleHQvcGxhaW4sICovKiIsCiAgICAgICAgICAiY29udGVu",
+    "dC10eXBlIjogImFwcGxpY2F0aW9uL2pzb247Y2hhcnNldD1VVEYtOCIsCiAgICAgICAgICAieC1w",
+    "b3dlcmJpLXJlc291cmNla2V5IjogImFueSIKICAgICAgICB9LAogICAgICAgIGJvZHk6IEpTT04u",
+    "c3RyaW5naWZ5KHBheWxvYWQpCiAgICAgIH0pOwogICAgICBzdGF0dXMgPSByZXNwb25zZS5zdGF0",
+    "dXM7CiAgICAgIHRleHQgPSBhd2FpdCByZXNwb25zZS50ZXh0KCk7CiAgICAgIHRyeSB7IHBhcnNl",
+    "ZEpzb24gPSBKU09OLnBhcnNlKHRleHQpOyB9IGNhdGNoKGUpIHsgZXJyb3IgPSAiS3VubmUgaWtr",
+    "ZSBKU09OLXBhcnNlIHJlc3BvbnNlOiAiICsgZS5tZXNzYWdlOyB9CiAgICB9IGNhdGNoKGUpIHsK",
+    "ICAgICAgZXJyb3IgPSAiRmV0Y2gtZmVqbDogIiArIGUubWVzc2FnZTsKICAgIH0KCiAgICBjb25z",
+    "dCByb3dDb3VudE1hcmtlciA9IHRleHQuc3BsaXQoJyJDIjpbJykubGVuZ3RoIC0gMTsKICAgIGNv",
+    "bnN0IGhhc1Jlc3RhcnRUb2tlbiA9IHRleHQuaW5jbHVkZXMoJyJSVCInKTsKICAgIGNvbnN0IG1l",
+    "dGEgPSB7IGF0YywgcmVnaW9uLCB5ZWFyLCBvcGdvZXJlbHNlLCBub3JtYWxpc2VyaW5nLCBzdGF0",
+    "dXMsIHJvd0NvdW50TWFya2VyLCBoYXNSZXN0YXJ0VG9rZW4sIGVycm9yIH07CiAgICBjb25zdCBy",
+    "b3dzID0gcGFyc2VSZXNwb25zZVRvUm93cyhwYXJzZWRKc29uLCBtZXRhKTsKICAgIHJldHVybiB7",
+    "IG1ldGE6IHsgLi4ubWV0YSwgcGFyc2VkUm93czogcm93cy5sZW5ndGggfSwgcm93cyB9OwogIH0K",
+    "CiAgY29uc3QgdG90YWwgPSBzZWxlY3RlZEF0Yy5sZW5ndGggKiBzZWxlY3RlZFJlZ2lvbnMubGVu",
+    "Z3RoICogc2VsZWN0ZWRNZXRyaWNzLmxlbmd0aCAqIG5vcm1hbGlzYXRpb25PcHRpb25zLmxlbmd0",
+    "aCAqIChzcGxpdEJ5WWVhciA/IHNlbGVjdGVkWWVhcnMubGVuZ3RoIDogMSk7CiAgY29uc3Qgc3Vt",
+    "bWFyeSA9IFtdOwogIGxldCBkb25lID0gMDsKICBsZXQgcGFydE5vID0gMTsKICBsZXQgYnVmZmVy",
+    "ID0gW107CgogIGZ1bmN0aW9uIGZsdXNoKGZvcmNlKSB7CiAgICBpZiAoYnVmZmVyLmxlbmd0aCA9",
+    "PT0gMCkgcmV0dXJuOwogICAgaWYgKCFmb3JjZSAmJiBidWZmZXIubGVuZ3RoIDwgbWF4Um93c1Bl",
+    "ckNzdikgcmV0dXJuOwogICAgY29uc3QgZmlsZW5hbWUgPSBgbWVkaWNpbnNhbGdfcGFyc2VkX3Bh",
+    "cnRfJHtTdHJpbmcocGFydE5vKS5wYWRTdGFydCgzLCAiMCIpfS5jc3ZgOwogICAgZG93bmxvYWRU",
+    "ZXh0KGZpbGVuYW1lLCByb3dzVG9Dc3YoYnVmZmVyKSwgInRleHQvY3N2O2NoYXJzZXQ9dXRmLTgi",
+    "KTsKICAgIGNvbnNvbGUubG9nKGBEb3dubG9hZGVkZSAke2ZpbGVuYW1lfSBtZWQgJHtidWZmZXIu",
+    "bGVuZ3RofSByw6Zra2VyYCk7CiAgICBwYXJ0Tm8gKz0gMTsKICAgIGJ1ZmZlciA9IFtdOwogIH0K",
+    "CiAgZm9yIChjb25zdCBhdGMgb2Ygc2VsZWN0ZWRBdGMpIHsKICAgIGZvciAoY29uc3QgcmVnaW9u",
+    "IG9mIHNlbGVjdGVkUmVnaW9ucykgewogICAgICBmb3IgKGNvbnN0IG9wZ29lcmVsc2Ugb2Ygc2Vs",
+    "ZWN0ZWRNZXRyaWNzKSB7CiAgICAgICAgZm9yIChjb25zdCBub3JtYWxpc2VyaW5nIG9mIG5vcm1h",
+    "bGlzYXRpb25PcHRpb25zLm1hcCh4ID0+IHgudmFsdWUpKSB7CiAgICAgICAgICBpZiAoc3BsaXRC",
+    "eVllYXIpIHsKICAgICAgICAgICAgZm9yIChjb25zdCB5ZWFyIG9mIHNlbGVjdGVkWWVhcnMpIHsK",
+    "ICAgICAgICAgICAgICBkb25lKys7CiAgICAgICAgICAgICAgY29uc29sZS5sb2coYFske2RvbmV9",
+    "LyR7dG90YWx9XSBIZW50ZXJgLCB7IGF0YywgcmVnaW9uLCBvcGdvZXJlbHNlLCBub3JtYWxpc2Vy",
+    "aW5nLCB5ZWFyIH0pOwogICAgICAgICAgICAgIGNvbnN0IHJlcyA9IGF3YWl0IHJ1bk9uZSh7IGF0",
+    "YywgcmVnaW9uLCBvcGdvZXJlbHNlLCBub3JtYWxpc2VyaW5nLCB5ZWFyIH0pOwogICAgICAgICAg",
+    "ICAgIHN1bW1hcnkucHVzaChyZXMubWV0YSk7CiAgICAgICAgICAgICAgYnVmZmVyLnB1c2goLi4u",
+    "cmVzLnJvd3MpOwogICAgICAgICAgICAgIGZsdXNoKGZhbHNlKTsKICAgICAgICAgICAgfQogICAg",
+    "ICAgICAgfSBlbHNlIHsKICAgICAgICAgICAgZG9uZSsrOwogICAgICAgICAgICBjb25zb2xlLmxv",
+    "ZyhgWyR7ZG9uZX0vJHt0b3RhbH1dIEhlbnRlcmAsIHsgYXRjLCByZWdpb24sIG9wZ29lcmVsc2Us",
+    "IG5vcm1hbGlzZXJpbmcsIHllYXI6IHNlbGVjdGVkWWVhcnMgfSk7CiAgICAgICAgICAgIGNvbnN0",
+    "IHJlcyA9IGF3YWl0IHJ1bk9uZSh7IGF0YywgcmVnaW9uLCBvcGdvZXJlbHNlLCBub3JtYWxpc2Vy",
+    "aW5nLCB5ZWFyOiBzZWxlY3RlZFllYXJzIH0pOwogICAgICAgICAgICBzdW1tYXJ5LnB1c2gocmVz",
+    "Lm1ldGEpOwogICAgICAgICAgICBidWZmZXIucHVzaCguLi5yZXMucm93cyk7CiAgICAgICAgICAg",
+    "IGZsdXNoKGZhbHNlKTsKICAgICAgICAgIH0KICAgICAgICB9CiAgICAgIH0KICAgIH0KICB9Cgog",
+    "IGZsdXNoKHRydWUpOwogIGRvd25sb2FkVGV4dCgibWVkaWNpbnNhbGdfZXhwb3J0X3N1bW1hcnku",
+    "anNvbiIsIEpTT04uc3RyaW5naWZ5KHN1bW1hcnksIG51bGwsIDIpLCAiYXBwbGljYXRpb24vanNv",
+    "bjtjaGFyc2V0PXV0Zi04Iik7CgogIGNvbnN0IHRvdGFsUm93cyA9IHN1bW1hcnkucmVkdWNlKChz",
+    "LCB4KSA9PiBzICsgKHgucGFyc2VkUm93cyB8fCAwKSwgMCk7CiAgY29uc3QgdHJ1bmNhdGVkID0g",
+    "c3VtbWFyeS5maWx0ZXIoeCA9PiB4Lmhhc1Jlc3RhcnRUb2tlbiB8fCBOdW1iZXIoeC5yb3dDb3Vu",
+    "dE1hcmtlcikgPj0gMjkwMDApOwogIGNvbnNvbGUubG9nKGBGw6ZyZGlnLiBQYXJzZWRlICR7dG90",
+    "YWxSb3dzfSByw6Zra2VyIGZvcmRlbHQgcMOlICR7cGFydE5vIC0gMX0gQ1NWLWZpbChlcikuYCwg",
+    "c3VtbWFyeSk7CiAgaWYgKHRydW5jYXRlZC5sZW5ndGggPiAwKSBjb25zb2xlLndhcm4oIk11bGln",
+    "dCBhZmtvcnRlZGUgUG93ZXIgQkktc3ZhcjoiLCB0cnVuY2F0ZWQpOwp9KSgpOw=="
   )
-
+  
   js_template <- rawToChar(jsonlite::base64_dec(js_b64))
   js_template <- gsub("__ATC_JS__", atc_js, js_template, fixed = TRUE)
   js_template <- gsub("__METRICS_JS__", metrics_js, js_template, fixed = TRUE)
   js_template <- gsub("__REGIONS_JS__", regions_js, js_template, fixed = TRUE)
   js_template <- gsub("__YEARS_JS__", years_js, js_template, fixed = TRUE)
   js_template <- gsub("__SPLIT_JS__", split_js, js_template, fixed = TRUE)
-
+  
   js_template
 }
 parse_pbi_number <- function(x) {
   if (is.null(x) || length(x) == 0) return(NA_real_)
   if (is.numeric(x)) return(as.numeric(x)[1])
-
+  
   x <- as.character(x)[1]
   if (is.na(x) || x == "") return(NA_real_)
-
+  
   x <- str_remove(x, "D$")
   x <- str_replace_all(x, "\\s", "")
   x <- str_replace(x, ",", ".")
-
+  
   suppressWarnings(as.numeric(x))
 }
 
 parse_literal <- function(x) {
   if (is.null(x) || length(x) == 0) return(NA_character_)
-
+  
   if (is.list(x)) {
     if (!is.null(x$Literal$Value)) return(parse_literal(x$Literal$Value))
     if (!is.null(x$Value)) return(parse_literal(x$Value))
     return(NA_character_)
   }
-
+  
   x <- as.character(x)[1]
   x <- str_replace_all(x, "^'|'$", "")
   x <- str_replace_all(x, "^\\u0027|\\u0027$", "")
@@ -474,12 +493,12 @@ parse_literal <- function(x) {
 
 extract_dictionary_values <- function(node) {
   found <- list()
-
+  
   walk_node <- function(x, path = character()) {
     if (!is.list(x)) return(NULL)
-
+    
     nms <- names(x) %||% character(0)
-
+    
     for (nm in nms) {
       val <- x[[nm]]
       if (str_detect(nm, "^D(N|[0-9]+)$") && is.list(val)) {
@@ -489,14 +508,14 @@ extract_dictionary_values <- function(node) {
         }
       }
     }
-
+    
     for (nm in nms) {
       walk_node(x[[nm]], c(path, nm))
     }
-
+    
     NULL
   }
-
+  
   walk_node(node)
   found
 }
@@ -504,10 +523,10 @@ extract_dictionary_values <- function(node) {
 resolve_dict_ref <- function(ref, dictionaries, preferred_index = NULL, strict_preferred = FALSE) {
   if (is.null(ref) || length(ref) == 0) return(NA_character_)
   if (length(dictionaries) == 0) return(NA_character_)
-
+  
   idx <- suppressWarnings(as.integer(ref))
   if (is.na(idx)) return(NA_character_)
-
+  
   if (!is.null(preferred_index)) {
     preferred_names <- names(dictionaries)[str_detect(names(dictionaries), paste0("\\.D", preferred_index, "$|^D", preferred_index, "$"))]
     for (dn in preferred_names) {
@@ -515,48 +534,48 @@ resolve_dict_ref <- function(ref, dictionaries, preferred_index = NULL, strict_p
       if (idx + 1 <= length(vals)) return(vals[[idx + 1]])
     }
   }
-
+  
   dn_names <- names(dictionaries)[str_detect(names(dictionaries), "\\.DN$|^DN$")]
   for (dn in dn_names) {
     vals <- dictionaries[[dn]]
     if (idx + 1 <= length(vals)) return(vals[[idx + 1]])
   }
-
+  
   for (vals in dictionaries) {
     if (idx + 1 <= length(vals)) return(vals[[idx + 1]])
   }
-
+  
   NA_character_
 }
 
 extract_rows_from_node <- function(node) {
   rows <- list()
-
+  
   walk_node <- function(x) {
     if (!is.list(x)) return(NULL)
-
+    
     if (!is.null(x$C) && is.list(x$C)) {
       rows[[length(rows) + 1]] <<- x
     }
-
+    
     for (child in x) {
       walk_node(child)
     }
-
+    
     NULL
   }
-
+  
   walk_node(node)
   rows
 }
 
 value_from_cell <- function(cell, dictionaries, col_index = NULL) {
   if (is.null(cell) || length(cell) == 0) return(NA)
-
+  
   if (is.atomic(cell) && !is.list(cell)) {
     return(cell[[1]])
   }
-
+  
   if (is.list(cell)) {
     # Power BI-komprimerede svar bruger ofte V som rå dictionary-indeks
     # sammen med D/D0/D1/... . Slå dictionary-referencen op før V, så
@@ -569,10 +588,10 @@ value_from_cell <- function(cell, dictionaries, col_index = NULL) {
         return(resolve_dict_ref(cell[[key]], dictionaries, preferred_index = preferred))
       }
     }
-
+    
     if (!is.null(cell$Value)) return(parse_literal(cell$Value))
     if (!is.null(cell$Literal$Value)) return(parse_literal(cell$Literal$Value))
-
+    
     # Nogle Power BI-svar gemmer tekst-dimensioner som V=<dictionary-indeks>
     # uden en eksplicit D/D0/D1-nøgle i cellen. For de første seks kolonner
     # er V derfor forsøgt slået op som dictionary-reference, før værdien
@@ -584,45 +603,45 @@ value_from_cell <- function(cell, dictionaries, col_index = NULL) {
         if (!is.na(resolved_v) && nzchar(resolved_v)) return(resolved_v)
       }
     }
-
+    
     if (!is.null(cell$V)) return(parse_literal(cell$V))
-
+    
     if (length(cell) == 1) return(value_from_cell(cell[[1]], dictionaries, col_index = col_index))
   }
-
+  
   NA
 }
 
 row_reuse_mask <- function(row) {
   if (is.null(row$R)) return(integer(0))
-
+  
   r <- row$R
   if (is.character(r)) {
     r <- suppressWarnings(as.integer(r))
   }
-
+  
   if (!is.numeric(r) || is.na(r)) return(integer(0))
-
+  
   which(as.logical(intToBits(as.integer(r))[1:32])) - 1L
 }
 
 parse_one_response_dsr <- function(response, metadata = list()) {
   if (is.null(response)) return(tibble())
-
+  
   dictionaries <- extract_dictionary_values(response)
   rows <- extract_rows_from_node(response)
-
+  
   if (length(rows) == 0) return(tibble())
-
+  
   previous <- rep(NA_character_, 7)
   parsed <- vector("list", length(rows))
-
+  
   for (i in seq_along(rows)) {
     row <- rows[[i]]
     cells <- row$C %||% list()
-
+    
     current <- rep(NA_character_, 7)
-
+    
     reuse_cols <- row_reuse_mask(row)
     if (length(reuse_cols) > 0) {
       for (col0 in reuse_cols) {
@@ -632,7 +651,7 @@ parse_one_response_dsr <- function(response, metadata = list()) {
         }
       }
     }
-
+    
     missing_positions <- which(is.na(current))
     if (length(cells) > 0) {
       for (j in seq_along(cells)) {
@@ -643,13 +662,13 @@ parse_one_response_dsr <- function(response, metadata = list()) {
         } else {
           next
         }
-
+        
         current[pos] <- as.character(value_from_cell(cells[[j]], dictionaries, col_index = pos - 1L))
       }
     }
-
+    
     previous <- current
-
+    
     parsed[[i]] <- tibble(
       `ATC, Niveau 5, kode & tekst` = current[1],
       Laegemiddeltekst_samlet_unavne = current[2],
@@ -660,13 +679,14 @@ parse_one_response_dsr <- function(response, metadata = list()) {
       value = parse_pbi_number(current[7])
     )
   }
-
+  
   bind_rows(parsed) |>
     mutate(
       atc_filter = metadata$atc %||% NA_character_,
       region_filter = metadata$region %||% NA_character_,
       year_filter = paste(metadata$year %||% NA_character_, collapse = ", "),
       opgoerelse = metadata$opgoerelse %||% NA_character_,
+      normalisering = metadata$normalisering %||% NA_character_,
       status = metadata$status %||% NA,
       rowCountMarker = metadata$rowCountMarker %||% NA,
       hasRestartToken = metadata$hasRestartToken %||% NA,
@@ -677,9 +697,9 @@ parse_one_response_dsr <- function(response, metadata = list()) {
 split_laegemiddeltekst <- function(x) {
   x <- x %||% NA_character_
   x <- ifelse(is.na(x), "", x)
-
+  
   parts <- str_split_fixed(x, "\\s*\\|\\s*", 5)
-
+  
   tibble(
     Varenummer = na_if(parts[, 1], ""),
     `Navn (Præparat)` = na_if(parts[, 2], ""),
@@ -699,6 +719,17 @@ metric_map <- c(
   "Regionalt tilskud" = "Tilskudsbeløb - Regionalt",
   "Omsætning" = "Ekspeditionsbeløb"
 )
+
+metric_cols <- c(
+  unname(metric_map),
+  paste0(unname(metric_map), " pr. 1.000 borgere")
+)
+
+output_metric_name <- function(opgoerelse, normalisering = NA_character_) {
+  base <- dplyr::recode(opgoerelse, !!!metric_map, .default = opgoerelse)
+  is_pr1000 <- !is.na(normalisering) & normalisering == "Antal pr. 1.000"
+  if_else(is_pr1000, paste0(base, " pr. 1.000 borgere"), base)
+}
 
 
 month_label_da <- function(x) {
@@ -731,7 +762,7 @@ normalise_ydertype <- function(x) {
 normalise_year_month_columns <- function(dat) {
   if (!"År" %in% names(dat)) dat$`År` <- NA_character_
   if (!"Måned" %in% names(dat)) dat$`Måned` <- NA_character_
-
+  
   old_col <- "År/Måned (Ekspedition)"
   if (old_col %in% names(dat)) {
     old <- str_trim(as.character(dat[[old_col]]))
@@ -750,7 +781,7 @@ normalise_year_month_columns <- function(dat) {
       str_extract(as.character(dat$year_filter), "[12][0-9]{3}")
     )
   }
-
+  
   dat |>
     mutate(
       `År` = str_remove(str_trim(as.character(`År`)), "D$"),
@@ -762,7 +793,7 @@ normalise_year_month_columns <- function(dat) {
 
 finalise_parsed_long_export <- function(long2) {
   if (is.null(long2) || nrow(long2) == 0) return(tibble())
-
+  
   # CSV-chunks fra browser-parseren bruger dansk Excel-format: semikolon + decimalkomma.
   if ("value" %in% names(long2)) {
     if (!is.numeric(long2$value)) {
@@ -775,9 +806,9 @@ finalise_parsed_long_export <- function(long2) {
   } else {
     long2$value <- 0
   }
-
+  
   long2 <- normalise_year_month_columns(long2)
-
+  
   if ("Ydertype" %in% names(long2)) {
     long2 <- long2 |> mutate(`Ydertype` = normalise_ydertype(`Ydertype`))
   } else if ("Ydertype, kode & tekst (Receptudsteder)" %in% names(long2)) {
@@ -785,7 +816,7 @@ finalise_parsed_long_export <- function(long2) {
   } else {
     long2$`Ydertype` <- NA_character_
   }
-
+  
   if (!"Bopælsregion" %in% names(long2)) {
     long2$Bopælsregion <- if ("region_filter" %in% names(long2)) long2$region_filter else NA_character_
   } else if ("region_filter" %in% names(long2)) {
@@ -796,7 +827,7 @@ finalise_parsed_long_export <- function(long2) {
         Bopælsregion = coalesce(Bopælsregion, as.character(region_filter))
       )
   }
-
+  
   if ("atc_filter" %in% names(long2)) {
     long2 <- long2 |>
       mutate(
@@ -807,7 +838,7 @@ finalise_parsed_long_export <- function(long2) {
         )
       )
   }
-
+  
   needed <- c(
     "ATC, Niveau 5, kode & tekst",
     "Form",
@@ -819,11 +850,11 @@ finalise_parsed_long_export <- function(long2) {
     "Bopælsregion",
     "nøgletal_output"
   )
-
+  
   for (nm in needed) {
     if (!nm %in% names(long2)) long2[[nm]] <- NA_character_
   }
-
+  
   keys <- c(
     "ATC, Niveau 5, kode & tekst",
     "Form",
@@ -834,7 +865,7 @@ finalise_parsed_long_export <- function(long2) {
     "Ydertype",
     "Bopælsregion"
   )
-
+  
   out <- long2 |>
     mutate(
       value = replace_na(value, 0),
@@ -848,38 +879,39 @@ finalise_parsed_long_export <- function(long2) {
       values_from = value,
       values_fill = 0
     )
-
-  for (col in unname(metric_map)) {
+  
+  for (col in metric_cols) {
     if (!col %in% names(out)) out[[col]] <- 0
   }
-
+  
   out |>
-    relocate(all_of(keys), all_of(unname(metric_map))) |>
+    relocate(all_of(keys), all_of(metric_cols)) |>
     filter(
-      rowSums(across(all_of(unname(metric_map)), ~ replace_na(as.numeric(.x), 0))) != 0
+      rowSums(across(all_of(metric_cols), ~ replace_na(as.numeric(.x), 0))) != 0
     ) |>
     arrange(`ATC, Niveau 5, kode & tekst`, `Navn (Præparat)`, `År`, `Måned`)
 }
 
 parse_export_object <- function(raw) {
   if (is.null(raw) || length(raw) == 0) return(tibble())
-
+  
   if (!is.list(raw) || is.null(raw[[1]])) {
     stop("JSON-filen kunne ikke tolkes som et array af Power BI-kald.")
   }
-
+  
   long <- purrr::map_dfr(raw, function(one_call) {
     meta <- list(
       atc = one_call$atc %||% NA_character_,
       region = one_call$region %||% NA_character_,
       year = one_call$year %||% NA,
       opgoerelse = one_call$opgoerelse %||% NA_character_,
+      normalisering = one_call$normalisering %||% NA_character_,
       status = one_call$status %||% NA,
       rowCountMarker = one_call$rowCountMarker %||% NA,
       hasRestartToken = one_call$hasRestartToken %||% NA,
       error = one_call$error %||% NA_character_
     )
-
+    
     tryCatch(
       parse_one_response_dsr(one_call$response, meta),
       error = function(e) {
@@ -894,6 +926,7 @@ parse_export_object <- function(raw) {
           region_filter = meta$region,
           year_filter = paste(meta$year, collapse = ", "),
           opgoerelse = meta$opgoerelse,
+          normalisering = meta$normalisering,
           status = meta$status,
           rowCountMarker = meta$rowCountMarker,
           hasRestartToken = meta$hasRestartToken,
@@ -902,33 +935,34 @@ parse_export_object <- function(raw) {
       }
     )
   })
-
+  
   if (nrow(long) == 0) return(tibble())
-
+  
   med_split <- split_laegemiddeltekst(long$Laegemiddeltekst_samlet_unavne)
-
+  
   long2 <- bind_cols(
     long |> select(-Laegemiddeltekst_samlet_unavne),
     med_split
   ) |>
     mutate(
       `ATC, Niveau 5, kode & tekst` = format_atc5(`ATC, Niveau 5, kode & tekst`),
-      nøgletal_output = dplyr::recode(opgoerelse, !!!metric_map, .default = opgoerelse),
+      nøgletal_output = output_metric_name(opgoerelse, normalisering),
       value = replace_na(value, 0)
     )
-
+  
   finalise_parsed_long_export(long2)
 }
 
 extract_export_metadata <- function(raw) {
   if (!is.list(raw) || length(raw) == 0) return(tibble())
-
+  
   purrr::map_dfr(raw, function(x) {
     tibble(
       atc = paste(x$atc %||% NA_character_, collapse = ", "),
       region = paste(x$region %||% NA_character_, collapse = ", "),
       year = paste(x$year %||% NA_character_, collapse = ", "),
       opgoerelse = paste(x$opgoerelse %||% NA_character_, collapse = ", "),
+      normalisering = paste(x$normalisering %||% NA_character_, collapse = ", "),
       status = x$status %||% NA,
       rowCountMarker = x$rowCountMarker %||% NA,
       hasRestartToken = x$hasRestartToken %||% NA,
@@ -951,7 +985,7 @@ ui <- page_sidebar(
     base_font = font_google("Inter"),
     heading_font = font_google("Inter")
   ),
-
+  
   tags$head(
     tags$style(HTML(paste0("
       :root { --p287: ", pantone_287, "; --p289: ", pantone_289, "; }
@@ -970,12 +1004,12 @@ ui <- page_sidebar(
       code { color: var(--p287); }
     ")) )
   ),
-
+  
   sidebar = sidebar(
     width = 390,
-
+    
     h5("1. Dataudtræk"),
-
+    
     textAreaInput(
       "atc",
       "ATC-koder eller Power BI ATC5-værdier",
@@ -983,19 +1017,19 @@ ui <- page_sidebar(
       rows = 7,
       placeholder = "Én ATC-kode per linje, fx:\nA02BC02\nB01AF01\nN06BA04\n\nEller fuld Power BI-værdi:\nA02BC02 (Pantoprazol)"
     ),
-
+    
     fileInput(
       "mapping_file",
       "Valgfri mapping-tabel: ATC → ATC5_Kode_Tekst",
       accept = c(".csv", ".txt", ".tsv")
     ),
-
+    
     div(
       class = "alert alert-info py-2",
       strong("Nøgletal: "),
-      "Alle tre nøgletal medtages altid: Antal DDD, regionalt tilskud og omsætning."
+      "Alle tre nøgletal medtages altid — både som absolutte værdier og pr. 1.000 borgere."
     ),
-
+    
     checkboxGroupInput(
       "regions",
       "Region",
@@ -1014,7 +1048,7 @@ ui <- page_sidebar(
         "Region Nordjylland"
       )
     ),
-
+    
     sliderInput(
       "years_range",
       "Periode (år)",
@@ -1025,32 +1059,32 @@ ui <- page_sidebar(
       sep = "",
       ticks = TRUE
     ),
-
+    
     hr(),
-
+    
     h5("2. Saml parsede CSV-chunks eller parse gammel JSON"),
-
+    
     fileInput(
       "parsed_csv_files",
       "Upload medicinsalg_parsed_part_*.csv (kan vælge flere)",
       accept = c(".csv"),
       multiple = TRUE
     ),
-
+    
     fileInput("json_file", "Alternativt: upload gammel rå powerbi_medicinsalg_export.json", accept = c(".json")),
-
+    
     actionButton("parse_btn", "Saml/parse filer", class = "btn-primary"),
-
+    
     hr(),
-
+    
     downloadButton("download_js", "Download JavaScript"),
     downloadButton("download_csv", "Download CSV"),
     downloadButton("download_xlsx", "Download Excel")
   ),
-
+  
   layout_columns(
     col_widths = c(12),
-
+    
     card(
       card_header("Sådan bruges generatoren"),
       div(
@@ -1067,7 +1101,7 @@ ui <- page_sidebar(
         )
       )
     ),
-
+    
     card(
       card_header(
         div(
@@ -1110,17 +1144,17 @@ ui <- page_sidebar(
         });
       "))
     ),
-
+    
     uiOutput("validation_message"),
     uiOutput("parse_status"),
     uiOutput("empty_data_warning"),
     uiOutput("truncation_warning"),
-
+    
     card(
       card_header("Metadata for uploadet JSON"),
       DTOutput("metadata_table")
     ),
-
+    
     card(
       card_header("Parsed data"),
       DTOutput("parsed_table")
@@ -1133,32 +1167,32 @@ server <- function(input, output, session) {
     req(input$mapping_file)
     read_mapping_file(input$mapping_file$datapath)
   })
-
+  
   selected_years <- reactive({
     rng <- suppressWarnings(as.integer(input$years_range))
     rng <- rng[!is.na(rng)]
     if (length(rng) < 2) return(integer(0))
     seq.int(min(rng), max(rng))
   })
-
+  
   atc_powerbi <- reactive({
     atc_raw <- normalise_atc_input(input$atc)
-
+    
     mapping <- NULL
     if (!is.null(input$mapping_file)) {
       mapping <- mapping_data()
     }
-
+    
     apply_atc_mapping(atc_raw, mapping)
   })
-
+  
   generated_js <- reactive({
     shiny::validate(
       shiny::need(length(atc_powerbi()) > 0, "Indtast mindst én ATC-kode."),
       shiny::need(length(input$regions) > 0, "Vælg mindst én region."),
       shiny::need(length(selected_years()) > 0, "Vælg mindst ét år.")
     )
-
+    
     generate_js(
       atc_powerbi = atc_powerbi(),
       metrics = names(metric_map),
@@ -1167,26 +1201,26 @@ server <- function(input, output, session) {
       split_by_year = TRUE
     )
   })
-
+  
   output$validation_message <- renderUI({
     atc_raw <- normalise_atc_input(input$atc)
     atc_mapped <- atc_powerbi()
-
+    
     if (length(atc_raw) == 0) {
       return(div(class = "alert alert-info", "Indtast mindst én ATC-kode."))
     }
-
+    
     div(
       class = "alert alert-secondary",
       strong("ATC-værdier sendt til Power BI-filteret: "),
       tags$code(paste(atc_mapped, collapse = "; "))
     )
   })
-
+  
   observe({
     session$sendCustomMessage("set_js_code", generated_js())
   })
-
+  
   output$download_js <- downloadHandler(
     filename = function() {
       paste0("powerbi_medicinsalg_export_", format(Sys.Date(), "%Y%m%d"), ".js")
@@ -1195,7 +1229,7 @@ server <- function(input, output, session) {
       writeLines(generated_js(), file, useBytes = TRUE)
     }
   )
-
+  
   # Cache upload, metadata and parsed data when the user clicks Parse JSON.
   # This is intentionally not a plain reactive(), because large JSON files are expensive
   # to parse and download handlers should write exactly the same object as the table shows.
@@ -1203,16 +1237,16 @@ server <- function(input, output, session) {
   metadata_val <- reactiveVal(tibble())
   parsed_data_val <- reactiveVal(tibble())
   parse_status_val <- reactiveVal(NULL)
-
+  
   observeEvent(input$parse_btn, {
     has_csv <- !is.null(input$parsed_csv_files) && nrow(input$parsed_csv_files) > 0
     has_json <- !is.null(input$json_file)
     req(has_csv || has_json)
-
+    
     parse_status_val(NULL)
     metadata_val(tibble())
     parsed_data_val(tibble())
-
+    
     tryCatch({
       if (has_csv) {
         long <- purrr::map_dfr(input$parsed_csv_files$datapath, function(path) {
@@ -1222,22 +1256,24 @@ server <- function(input, output, session) {
             locale = readr::locale(encoding = "UTF-8", decimal_mark = ",", grouping_mark = ".")
           )
         })
-
+        
+        if (!"normalisering" %in% names(long)) long$normalisering <- NA_character_
+        
         parsed <- finalise_parsed_long_export(long)
-
+        
         meta <- long |>
-          distinct(atc_filter, region_filter, year_filter, opgoerelse, status, rowCountMarker, hasRestartToken, export_error) |>
+          distinct(atc_filter, region_filter, year_filter, opgoerelse, normalisering, status, rowCountMarker, hasRestartToken, export_error) |>
           rename(
             atc = atc_filter,
             region = region_filter,
             year = year_filter,
             error = export_error
           )
-
+        
         raw_json_val(NULL)
         metadata_val(meta)
         parsed_data_val(parsed)
-
+        
         parse_status_val(list(
           ok = TRUE,
           message = paste0(
@@ -1249,11 +1285,11 @@ server <- function(input, output, session) {
         raw <- jsonlite::fromJSON(input$json_file$datapath, simplifyVector = FALSE)
         meta <- extract_export_metadata(raw)
         parsed <- parse_export_object(raw)
-
+        
         raw_json_val(raw)
         metadata_val(meta)
         parsed_data_val(parsed)
-
+        
         parse_status_val(list(
           ok = TRUE,
           message = if (nrow(parsed) > 0) {
@@ -1276,31 +1312,31 @@ server <- function(input, output, session) {
       ))
     })
   })
-
+  
   metadata <- reactive({
     metadata_val()
   })
-
+  
   parsed_data <- reactive({
     parsed_data_val()
   })
-
+  
   output$parse_status <- renderUI({
     status <- parse_status_val()
     if (is.null(status)) return(NULL)
-
+    
     div(
       class = if (isTRUE(status$ok)) "alert alert-success" else "alert alert-danger",
       status$message
     )
   })
-
+  
   output$empty_data_warning <- renderUI({
     status <- parse_status_val()
     if (is.null(status) || !isTRUE(status$ok) || nrow(metadata()) == 0 || nrow(parsed_data()) > 0) {
       return(NULL)
     }
-
+    
     div(
       class = "alert alert-warning",
       strong("Ingen datarækker i JSON-filen: "),
@@ -1309,19 +1345,19 @@ server <- function(input, output, session) {
       "Den reviderede JavaScript-generator bruger nu prefix-match for rå ATC-koder, fx C09AA05."
     )
   })
-
+  
   output$truncation_warning <- renderUI({
     req(nrow(metadata()) > 0)
     meta <- metadata()
-
+    
     problematic <- meta |>
       filter(
         hasRestartToken == TRUE |
           (!is.na(rowCountMarker) & suppressWarnings(as.numeric(rowCountMarker)) >= 29000)
       )
-
+    
     if (nrow(problematic) == 0) return(NULL)
-
+    
     div(
       class = "alert alert-warning",
       strong("Muligt afkortet Power BI-output: "),
@@ -1329,7 +1365,7 @@ server <- function(input, output, session) {
       "Prøv at lave et mindre udtræk, fx færre år, færre regioner eller færre ATC-koder."
     )
   })
-
+  
   output$metadata_table <- renderDT({
     req(nrow(metadata()) > 0)
     datatable(
@@ -1338,7 +1374,7 @@ server <- function(input, output, session) {
       rownames = FALSE
     )
   })
-
+  
   output$parsed_table <- renderDT({
     req(nrow(parsed_data()) > 0)
     datatable(
@@ -1347,7 +1383,7 @@ server <- function(input, output, session) {
       rownames = FALSE
     )
   })
-
+  
   output$download_csv <- downloadHandler(
     filename = function() {
       paste0("medicinsalg_parsed_", format(Sys.Date(), "%Y%m%d"), ".csv")
@@ -1360,7 +1396,7 @@ server <- function(input, output, session) {
       readr::write_excel_csv2(dat, file, na = "")
     }
   )
-
+  
   output$download_xlsx <- downloadHandler(
     filename = function() {
       paste0("medicinsalg_parsed_", format(Sys.Date(), "%Y%m%d"), ".xlsx")
