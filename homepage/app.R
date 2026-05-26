@@ -72,12 +72,22 @@ ui <- fluidPage(
         tags$a(
           href = "https://kfaapps.au.dk/lmgrupper/",
           class = "link-button",
-          "Opdaterede prisoversigter for lægemiddelgrupper"
+          "Priser (Sundhedsdatastyrelsen)"
+        ),
+        tags$a(
+          href = "https://kfaapps.au.dk/lmgrupper2/",
+          class = "link-button",
+          "Priser (erhverv.medicinpriser.dk)"
         ),
         tags$a(
           href = "https://kfaapps.au.dk/lmforbrug/",
           class = "link-button",
-          "Forbrug og tilskudsudgifter over tid"
+          "Forbrug (excel-rapport)"
+        ),
+        tags$a(
+          href = "https://kfaapps.au.dk/powerbi/",
+          class = "link-button",
+          "Forbrug (Power BI)"
         )
     ),
 
@@ -116,7 +126,7 @@ ui <- fluidPage(
         )
     ),
 
-    # NEW SECTION: Statistik over aktiviteter
+    # Section 4: Statistik over aktiviteter
     div(class = "subheader", "Statistik over aktiviteter"),
     div(class = "links",
         tags$a(
@@ -132,14 +142,15 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
-  # Compute last-update date
-  last_date <- if (file.exists(DATA_FILE)) {
-    format(file.info(DATA_FILE)$mtime, "%d-%m-%Y")
-  } else {
-    format(Sys.Date(), "%d-%m-%Y")
-  }
-
   output$footer_text <- renderText({
+    app_file <- "app.R"
+    
+    last_date <- if (file.exists(app_file)) {
+      format(file.info(app_file)$mtime, "%d-%m-%Y")
+    } else {
+      format(Sys.Date(), "%d-%m-%Y")
+    }
+    
     paste0(
       "Senest opdateret ", last_date,
       " | Support: Frederik Kraglund, frekra@biomed.au.dk"
