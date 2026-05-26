@@ -37,7 +37,7 @@ if (!exists("timeGranularity.timePlot")) timeGranularity.timePlot <- "Måned"
 if (!exists("regionToggle.timePlot"))    regionToggle.timePlot    <- "Begge"
 if (!exists("svartypeFilterToggle.timePlot")) svartypeFilterToggle.timePlot <- "Alle"
 
-if (!exists("svartidTypeToggle")) svartidTypeToggle <- "Hverdage u. helligdage og weekend"
+if (!exists("svartidTypeToggle.timePlot")) svartidTypeToggle.timePlot <- "Hverdage u. helligdage og weekend"
 
 if (!exists("graf1_percentile")) graf1_percentile <- 90
 if (!exists("graf2_percentile")) graf2_percentile <- 50
@@ -145,7 +145,7 @@ validate_percentile_choice(graf1_percentile)
 validate_percentile_choice(graf2_percentile)
 validate_percentile_choice(graf3_percentile)
 
-svartid_col <- resolve_svartid_col(svartidTypeToggle)
+svartid_col <- resolve_svartid_col(svartidTypeToggle.timePlot)
 if (!svartid_col %in% names(data.lmraad_filtered)) {
   stop("Chosen svartid column not found in data: ", svartid_col)
 }
