@@ -72,12 +72,22 @@ ui <- fluidPage(
         tags$a(
           href = "https://kfaapps.au.dk/lmgrupper/",
           class = "link-button",
-          "Opdaterede prisoversigter for lægemiddelgrupper"
+          "Priser (Sundhedsdatastyrelsen)"
+        ),
+        tags$a(
+          href = "https://kfaapps.au.dk/lmgrupper2/",
+          class = "link-button",
+          "Priser (erhverv.medicinpriser.dk)"
         ),
         tags$a(
           href = "https://kfaapps.au.dk/lmforbrug/",
           class = "link-button",
-          "Forbrug og tilskudsudgifter over tid"
+          "Forbrug (excel-rapport)"
+        ),
+        tags$a(
+          href = "https://kfaapps.au.dk/powerbi/",
+          class = "link-button",
+          "Forbrug (Power BI)"
         )
     ),
 
@@ -116,7 +126,7 @@ ui <- fluidPage(
         )
     ),
 
-    # NEW SECTION: Statistik over aktiviteter
+    # Section 4: Statistik over aktiviteter
     div(class = "subheader", "Statistik over aktiviteter"),
     div(class = "links",
         tags$a(
