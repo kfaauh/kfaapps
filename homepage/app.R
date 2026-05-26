@@ -142,14 +142,15 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
-  # Compute last-update date
-  last_date <- if (file.exists(DATA_FILE)) {
-    format(file.info(DATA_FILE)$mtime, "%d-%m-%Y")
-  } else {
-    format(Sys.Date(), "%d-%m-%Y")
-  }
-
   output$footer_text <- renderText({
+    app_file <- "app.R"
+    
+    last_date <- if (file.exists(app_file)) {
+      format(file.info(app_file)$mtime, "%d-%m-%Y")
+    } else {
+      format(Sys.Date(), "%d-%m-%Y")
+    }
+    
     paste0(
       "Senest opdateret ", last_date,
       " | Support: Frederik Kraglund, frekra@biomed.au.dk"
