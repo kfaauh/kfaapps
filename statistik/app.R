@@ -206,6 +206,10 @@ ui <- fluidPage(
         margin: -10px 0 0 0 !important;
         padding: 0 !important;
       }
+      .download-links-svartider-dist {
+        margin: 15px 0 0 0 !important;
+        padding: 0 !important;
+      }
       .download-links-specialefordeling {
         margin: -10px 0 0 0 !important;
         padding: 0 !important;
@@ -438,6 +442,20 @@ ui <- fluidPage(
         margin: 0 !important;
       }
 
+      /* Svartider inner section headings and separators */
+      .svartider-inner-sep {
+        border-top: 1px solid #cccccc;
+        margin: 8px auto 4px auto;
+        width: 90%;
+      }
+      .svartider-subsection-heading {
+        font-size: 0.85em;
+        font-weight: bold;
+        color: #333;
+        margin: 2px 0 4px 0;
+        text-align: center;
+      }
+
     "))
   ),
 
@@ -631,7 +649,12 @@ div(
       class = "links",
       actionButton(
         "run_svartider_plot",
-        "Plot svartider",
+        "Plot svartider, udvikling",
+        class = "link-button"
+      ),
+      actionButton(
+        "run_svartider_dist_plot",
+        "Plot svartider, distribution",
         class = "link-button"
       )
     ),
@@ -640,7 +663,48 @@ div(
       class = "svartider-settings",
       tags$summary("Indstillinger for 'Svartider' (klik for at folde ud)"),
 
-      # Line 1: Fra, Til, Tidsopløsning, Inkluderede dage
+      # === Fælles indstillinger (ingen overskrift) ===
+      div(
+        class = "controls-row",
+        selectInput(
+          "svartidTypeToggle_timePlot",
+          label = "Inkluderede dage",
+          choices = c(
+            "Alle dage",
+            "Hverdage m. helligdage",
+            "Hverdage u. helligdage og weekend"
+          ),
+          selected = "Hverdage u. helligdage og weekend",
+          width = "250px"
+        ),
+        selectInput(
+          "svartypeFilterToggle_timePlot",
+          label = "Svartype",
+          choices = c(
+            "Alle",
+            "Klinisk rådgivning",
+            "Almindeligt svar",
+            "Kortsvar",
+            "Generel forespørgsel",
+            "Medicingennemgang",
+            "Ibrugtagningssag"
+          ),
+          selected = "Almindeligt svar",
+          width = "190px"
+        ),
+        selectInput(
+          "regionToggle_timePlot",
+          label = "Region (rekvirent)",
+          choices = c("Begge", "Nordjylland", "Midtjylland"),
+          selected = "Begge",
+          width = "180px"
+        )
+      ),
+
+      # === Indstillinger: Svartider, udvikling ===
+      tags$hr(class = "svartider-inner-sep"),
+      tags$p(class = "svartider-subsection-heading", "Indstillinger: Svartider, udvikling"),
+
       div(
         class = "controls-row",
         dateInput(
@@ -663,47 +727,9 @@ div(
           choices = c("Uge", "Måned", "Kvartal", "År"),
           selected = "Måned",
           width = "120px"
-        ),
-        selectInput(
-          "svartidTypeToggle_timePlot",
-          label = "Inkluderede dage",
-          choices = c(
-            "Alle dage",
-            "Hverdage m. helligdage",
-            "Hverdage u. helligdage og weekend"
-          ),
-          selected = "Hverdage u. helligdage og weekend",
-          width = "250px"
         )
       ),
 
-      # Line 2: Svartider-specific: Svartype, Region
-      div(
-        class = "controls-row",
-        selectInput(
-          "svartypeFilterToggle_timePlot",
-          label = "Svartype",
-          choices = c(
-            "Alle",
-            "Klinisk rådgivning",
-            "Almindeligt svar",
-            "Kortsvar",
-            "Generel forespørgsel",
-            "Medicingennemgang"
-          ),
-          selected = "Almindeligt svar",
-          width = "190px"
-        ),
-        selectInput(
-          "regionToggle_timePlot",
-          label = "Region (rekvirent)",
-          choices = c("Begge", "Nordjylland", "Midtjylland"),
-          selected = "Begge",
-          width = "180px"
-        )
-      ),
-
-      # Line 3: Percentiles
       div(
         class = "controls-row",
         selectInput(
@@ -727,6 +753,185 @@ div(
           selected = "Ingen",
           width = "160px"
         )
+      ),
+
+      # === Indstillinger: Svartider, distribution ===
+      tags$hr(class = "svartider-inner-sep"),
+      tags$p(class = "svartider-subsection-heading", "Indstillinger: Svartider, distribution"),
+
+      div(
+        class = "controls-row",
+        selectInput(
+          "dist_vis_type",
+          label = "Vis antal",
+          choices = c("%" = "pct", "Absolut" = "abs"),
+          selected = "pct",
+          width = "120px"
+        ),
+        numericInput(
+          "dist_n_ranges",
+          label = "Antal perioder",
+          value = 3,
+          min = 1,
+          max = 4,
+          width = "120px"
+        ),
+        selectInput(
+          "dist_bar_label",
+          label = "Vis antal pr. søjle",
+          choices = c("Nej", "Vis n" = "n", "Vis %" = "pct"),
+          selected = "Nej",
+          width = "150px"
+        ),
+        div(
+          style = "display:flex; flex-direction:column; justify-content:flex-end; padding-bottom:4px;",
+          checkboxInput(
+            "dist_show_n_title",
+            label = "Vis samlet antal",
+            value = TRUE
+          )
+        )
+      ),
+
+      # Periode 1 (always shown)
+      div(
+        class = "controls-row",
+        tags$div(
+          style = "display:flex; align-items:center; font-weight:bold; font-size:0.85em; padding-top:16px;",
+          "Periode 1:"
+        ),
+        dateInput(
+          "dist_from_1",
+          label = "Fra",
+          value = floor_date(Sys.Date(), "month") %m-% years(1),
+          format = "dd-mm-yyyy",
+          width = "120px"
+        ),
+        dateInput(
+          "dist_to_1",
+          label = "Til",
+          value = floor_date(Sys.Date(), "month") - days(1),
+          format = "dd-mm-yyyy",
+          width = "120px"
+        ),
+        textInput(
+          "dist_title_1",
+          label = "Titel",
+          value = paste0(
+            format(floor_date(Sys.Date(), "month") %m-% years(1), "%d.%m.%Y"),
+            " \u2013 ",
+            format(floor_date(Sys.Date(), "month") - days(1), "%d.%m.%Y")
+          ),
+          width = "200px"
+        )
+      ),
+
+      # Periode 2 (conditional)
+      conditionalPanel(
+        condition = "input.dist_n_ranges >= 2",
+        div(
+          class = "controls-row",
+          tags$div(
+            style = "display:flex; align-items:center; font-weight:bold; font-size:0.85em; padding-top:16px;",
+            "Periode 2:"
+          ),
+          dateInput(
+            "dist_from_2",
+            label = "Fra",
+            value = floor_date(Sys.Date(), "month") %m-% years(2),
+            format = "dd-mm-yyyy",
+            width = "120px"
+          ),
+          dateInput(
+            "dist_to_2",
+            label = "Til",
+            value = floor_date(Sys.Date(), "month") %m-% years(1) - days(1),
+            format = "dd-mm-yyyy",
+            width = "120px"
+          ),
+          textInput(
+            "dist_title_2",
+            label = "Titel",
+            value = paste0(
+              format(floor_date(Sys.Date(), "month") %m-% years(2), "%d.%m.%Y"),
+              " \u2013 ",
+              format(floor_date(Sys.Date(), "month") %m-% years(1) - days(1), "%d.%m.%Y")
+            ),
+            width = "200px"
+          )
+        )
+      ),
+
+      # Periode 3 (conditional)
+      conditionalPanel(
+        condition = "input.dist_n_ranges >= 3",
+        div(
+          class = "controls-row",
+          tags$div(
+            style = "display:flex; align-items:center; font-weight:bold; font-size:0.85em; padding-top:16px;",
+            "Periode 3:"
+          ),
+          dateInput(
+            "dist_from_3",
+            label = "Fra",
+            value = floor_date(Sys.Date(), "month") %m-% years(3),
+            format = "dd-mm-yyyy",
+            width = "120px"
+          ),
+          dateInput(
+            "dist_to_3",
+            label = "Til",
+            value = floor_date(Sys.Date(), "month") %m-% years(2) - days(1),
+            format = "dd-mm-yyyy",
+            width = "120px"
+          ),
+          textInput(
+            "dist_title_3",
+            label = "Titel",
+            value = paste0(
+              format(floor_date(Sys.Date(), "month") %m-% years(3), "%d.%m.%Y"),
+              " \u2013 ",
+              format(floor_date(Sys.Date(), "month") %m-% years(2) - days(1), "%d.%m.%Y")
+            ),
+            width = "200px"
+          )
+        )
+      ),
+
+      # Periode 4 (conditional)
+      conditionalPanel(
+        condition = "input.dist_n_ranges >= 4",
+        div(
+          class = "controls-row",
+          tags$div(
+            style = "display:flex; align-items:center; font-weight:bold; font-size:0.85em; padding-top:16px;",
+            "Periode 4:"
+          ),
+          dateInput(
+            "dist_from_4",
+            label = "Fra",
+            value = floor_date(Sys.Date(), "month") %m-% months(30),
+            format = "dd-mm-yyyy",
+            width = "120px"
+          ),
+          dateInput(
+            "dist_to_4",
+            label = "Til",
+            value = floor_date(Sys.Date(), "month") - days(1),
+            format = "dd-mm-yyyy",
+            width = "120px"
+          ),
+          textInput(
+            "dist_title_4",
+            label = "Titel",
+            value = paste0(
+              format(floor_date(Sys.Date(), "month") %m-% months(30), "%d.%m.%Y"),
+              " \u2013 ",
+              format(floor_date(Sys.Date(), "month") - days(1), "%d.%m.%Y")
+            ),
+            width = "200px"
+          )
+        )
       )
     ),
 
@@ -740,6 +945,21 @@ div(
           class = "download-links-svartider",
           downloadButton("download_svartider_png", "Download PNG", class = "small-button"),
           downloadButton("download_svartider_pdf", "Download vector (pdf)", class = "small-button")
+        )
+      ),
+      div(style = "height: 0px;")
+    ),
+
+    conditionalPanel(
+      condition = "output.svartider_dist_plot_available == true",
+      div(class = "section-separator-thin"),
+      div(
+        class = "plot-container",
+        plotOutput("svartider_dist_plot", inline = TRUE),
+        div(
+          class = "download-links-svartider-dist",
+          downloadButton("download_svartider_dist_png", "Download PNG", class = "small-button"),
+          downloadButton("download_svartider_dist_pdf", "Download vector (pdf)", class = "small-button")
         )
       ),
       div(style = "height: 0px;")
@@ -1099,6 +1319,7 @@ div(
     div(class = "section-separator"),
 
     tags$details(
+      id = "tekniske_detaljer_details",
       tags$summary("Tekniske detaljer (klik for at folde ud)"),
       div(
         id = "console_output",
@@ -1121,13 +1342,42 @@ server <- function(input, output, session) {
   activity_plot        <- reactiveVal(NULL)
   svartype_plot_obj    <- reactiveVal(NULL)
   svartider_plot_obj   <- reactiveVal(NULL)
+  svartider_dist_plot_obj    <- reactiveVal(NULL)
+  svartider_dist_n_active    <- reactiveVal(3L)
+
+  # Track the last auto-generated title per period (to detect manual edits)
+  last_auto_title_1 <- reactiveVal(paste0(
+    format(floor_date(Sys.Date(), "month") %m-% years(1), "%d.%m.%Y"),
+    " \u2013 ",
+    format(floor_date(Sys.Date(), "month") - days(1), "%d.%m.%Y")
+  ))
+  last_auto_title_2 <- reactiveVal(paste0(
+    format(floor_date(Sys.Date(), "month") %m-% years(2), "%d.%m.%Y"),
+    " \u2013 ",
+    format(floor_date(Sys.Date(), "month") %m-% years(1) - days(1), "%d.%m.%Y")
+  ))
+  last_auto_title_3 <- reactiveVal(paste0(
+    format(floor_date(Sys.Date(), "month") %m-% years(3), "%d.%m.%Y"),
+    " \u2013 ",
+    format(floor_date(Sys.Date(), "month") %m-% years(2) - days(1), "%d.%m.%Y")
+  ))
+  last_auto_title_4 <- reactiveVal(paste0(
+    format(floor_date(Sys.Date(), "month") %m-% months(30), "%d.%m.%Y"),
+    " \u2013 ",
+    format(floor_date(Sys.Date(), "month") - days(1), "%d.%m.%Y")
+  ))
+
   specialefordeling_plot_obj <- reactiveVal(NULL)
   spmfordeling_plot_obj <- reactiveVal(NULL)
 
   svartype_plot_active        <- reactiveVal(FALSE)
   svartider_plot_active       <- reactiveVal(FALSE)
+  svartider_dist_plot_active  <- reactiveVal(FALSE)
   specialefordeling_plot_active <- reactiveVal(FALSE)
   spmfordeling_plot_active <- reactiveVal(FALSE)
+
+  # Tracks which svartider plot was last requested: "udvikling" or "distribution"
+  svartider_active_type <- reactiveVal(NULL)
 
   output$plot_available <- reactive({
     !is.null(activity_plot())
@@ -1140,9 +1390,14 @@ server <- function(input, output, session) {
   outputOptions(output, "svartype_plot_available", suspendWhenHidden = FALSE)
 
   output$svartider_plot_available <- reactive({
-    !is.null(svartider_plot_obj())
+    !is.null(svartider_plot_obj()) && identical(svartider_active_type(), "udvikling")
   })
   outputOptions(output, "svartider_plot_available", suspendWhenHidden = FALSE)
+
+  output$svartider_dist_plot_available <- reactive({
+    !is.null(svartider_dist_plot_obj()) && identical(svartider_active_type(), "distribution")
+  })
+  outputOptions(output, "svartider_dist_plot_available", suspendWhenHidden = FALSE)
 
   output$specialefordeling_plot_available <- reactive({
     !is.null(specialefordeling_plot_obj())
@@ -1993,10 +2248,11 @@ observeEvent(
     shinyjs::disable("run_svartider_plot")
     shinyjs::html(
       id   = "console_output",
-      html = "Starter script til 'Svartider'...\n\n",
+      html = "Starter script til 'Svartider, udvikling'...\n\n",
       add  = TRUE
     )
 
+    svartider_active_type("udvikling")
     svartider_plot_active(TRUE)
     run_svartider_plot()
 
@@ -2060,6 +2316,243 @@ observeEvent(
         device = cairo_pdf,
         width = 10,
         height = 6.5,
+        units = "in",
+        dpi = 300
+      )
+    }
+  )
+
+  # -------------------------- SVARTIDER DISTRIBUTION PLOT -------------------------- #
+
+  run_svartider_dist_plot <- function() {
+    script_path_plot <- file.path(
+      here("statistik", "scripts"),
+      "plot svartid distribution.R"
+    )
+
+    if (!file.exists(script_path_plot)) {
+      shinyjs::html(
+        id   = "console_output",
+        html = paste0("FEJL: 'plot svartid distribution.R' script ikke fundet:\n", script_path_plot, "\n"),
+        add  = TRUE
+      )
+      script_status(list(
+        type    = "error",
+        message = "Scriptet til 'Svartider, distribution' blev ikke fundet. Kontakt support."
+      ))
+      return(invisible(NULL))
+    }
+
+    plot_env <- new.env(parent = globalenv())
+
+    plot_env$svartidTypeToggle.timePlot    <- input$svartidTypeToggle_timePlot
+    plot_env$svartypeFilterToggle.timePlot <- input$svartypeFilterToggle_timePlot
+    plot_env$regionToggle.timePlot         <- input$regionToggle_timePlot
+    plot_env$dist_vis_type                 <- input$dist_vis_type
+    plot_env$dist_n_ranges                 <- as.integer(input$dist_n_ranges)
+    plot_env$dist_show_n_title             <- isTRUE(input$dist_show_n_title)
+    plot_env$dist_bar_label                <- if (is.null(input$dist_bar_label)) "Nej" else input$dist_bar_label
+    plot_env$dist_from_1  <- as.Date(input$dist_from_1)
+    plot_env$dist_to_1    <- as.Date(input$dist_to_1)
+    plot_env$dist_title_1 <- trimws(if (is.null(input$dist_title_1)) "" else input$dist_title_1)
+    plot_env$dist_from_2  <- as.Date(input$dist_from_2)
+    plot_env$dist_to_2    <- as.Date(input$dist_to_2)
+    plot_env$dist_title_2 <- trimws(if (is.null(input$dist_title_2)) "" else input$dist_title_2)
+    plot_env$dist_from_3  <- as.Date(input$dist_from_3)
+    plot_env$dist_to_3    <- as.Date(input$dist_to_3)
+    plot_env$dist_title_3 <- trimws(if (is.null(input$dist_title_3)) "" else input$dist_title_3)
+    plot_env$dist_from_4  <- as.Date(input$dist_from_4)
+    plot_env$dist_to_4    <- as.Date(input$dist_to_4)
+    plot_env$dist_title_4 <- trimws(if (is.null(input$dist_title_4)) "" else input$dist_title_4)
+
+    tryCatch(
+      {
+        withCallingHandlers(
+          {
+            message("Kører 'Svartider, distribution' script: ", script_path_plot)
+            source(script_path_plot, local = plot_env)
+          },
+          message = function(m) {
+            shinyjs::html(
+              id   = "console_output",
+              html = paste0(m$message, "\n"),
+              add  = TRUE
+            )
+            invokeRestart("muffleMessage")
+          }
+        )
+
+        if (!exists("p", envir = plot_env, inherits = FALSE)) {
+          stop("Plot-objekt 'p' ikke fundet efter kørsel af 'plot svartid distribution.R'.")
+        }
+
+        svartider_dist_plot_obj(get("p", envir = plot_env))
+        if (exists("n_active", envir = plot_env, inherits = FALSE)) {
+          svartider_dist_n_active(as.integer(get("n_active", envir = plot_env)))
+        }
+        script_status(NULL)
+
+        shinyjs::html(
+          id   = "console_output",
+          html = "\n'Svartider, distribution' plot-script færdigt.\n",
+          add  = TRUE
+        )
+      },
+      error = function(e) {
+        err_msg <- e$message
+        script_status(list(
+          type    = "error",
+          message = "Der opstod en fejl under opdatering af 'Svartider, distribution'. Se tekniske detaljer eller kontakt support."
+        ))
+        shinyjs::html(
+          id   = "console_output",
+          html = paste0(
+            "\n*** TEKNISK FEJL (svartider-distribution-plot) ***\n",
+            err_msg,
+            "\n****************************************\n"
+          ),
+          add  = TRUE
+        )
+      }
+    )
+
+    invisible(NULL)
+  }
+
+  observeEvent(input$run_svartider_dist_plot, {
+    shinyjs::disable("run_svartider_dist_plot")
+    shinyjs::html(
+      id   = "console_output",
+      html = "Starter script til 'Svartider, distribution'...\n\n",
+      add  = TRUE
+    )
+
+    svartider_active_type("distribution")
+    svartider_dist_plot_active(TRUE)
+    run_svartider_dist_plot()
+
+    shinyjs::enable("run_svartider_dist_plot")
+  })
+
+  observeEvent(
+    list(
+      input$svartidTypeToggle_timePlot,
+      input$svartypeFilterToggle_timePlot,
+      input$regionToggle_timePlot,
+      input$dist_vis_type,
+      input$dist_n_ranges,
+      input$dist_show_n_title,
+      input$dist_bar_label,
+      input$dist_from_1,
+      input$dist_to_1,
+      input$dist_title_1,
+      input$dist_from_2,
+      input$dist_to_2,
+      input$dist_title_2,
+      input$dist_from_3,
+      input$dist_to_3,
+      input$dist_title_3,
+      input$dist_from_4,
+      input$dist_to_4,
+      input$dist_title_4
+    ),
+    {
+      if (isTRUE(svartider_dist_plot_active())) {
+        run_svartider_dist_plot()
+      }
+    },
+    ignoreInit = TRUE
+  )
+
+  # Auto-update title fields when dates change (only if user hasn't edited manually)
+  observeEvent(list(input$dist_from_1, input$dist_to_1), {
+    req(input$dist_from_1, input$dist_to_1)
+    auto <- paste0(
+      format(as.Date(input$dist_from_1), "%d.%m.%Y"), " \u2013 ",
+      format(as.Date(input$dist_to_1),   "%d.%m.%Y")
+    )
+    if (trimws(input$dist_title_1) == last_auto_title_1()) {
+      updateTextInput(session, "dist_title_1", value = auto)
+      last_auto_title_1(auto)
+    }
+  }, ignoreInit = TRUE)
+
+  observeEvent(list(input$dist_from_2, input$dist_to_2), {
+    req(input$dist_from_2, input$dist_to_2)
+    auto <- paste0(
+      format(as.Date(input$dist_from_2), "%d.%m.%Y"), " \u2013 ",
+      format(as.Date(input$dist_to_2),   "%d.%m.%Y")
+    )
+    if (trimws(input$dist_title_2) == last_auto_title_2()) {
+      updateTextInput(session, "dist_title_2", value = auto)
+      last_auto_title_2(auto)
+    }
+  }, ignoreInit = TRUE)
+
+  observeEvent(list(input$dist_from_3, input$dist_to_3), {
+    req(input$dist_from_3, input$dist_to_3)
+    auto <- paste0(
+      format(as.Date(input$dist_from_3), "%d.%m.%Y"), " \u2013 ",
+      format(as.Date(input$dist_to_3),   "%d.%m.%Y")
+    )
+    if (trimws(input$dist_title_3) == last_auto_title_3()) {
+      updateTextInput(session, "dist_title_3", value = auto)
+      last_auto_title_3(auto)
+    }
+  }, ignoreInit = TRUE)
+
+  observeEvent(list(input$dist_from_4, input$dist_to_4), {
+    req(input$dist_from_4, input$dist_to_4)
+    auto <- paste0(
+      format(as.Date(input$dist_from_4), "%d.%m.%Y"), " \u2013 ",
+      format(as.Date(input$dist_to_4),   "%d.%m.%Y")
+    )
+    if (trimws(input$dist_title_4) == last_auto_title_4()) {
+      updateTextInput(session, "dist_title_4", value = auto)
+      last_auto_title_4(auto)
+    }
+  }, ignoreInit = TRUE)
+
+  output$svartider_dist_plot <- renderPlot(
+    {
+      req(svartider_dist_plot_obj())
+      print(svartider_dist_plot_obj())
+    },
+    width  = 800,
+    height = function() {
+      n <- svartider_dist_n_active()
+      150L + n * 200L
+    },
+    res    = 96
+  )
+
+  output$download_svartider_dist_png <- downloadHandler(
+    filename = function() {
+      paste0("svartider_distribution_", Sys.Date(), ".png")
+    },
+    content = function(file) {
+      req(svartider_dist_plot_obj())
+      h_in <- 1.5 + svartider_dist_n_active() * 2
+      grDevices::png(file, width = 10, height = h_in, units = "in", res = 300)
+      print(svartider_dist_plot_obj())
+      grDevices::dev.off()
+    }
+  )
+
+  output$download_svartider_dist_pdf <- downloadHandler(
+    filename = function() {
+      paste0("svartider_distribution_", Sys.Date(), ".pdf")
+    },
+    contentType = "application/pdf",
+    content = function(file) {
+      req(svartider_dist_plot_obj())
+      h_in <- 1.5 + svartider_dist_n_active() * 2
+      ggplot2::ggsave(
+        filename = file,
+        plot = svartider_dist_plot_obj(),
+        device = cairo_pdf,
+        width = 10,
+        height = h_in,
         units = "in",
         dpi = 300
       )
@@ -2799,6 +3292,17 @@ observeEvent(
   )
 
   # -------------------------- STATUS MESSAGE -------------------------- #
+
+  # Auto-open "Tekniske detaljer" when an error occurs so the user can see it
+  observe({
+    status <- script_status()
+    if (!is.null(status) && identical(status$type, "error")) {
+      shinyjs::runjs(
+        "var el = document.getElementById('tekniske_detaljer_details');
+         if (el) el.open = true;"
+      )
+    }
+  })
 
   output$status_message <- renderUI({
     status <- script_status()
