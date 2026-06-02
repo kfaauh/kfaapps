@@ -449,7 +449,7 @@ server <- function(input, output, session) {
 
         # Combine header and results
         HTML(paste0(
-          "<h4 style='font-size:16px;'><b>Seponeringslisten 2025 (kilde: Sundhedsstyrelsen):</b></h4>",
+          "<h4 style='font-size:16px;'><b>Seponeringslisten 2026 (kilde: Medicinrådet):</b></h4>",
           paste(seponerings_results, collapse = " ")
         ))
       } else {
