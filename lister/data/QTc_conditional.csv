@@ -33,6 +33,7 @@ Benzphetamine;;0;;1;SRSpecial Risk
 Bepridil;C08EA02;2;;1;Known Risk of TdP
 Betrixaban;B01AF04;1;;1;Possible Risk of TdP
 Bicalutamide;L02BB03;1;;1;Possible Risk of TdP
+Bilastine;R06AX29;1;;1;Possible Risk of TdP
 Bortezomib (Bortexomib);L01XG01;1;;1;Possible Risk of TdP
 Bosutinib;L01EA04;1;;1;Possible Risk of TdP
 Buprenorphine;N02AE01;1;;1;Possible Risk of TdP
@@ -48,6 +49,7 @@ Chlorpromazine;N05AA01;2;;1;Known Risk of TdP
 Chlorprothixene;N05AF03;2;;1;Known Risk of TdP
 Cilostazol;B01AC23;2;;1;Known Risk of TdP
 Cimetidine;A02BA01;3;Bradycardia, Low serum K or Mg, Used with concomitant QT/TdP drug, Reduces elimination of a QT/TdP drug;1;Conditional Risk of TdP
+Cinacalcet;H05BX01;3;N/A;1;Conditional Risk of TdP
 Ciprofloxacin;J01MA02;2;;1;Known Risk of TdP
 Cisapride;A03FA02;2;;1;Known Risk of TdP
 Citalopram;N06AB04;2;;1;Known Risk of TdP
@@ -116,6 +118,7 @@ Garenoxacin;J01MA19;3;Low serum K or Mg, Use with concomitant QT/TdP drug;1;Cond
 Gatifloxacin;J01MA16;2;;1;Known Risk of TdP
 Gemifloxacin;J01MA15;1;;1;Possible Risk of TdP
 Gepirone;N06AX19;1;;1;Possible Risk of TdP
+Gepotidacin;J01XX13;1;;1;Possible Risk of TdP
 Gilteritinib;L01EX13;1;;1;Possible Risk of TdP
 Givinostat;M09AX14;1;;1;Possible Risk of TdP
 Glasdegib;L01XJ03;1;;1;Possible Risk of TdP
@@ -151,7 +154,6 @@ Lefamulin;J01XX12;1;;1;Possible Risk of TdP
 Lenvatinib;L01EX08;1;;1;Possible Risk of TdP
 Leuprolide (Leuprorelin);L02AE02;1;;1;Possible Risk of TdP
 Levalbuterol (Levosalbutamol);R03AC;0;;1;SRSpecial Risk
-Levetiracetam;N03AX14;1;;1;Possible Risk of TdP
 Levofloxacin;J01MA12;2;;1;Known Risk of TdP
 Levoketoconazole;;1;;1;Possible Risk of TdP
 Levomepromazine (Methotrimeprazine);N05AA02;2;;1;Known Risk of TdP
@@ -183,6 +185,7 @@ Mianserin;N06AX03;1;;1;Possible Risk of TdP
 Midodrine;C01CA17;0;;1;SRSpecial Risk
 Midostaurin;L01EX10;1;;1;Possible Risk of TdP
 Mifepristone;G03XB01;1;;1;Possible Risk of TdP
+Milsaperidone;;1;;1;Possible Risk of TdP
 Mirabegron;G04BD12;1;;1;Possible Risk of TdP
 Mirtazapine;N06AX11;1;;1;Possible Risk of TdP
 Mobocertinib;L01EB10;2;;1;Known Risk of TdP
@@ -204,6 +207,7 @@ Oliceridine;N02AX07;1;;1;Possible Risk of TdP
 Olodaterol;R03AC19;0;;1;SRSpecial Risk
 Omeprazole;A02BC01;3;Used with concomitant QT/TdP drug, Use causes low serum K or Mg;1;Conditional Risk of TdP
 Ondansetron;A04AA01;2;;1;Known Risk of TdP
+Opipramol;N06AA05;1;;1;Possible Risk of TdP
 Osilodrostat;H02CA02;1;;1;Possible Risk of TdP
 Osimertinib;L01EB04;2;;1;Known Risk of TdP
 Oxaliplatin;L01XA03;2;;1;Known Risk of TdP
@@ -221,6 +225,7 @@ Pasireotide;H01CB05;1;;1;Possible Risk of TdP
 Pazopanib;L01EX03;1;;1;Possible Risk of TdP
 Pentamidine;P01CX01;2;;1;Known Risk of TdP
 Perphenazine;N05AB03;1;;1;Possible Risk of TdP
+Pilsicainide;;1;;1;Possible Risk of TdP
 Phendimetrazine;;0;;1;SRSpecial Risk
 Phentermine;A08AA01;0;;1;SRSpecial Risk
 Phenylephrine;C01CA06;0;;1;SRSpecial Risk
@@ -251,6 +256,7 @@ Ranolazine;C01EB18;3;Bradycardia, Low serum K or Mg, Impaired drug elimination, 
 Relugolix;L02BX04;1;;1;Possible Risk of TdP
 Remdesivir;J05AB16;1;;1;Possible Risk of TdP
 Remimazolam;N05CD14;1;;1;Possible Risk of TdP
+Revumenib;L01XX87;1;;1;Possible Risk of TdP
 Ribociclib;L01EF02;1;;1;Possible Risk of TdP
 Rilpivirine;J05AG05;1;;1;Possible Risk of TdP
 Risperidone;N05AX08;3;Bradycardia, Low serum K or Mg, Excessive dose, Used with concomitant QT/TdP drug;1;Conditional Risk of TdP
@@ -268,6 +274,7 @@ Sertraline;N06AB06;3;Bradycardia, Low serum K or Mg, Use with concomitant QT/TdP
 Sevoflurane;N01AB08;2;;1;Known Risk of TdP
 Sibutramine;A08AA10;0;;1;SRSpecial Risk
 Siponimod;L04AA42;1;;1;Possible Risk of TdP
+Sitafloxacin;J01MA21;1;;1;Possible Risk of TdP
 Solifenacin;G04BD08;3;Bradycardia, Low serum K or Mg, Use with concomitant QT/TdP drug;1;Conditional Risk of TdP
 Sorafenib;L01EX02;1;;1;Possible Risk of TdP
 Sotalol;C07AA07;2;;1;Known Risk of TdP
