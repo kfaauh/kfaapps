@@ -531,7 +531,7 @@ server <- function(input, output, session) {
           paste(collapse = ", ")
 
         HTML(paste0(
-          "<h4 style='font-size:16px;'><b>QTc-forlængende lægemidler (kilde: CredibleMeds, opdateret 8. august 2024):</b></h4>",
+          "<h4 style='font-size:16px;'><b>QTc-forlængende lægemidler (kilde: CredibleMeds, opdateret 16. april 2026):</b></h4>",
           paste(qtc_results, collapse = " "),
           "<br><b>Matchede ATC-koder:</b> ", matched_atc_codes
         ))
