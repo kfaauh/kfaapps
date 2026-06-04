@@ -2,6 +2,10 @@ library(readxl)
 
 args <- commandArgs(trailingOnly = TRUE)
 
+message("Number of trailing args: ", length(args))
+message("Args:")
+message(paste(seq_along(args), args, sep = ": ", collapse = "\n"))
+
 if (length(args) < 1) {
   stop(
     "No output directories supplied. Usage: Rscript Update_list.R <out_dir1> [<out_dir2> ...]",
@@ -10,6 +14,9 @@ if (length(args) < 1) {
 }
 
 out_dirs <- args
+
+message("Output dirs:")
+message(paste(seq_along(out_dirs), out_dirs, sep = ": ", collapse = "\n"))
 
 # URL of the XLSX download link
 url <- "https://laegemiddelstyrelsen.dk/LinkArchive.ashx?id=0BD4960F0D7744E3BABC951431681ECC&lang=da"
