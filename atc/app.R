@@ -21,7 +21,7 @@ library(stringdist)
 ## Vi læser CSV-filen med semikolon som separator. Encoding "UTF-8-BOM" fjerner
 ## eventuelle byte‑order marks. Det tomme kolonnenavn "Unnamed: 11" fjernes.
 ## -------------------------------------------------------------------------
-path <- file.path(getwd(), "ListeOverGodkendteLaegemidler.csv")
+path <- file.path(getwd(), "data", "ListeOverGodkendteLaegemidler.csv")
 atc_data <- read.csv(path, sep = ";", fileEncoding = "UTF-8-BOM",
                      stringsAsFactors = FALSE, check.names = FALSE)
 names(atc_data) <- gsub("^Unnamed:.*", "", names(atc_data))
