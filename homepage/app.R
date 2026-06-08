@@ -94,6 +94,11 @@ ui <- fluidPage(
     # Section 2: Batchopslag af ATC-koder
     div(class = "subheader", "Batchopslag af ATC-koder"),
     div(class = "links",
+         tags$a(
+          href = "https://kfaapps.au.dk/atc/",
+          class = "link-button",
+          "Generator til ATC-kodelister"
+        ),
         tags$a(
           href = "https://kfaapps.au.dk/lister/",
           class = "link-button",
