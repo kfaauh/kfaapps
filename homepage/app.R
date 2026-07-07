@@ -116,7 +116,7 @@ ui <- fluidPage(
         )
     ),
 
-    # Section 3: Visualiseringer
+    # Section 3: Visualiseringer og overblik
     div(class = "subheader", "Visualiseringer"),
     div(class = "links",
         tags$a(
@@ -128,6 +128,11 @@ ui <- fluidPage(
           href = "https://kfaapps.au.dk/compliance/",
           class = "link-button",
           "Compliance"
+        ),
+        tags$a(
+          href = "https://kfaapps.au.dk/spc/",
+          class = "link-button",
+          "Regulatorisk dokumentfinder"
         )
     ),
 
