@@ -1420,6 +1420,29 @@ server <- function(input, output, session) {
     output$kidney_output <- renderUI({ NULL })
   })
 
+# Resultaterne ligger i cards, som skjules indtil de indeholder data.
+# Shiny må derfor ikke suspendere disse outputs, mens de er skjulte.
+outputOptions(output, "drug_name_output", suspendWhenHidden = FALSE)
+outputOptions(output, "generic_atc_codes", suspendWhenHidden = FALSE)
+
+outputOptions(output, "acb_output", suspendWhenHidden = FALSE)
+outputOptions(output, "acb_cat3_output", suspendWhenHidden = FALSE)
+outputOptions(output, "acb_cat2_output", suspendWhenHidden = FALSE)
+outputOptions(output, "acb_cat1_output", suspendWhenHidden = FALSE)
+
+outputOptions(output, "seponeringslisten_output", suspendWhenHidden = FALSE)
+outputOptions(output, "seponeringslist_atc_codes", suspendWhenHidden = FALSE)
+
+outputOptions(output, "qtc_output", suspendWhenHidden = FALSE)
+
+outputOptions(output, "serotonergic_output", suspendWhenHidden = FALSE)
+outputOptions(output, "serotonergic_atc_codes", suspendWhenHidden = FALSE)
+
+outputOptions(output, "bleeding_risk_output", suspendWhenHidden = FALSE)
+outputOptions(output, "bleeding_risk_atc_codes", suspendWhenHidden = FALSE)
+
+outputOptions(output, "kidney_output", suspendWhenHidden = FALSE)
+                                     
 }
 
 # Run the application
