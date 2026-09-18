@@ -400,7 +400,7 @@ ui <- fluidPage(
 
         tags$p(
           class = "hero-eyebrow",
-          "Klinisk Farmakologisk Enhed · Aalborg Universitetshospital"
+          "Klinisk Farmakologi"
         ),
 
         tags$h1("KFA apps"),
@@ -484,8 +484,7 @@ ui <- fluidPage(
             "Screen en medicinliste for farmakologiske",
             "risici, relevante lister og interaktioner."
           ),
-          href = "https://kfaapps.au.dk/lister/",
-          badge = "Moderniseres"
+          href = "https://kfaapps.au.dk/lister/"
         ),
 
         app_card(
@@ -551,13 +550,13 @@ ui <- fluidPage(
 
       app_section(
         "Enhedsdata",
-        "Overblik over Klinisk Farmakologisk Enheds aktiviteter.",
+        "Overblik over aktiviteter på Klinisk Farmakologisk Afdeling, AUH.",
 
         app_card(
           title = "Afdelingsstatistik",
           description = paste(
             "Visualisér aktiviteter, svartider",
-            "og øvrige nøgletal for enheden."
+            "og øvrige nøgletal for afdelingen."
           ),
           href = "https://kfaapps.au.dk/statistik/"
         )
@@ -576,7 +575,7 @@ ui <- fluidPage(
         class = "footer-inner",
 
         div(
-          "KFA apps · Klinisk Farmakologisk Enhed, AUH"
+          "KFA apps · Klinisk Farmakologisk Afdeling, AUH"
         ),
 
         div(
