@@ -10,6 +10,7 @@ library(httr)
 library(stringr)
 library(shinycssloaders)
 library(shinymanager)
+library(bslib)
 
 credentials <- data.frame(
   user = "KFA",
