@@ -388,15 +388,15 @@ ui <- fluidPage(
   div(
     class = "page-shell",
 
-    main(
-      class = "page-content",
+    tags$main(
+  class = "page-content",
 
       # -----------------------------------------------------------------
       # Hero
       # -----------------------------------------------------------------
 
-      section(
-        class = "hero",
+      tags$section(
+  class = "hero",
 
         tags$p(
           class = "hero-eyebrow",
@@ -569,8 +569,8 @@ ui <- fluidPage(
     # Footer
     # -------------------------------------------------------------------
 
-    footer(
-      class = "footer",
+ tags$footer(
+  class = "footer",
 
       div(
         class = "footer-inner",
