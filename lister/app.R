@@ -976,6 +976,49 @@ server <- function(input, output, session) {
     check_credentials = check_credentials(credentials)
   )
 
+    # -----------------------------------------------------------------------
+  # Register dynamic outputs at session start
+  # -----------------------------------------------------------------------
+
+  output$acb_output <- renderUI({ NULL })
+  output$acb_cat3_output <- renderUI({ NULL })
+  output$acb_cat2_output <- renderUI({ NULL })
+  output$acb_cat1_output <- renderUI({ NULL })
+
+  output$seponeringslisten_output <- renderUI({ NULL })
+  output$seponeringslist_atc_codes <- renderUI({ NULL })
+
+  output$qtc_output <- renderUI({ NULL })
+
+  output$serotonergic_output <- renderUI({ NULL })
+  output$serotonergic_atc_codes <- renderUI({ NULL })
+
+  output$bleeding_risk_output <- renderUI({ NULL })
+  output$bleeding_risk_atc_codes <- renderUI({ NULL })
+
+  output$kidney_output <- renderUI({ NULL })
+
+
+  # These outputs live inside initially hidden result cards.
+  # Keep them active even while the cards are hidden.
+  outputOptions(output, "acb_output", suspendWhenHidden = FALSE)
+  outputOptions(output, "acb_cat3_output", suspendWhenHidden = FALSE)
+  outputOptions(output, "acb_cat2_output", suspendWhenHidden = FALSE)
+  outputOptions(output, "acb_cat1_output", suspendWhenHidden = FALSE)
+
+  outputOptions(output, "seponeringslisten_output", suspendWhenHidden = FALSE)
+  outputOptions(output, "seponeringslist_atc_codes", suspendWhenHidden = FALSE)
+
+  outputOptions(output, "qtc_output", suspendWhenHidden = FALSE)
+
+  outputOptions(output, "serotonergic_output", suspendWhenHidden = FALSE)
+  outputOptions(output, "serotonergic_atc_codes", suspendWhenHidden = FALSE)
+
+  outputOptions(output, "bleeding_risk_output", suspendWhenHidden = FALSE)
+  outputOptions(output, "bleeding_risk_atc_codes", suspendWhenHidden = FALSE)
+
+  outputOptions(output, "kidney_output", suspendWhenHidden = FALSE)
+
   # Reactive expression to clean and process ATC codes input
   atc_codes <- reactive({
     input$atc_codes %>%
@@ -1043,7 +1086,7 @@ server <- function(input, output, session) {
   # Render comma-separated ATC codes for the generic names output
   output$generic_atc_codes <- renderUI({
     if (length(atc_codes()) > 0) {
-      HTML(paste("<b>ATC-koder:</b><br>", paste(atc_codes(), collapse = ", "),"<br>"))
+      HTML(paste("<br><b>ATC-koder:</b><br>", paste(atc_codes(), collapse = ", "),"<br>"))
     } else {
       HTML("")
     }
