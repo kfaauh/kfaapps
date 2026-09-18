@@ -432,12 +432,9 @@ ui <- secure_app(
           Shiny UI output contains content. This also hides them
           again when 'Ryd resultater' sets their outputs to NULL.
         */
+
         .result-card-dynamic {
           display: none;
-        }
-
-        .result-card-dynamic:has(.shiny-html-output:not(:empty)) {
-          display: block;
         }
 
         .result-kicker {
@@ -608,6 +605,7 @@ ui <- secure_app(
         }
 
 
+
         // Copy visible results as plain text
         $(document).on('click', '#mark_and_copy', function() {
 
@@ -654,6 +652,37 @@ ui <- secure_app(
             document.body.removeChild(textarea);
           }
         });
+
+        // Show result card before Shiny calculates the output
+$(document).on('click', '#generate_anticholinergic', function() {
+  $('#card_acb').show();
+});
+
+$(document).on('click', '#generate_seponeringslisten', function() {
+  $('#card_sepo').show();
+});
+
+$(document).on('click', '#generate_qtc', function() {
+  $('#card_qtc').show();
+});
+
+$(document).on('click', '#generate_serotonergic', function() {
+  $('#card_serotonergic').show();
+});
+
+$(document).on('click', '#generate_bleeding_risk', function() {
+  $('#card_bleeding').show();
+});
+
+$(document).on('click', '#generate_renal', function() {
+  $('#card_renal').show();
+});
+
+
+// Hide result cards when results are cleared
+$(document).on('click', '#clear_output', function() {
+  $('.result-card-dynamic').hide();
+});
         ")
       )
     ),
@@ -862,9 +891,8 @@ ui <- secure_app(
   )
 ),
 
-
-          div(
-            class = "result-card result-card-dynamic",
+div(
+  class = "result-card",
 
             div(
               class = "result-kicker",
@@ -877,6 +905,7 @@ ui <- secure_app(
 
 
           div(
+            id = "card_acb",
             class = "result-card result-card-dynamic",
 
             uiOutput("acb_output"),
@@ -887,6 +916,7 @@ ui <- secure_app(
 
 
           div(
+            id = "card_sepo",
             class = "result-card result-card-dynamic",
 
             uiOutput("seponeringslisten_output"),
@@ -895,6 +925,7 @@ ui <- secure_app(
 
 
           div(
+             id = "card_qtc",
             class = "result-card result-card-dynamic",
 
             uiOutput("qtc_output")
@@ -902,6 +933,7 @@ ui <- secure_app(
 
 
           div(
+            id = "card_serotonergic",
             class = "result-card result-card-dynamic",
 
             uiOutput("serotonergic_output"),
@@ -910,6 +942,7 @@ ui <- secure_app(
 
 
           div(
+            id = "card_bleeding",
             class = "result-card result-card-dynamic",
 
             uiOutput("bleeding_risk_output"),
@@ -918,6 +951,7 @@ ui <- secure_app(
 
 
           div(
+            id = "card_renal",
             class = "result-card result-card-dynamic",
 
             uiOutput("kidney_output")
@@ -1419,29 +1453,6 @@ server <- function(input, output, session) {
     output$bleeding_risk_atc_codes <- renderUI({ NULL })
     output$kidney_output <- renderUI({ NULL })
   })
-
-# Resultaterne ligger i cards, som skjules indtil de indeholder data.
-# Shiny må derfor ikke suspendere disse outputs, mens de er skjulte.
-outputOptions(output, "drug_name_output", suspendWhenHidden = FALSE)
-outputOptions(output, "generic_atc_codes", suspendWhenHidden = FALSE)
-
-outputOptions(output, "acb_output", suspendWhenHidden = FALSE)
-outputOptions(output, "acb_cat3_output", suspendWhenHidden = FALSE)
-outputOptions(output, "acb_cat2_output", suspendWhenHidden = FALSE)
-outputOptions(output, "acb_cat1_output", suspendWhenHidden = FALSE)
-
-outputOptions(output, "seponeringslisten_output", suspendWhenHidden = FALSE)
-outputOptions(output, "seponeringslist_atc_codes", suspendWhenHidden = FALSE)
-
-outputOptions(output, "qtc_output", suspendWhenHidden = FALSE)
-
-outputOptions(output, "serotonergic_output", suspendWhenHidden = FALSE)
-outputOptions(output, "serotonergic_atc_codes", suspendWhenHidden = FALSE)
-
-outputOptions(output, "bleeding_risk_output", suspendWhenHidden = FALSE)
-outputOptions(output, "bleeding_risk_atc_codes", suspendWhenHidden = FALSE)
-
-outputOptions(output, "kidney_output", suspendWhenHidden = FALSE)
                                      
 }
 
