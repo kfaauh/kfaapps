@@ -161,114 +161,779 @@ generate_stockleys_url <- function(atc_codes) {
   return(url)
 }
 
-# Define UI
-ui <- secure_app(fluidPage(
-  titlePanel("Lister og interaktioner"),
+# -------------------------------------------------------------------------
+# Theme
+# -------------------------------------------------------------------------
 
-  # Add CSS to style the buttons with vertical alignment and spacing
-  tags$style(HTML("
-    .btn-custom, .btn-primary {
-      display: block;
-      width: 100%;
-      margin-bottom: 15px;
-      text-align: left;
-    }
-    .btn-custom {
-      background-color: #0033A0;
-      color: white;
-      border: none;
-    }
-    .btn-custom:hover {
-      background-color: #00217A;
-      color: white;
-    }
-  ")),
+kfa_theme <- bs_theme(
+  version = 5,
+  bg = "#F6F8FB",
+  fg = "#1F2933",
+  primary = "#0033A0",
+  secondary = "#667085",
+  base_font = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif",
+  heading_font = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"
+)
 
-  # JavaScript handler for redirecting the browser to a new URL
-  tags$script(HTML("
-    Shiny.addCustomMessageHandler('redirect', function(message) {
-      window.open(message.url, '_blank');
-    });
-  ")),
 
-  sidebarLayout(
-    sidebarPanel(
-      textAreaInput("atc_codes", label = "Indtast ATC-koder (én pr. linje)",
-                    placeholder = "f.eks. N05AN01\nC03CA01", height = "300px"),
+# -------------------------------------------------------------------------
+# UI
+# -------------------------------------------------------------------------
 
-      actionButton("generate_anticholinergic", "Antikolinerg belastning", class = "btn btn-primary"),
-      actionButton("generate_seponeringslisten", "Seponeringslisten", class = "btn btn-primary"),
-      actionButton("generate_qtc", "QTc-forlængelse", class = "btn btn-primary"),
-      actionButton("generate_serotonergic", "Serotonergt load", class = "btn btn-primary"),
-      actionButton("generate_bleeding_risk", "Blødningsrisiko", class = "btn btn-primary"),
-      actionButton("generate_renal", "Nyrefunktion fra pro.medicin.dk", class = "btn btn-primary"),
-      actionButton("generate_interaktionsdatabasen", "Interaktionsdatabasen.dk", class = "btn btn-primary"),
-      actionButton("generate_interaksjoner", "Interaksjoner.no", class = "btn btn-primary"),
-      actionButton("generate_stockleys", "Stockley's Drug Interactions", class = "btn btn-primary"),
-      br(),
-      actionButton("mark_and_copy", "Markér og kopier indhold", class = "btn-custom"),
-      actionButton("clear_output", "Ryd indhold", class = "btn-custom")
+ui <- secure_app(
+  fluidPage(
+    theme = kfa_theme,
+
+    tags$head(
+
+      tags$title("Lister og interaktioner | KFA apps"),
+
+      tags$style(
+        HTML("
+        body {
+          background: #F6F8FB;
+          color: #1F2933;
+        }
+
+        .container-fluid {
+          padding: 0;
+        }
+
+        .kfa-shell {
+          width: 100%;
+          max-width: 1240px;
+          margin: 0 auto;
+          padding: 28px 28px 60px;
+        }
+
+
+        /* Header ------------------------------------------------------- */
+
+        .kfa-topbar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 30px;
+        }
+
+        .home-link {
+          color: #667085;
+          text-decoration: none;
+          font-size: 0.88rem;
+          font-weight: 550;
+        }
+
+        .home-link:hover {
+          color: #0033A0;
+          text-decoration: none;
+        }
+
+        .kfa-label {
+          color: #98A2B3;
+          font-size: 0.78rem;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+        }
+
+
+        /* Hero --------------------------------------------------------- */
+
+        .app-heading {
+          margin-bottom: 30px;
+        }
+
+        .app-heading h1 {
+          margin: 0;
+          color: #182230;
+          font-size: clamp(2rem, 4vw, 2.75rem);
+          font-weight: 700;
+          letter-spacing: -0.035em;
+        }
+
+        .app-heading p {
+          margin: 10px 0 0;
+          max-width: 700px;
+          color: #667085;
+          font-size: 1rem;
+          line-height: 1.6;
+        }
+
+
+        /* Main layout -------------------------------------------------- */
+
+        .kfa-layout {
+          display: grid;
+          grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+          gap: 24px;
+          align-items: start;
+        }
+
+        .controls-column {
+          position: sticky;
+          top: 20px;
+        }
+
+        .panel-card,
+        .result-card {
+          background: #FFFFFF;
+          border: 1px solid #E3E8EF;
+          border-radius: 14px;
+          box-shadow: 0 5px 18px rgba(16, 24, 40, 0.035);
+        }
+
+        .panel-card {
+          padding: 22px;
+          margin-bottom: 15px;
+        }
+
+        .panel-card h2 {
+          margin: 0 0 6px;
+          color: #182230;
+          font-size: 1rem;
+          font-weight: 650;
+        }
+
+        .panel-description {
+          margin: 0 0 17px;
+          color: #667085;
+          font-size: 0.84rem;
+          line-height: 1.45;
+        }
+
+
+        /* ATC input ---------------------------------------------------- */
+
+        .form-control {
+          border-color: #D0D5DD;
+          border-radius: 9px;
+          box-shadow: none;
+        }
+
+        .form-control:focus {
+          border-color: #7295DA;
+          box-shadow: 0 0 0 3px rgba(0, 51, 160, 0.10);
+        }
+
+        #atc_codes {
+          min-height: 220px;
+          resize: vertical;
+          font-family: SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+          font-size: 0.9rem;
+          line-height: 1.55;
+        }
+
+        .input-meta {
+          display: flex;
+          justify-content: space-between;
+          gap: 10px;
+          margin-top: 8px;
+          color: #98A2B3;
+          font-size: 0.76rem;
+        }
+
+
+        /* Buttons ------------------------------------------------------ */
+
+        .btn {
+          border-radius: 8px;
+          font-weight: 550;
+          transition:
+            background-color 120ms ease,
+            border-color 120ms ease,
+            transform 120ms ease;
+        }
+
+        .btn:hover {
+          transform: translateY(-1px);
+        }
+
+        .btn-run {
+          width: 100%;
+          padding: 11px 16px;
+          margin: 15px 0 12px;
+          background: #0033A0 !important;
+          border-color: #0033A0 !important;
+          color: #FFFFFF !important;
+          text-align: center;
+        }
+
+        .btn-run:hover {
+          background: #00277D !important;
+          border-color: #00277D !important;
+        }
+
+        .screening-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+        }
+
+        .btn-screen {
+          width: 100%;
+          padding: 8px 9px;
+          background: #FFFFFF !important;
+          border: 1px solid #D0D5DD !important;
+          color: #344054 !important;
+          font-size: 0.81rem;
+          text-align: left;
+        }
+
+        .btn-screen:hover {
+          border-color: #9CB6E8 !important;
+          background: #F5F8FF !important;
+          color: #0033A0 !important;
+        }
+
+        .btn-wide {
+          width: 100%;
+          margin-top: 8px;
+          padding: 9px 12px;
+          background: #FFFFFF !important;
+          border: 1px solid #D0D5DD !important;
+          color: #344054 !important;
+          text-align: left;
+        }
+
+        .btn-wide:hover {
+          border-color: #9CB6E8 !important;
+          background: #F5F8FF !important;
+          color: #0033A0 !important;
+        }
+
+        .btn-utility {
+          padding: 8px 11px;
+          background: transparent !important;
+          border: 1px solid #D0D5DD !important;
+          color: #667085 !important;
+          font-size: 0.8rem;
+        }
+
+        .utility-row {
+          display: flex;
+          gap: 8px;
+        }
+
+
+        /* Results ------------------------------------------------------ */
+
+        .results-column {
+          min-width: 0;
+        }
+
+        .result-card {
+          padding: 24px 26px;
+          margin-bottom: 16px;
+        }
+
+        /*
+          Dynamic result cards are invisible until at least one
+          Shiny UI output contains content. This also hides them
+          again when 'Ryd resultater' sets their outputs to NULL.
+        */
+        .result-card-dynamic {
+          display: none;
+        }
+
+        .result-card-dynamic:has(.shiny-html-output:not(:empty)) {
+          display: block;
+        }
+
+        .result-kicker {
+          margin-bottom: 14px;
+          color: #667085;
+          font-size: 0.73rem;
+          font-weight: 700;
+          letter-spacing: 0.055em;
+          text-transform: uppercase;
+        }
+
+        .result-card h4 {
+          margin-top: 0 !important;
+          margin-bottom: 13px !important;
+          color: #182230;
+          font-size: 1rem !important;
+          font-weight: 650;
+          line-height: 1.45;
+        }
+
+        .result-card .shiny-html-output {
+          color: #344054;
+          font-size: 0.9rem;
+          line-height: 1.6;
+        }
+
+        .empty-state {
+          padding: 54px 30px;
+          border: 1px dashed #D0D5DD;
+          border-radius: 14px;
+          text-align: center;
+          color: #98A2B3;
+          background: rgba(255,255,255,0.45);
+        }
+
+        .empty-state-title {
+          color: #667085;
+          font-size: 0.95rem;
+          font-weight: 600;
+          margin-bottom: 5px;
+        }
+
+
+        /* Copy toast --------------------------------------------------- */
+
+        .copy-toast {
+          position: fixed;
+          right: 24px;
+          bottom: 24px;
+          z-index: 9999;
+          padding: 11px 16px;
+          border-radius: 9px;
+          background: #182230;
+          color: white;
+          font-size: 0.85rem;
+          box-shadow: 0 10px 30px rgba(16,24,40,0.20);
+          opacity: 0;
+          pointer-events: none;
+          transform: translateY(8px);
+          transition: opacity 150ms ease, transform 150ms ease;
+        }
+
+        .copy-toast.visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+
+
+        /* Mobile ------------------------------------------------------- */
+
+        @media (max-width: 820px) {
+
+          .kfa-shell {
+            padding: 20px 15px 42px;
+          }
+
+          .kfa-layout {
+            grid-template-columns: 1fr;
+          }
+
+          .controls-column {
+            position: static;
+          }
+
+          .screening-grid {
+            grid-template-columns: 1fr 1fr;
+          }
+
+          .result-card {
+            padding: 20px;
+          }
+        }
+
+        @media (max-width: 440px) {
+
+          .screening-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .kfa-label {
+            display: none;
+          }
+        }
+        ")
+      ),
+
+
+      # ---------------------------------------------------------------
+      # JavaScript
+      # ---------------------------------------------------------------
+
+      tags$script(
+        HTML("
+        // Open dynamic external URLs
+        Shiny.addCustomMessageHandler('redirect', function(message) {
+          window.open(message.url, '_blank');
+        });
+
+
+        // Main screening button:
+        // trigger the five fast/local screening buttons.
+        // Renal-function scraping remains separate.
+        $(document).on('click', '#generate_screening', function() {
+          [
+            'generate_anticholinergic',
+            'generate_seponeringslisten',
+            'generate_qtc',
+            'generate_serotonergic',
+            'generate_bleeding_risk'
+          ].forEach(function(id) {
+            $('#' + id).trigger('click');
+          });
+        });
+
+
+        // Count unique non-empty ATC codes
+        function updateAtcCount() {
+          var value = $('#atc_codes').val() || '';
+
+          var codes = value
+            .split(/\\r?\\n/)
+            .map(function(x) { return x.trim(); })
+            .filter(function(x) { return x.length > 0; });
+
+          codes = [...new Set(codes)];
+
+          var label = codes.length === 1
+            ? '1 ATC-kode'
+            : codes.length + ' ATC-koder';
+
+          $('#atc_count').text(label);
+        }
+
+        $(document).on('input', '#atc_codes', updateAtcCount);
+        $(document).on('shiny:connected', updateAtcCount);
+
+
+        // Small non-blocking toast
+        function showCopyToast(message) {
+          var toast = $('#copy_toast');
+
+          toast.text(message);
+          toast.addClass('visible');
+
+          setTimeout(function() {
+            toast.removeClass('visible');
+          }, 1800);
+        }
+
+
+        // Copy visible results as plain text
+        $(document).on('click', '#mark_and_copy', function() {
+
+          var allOutput = document.getElementById('all_output');
+
+          if (!allOutput) {
+            return;
+          }
+
+          var text = allOutput.innerText.trim();
+
+          if (!text) {
+            showCopyToast('Ingen resultater at kopiere');
+            return;
+          }
+
+          if (navigator.clipboard && window.isSecureContext) {
+
+            navigator.clipboard.writeText(text)
+              .then(function() {
+                showCopyToast('Resultater kopieret');
+              })
+              .catch(function() {
+                showCopyToast('Kunne ikke kopiere resultater');
+              });
+
+          } else {
+
+            var textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+
+            document.body.appendChild(textarea);
+            textarea.select();
+
+            try {
+              document.execCommand('copy');
+              showCopyToast('Resultater kopieret');
+            } catch (err) {
+              showCopyToast('Kunne ikke kopiere resultater');
+            }
+
+            document.body.removeChild(textarea);
+          }
+        });
+        ")
+      )
     ),
 
-mainPanel(
-      div(id = "all_output",
-          uiOutput("drug_name_output"),
-          uiOutput("generic_atc_codes"),
-          hr(style = "border-top:1px solid black;"),
 
-          uiOutput("acb_output"),
-          uiOutput("acb_atc_codes"),
-          uiOutput("acb_cat3_output"),
-          uiOutput("acb_cat2_output"),
-          uiOutput("acb_cat1_output"),
-          hr(style = "border-top:1px solid black;"),
+    # -------------------------------------------------------------------
+    # Page
+    # -------------------------------------------------------------------
 
-          uiOutput("seponeringslisten_output"),
-          uiOutput("seponeringslist_atc_codes"),
-          hr(style = "border-top:1px solid black;"),
+    div(
+      class = "kfa-shell",
 
-          uiOutput("qtc_output"),
-          uiOutput("qtc_atc_codes"),
-          hr(style = "border-top:1px solid black;"),
+      div(
+        class = "kfa-topbar",
 
-          uiOutput("serotonergic_output"),
-          uiOutput("serotonergic_atc_codes"),
-          hr(style = "border-top:1px solid black;"),
+        tags$a(
+          href = "https://kfaapps.au.dk/",
+          class = "home-link",
+          "\u2190 KFA apps"
+        ),
 
-          uiOutput("bleeding_risk_output"),
-          uiOutput("bleeding_risk_atc_codes"),
-          hr(style = "border-top:1px solid black;"),
+        tags$span(
+          class = "kfa-label",
+          "Klinisk Farmakologi"
+        )
+      ),
 
-          uiOutput("kidney_output"),
 
-          uiOutput("interaction_url_dk"),
-          uiOutput("interaction_url_no"),
-          uiOutput("stockleys_url")
-      )
+      div(
+        class = "app-heading",
+
+        tags$h1("Lister og interaktioner"),
+
+        tags$p(
+          paste(
+            "Screen en medicinliste for farmakologiske risici,",
+            "relevante lister og lægemiddelinteraktioner."
+          )
+        )
+      ),
+
+
+      div(
+        class = "kfa-layout",
+
+
+        # ----------------------------------------------------------------
+        # Controls
+        # ----------------------------------------------------------------
+
+        div(
+          class = "controls-column",
+
+          div(
+            class = "panel-card",
+
+            tags$h2("Medicinliste"),
+
+            tags$p(
+              class = "panel-description",
+              "Indtast én ATC-kode pr. linje."
+            ),
+
+            textAreaInput(
+              "atc_codes",
+              label = NULL,
+              placeholder = "N05AN01\nC03CA01\nN06AB06",
+              height = "220px",
+              width = "100%"
+            ),
+
+            div(
+              class = "input-meta",
+
+              tags$span(
+                id = "atc_count",
+                "0 ATC-koder"
+              ),
+
+              tags$span(
+                "Dubletter ignoreres"
+              )
+            ),
+
+            actionButton(
+              "generate_screening",
+              "Kør screening",
+              class = "btn-run"
+            ),
+
+            div(
+              class = "screening-grid",
+
+              actionButton(
+                "generate_anticholinergic",
+                "Antikolinerg belastning",
+                class = "btn-screen"
+              ),
+
+              actionButton(
+                "generate_seponeringslisten",
+                "Seponeringslisten",
+                class = "btn-screen"
+              ),
+
+              actionButton(
+                "generate_qtc",
+                "QTc-forlængelse",
+                class = "btn-screen"
+              ),
+
+              actionButton(
+                "generate_serotonergic",
+                "Serotonerg belastning",
+                class = "btn-screen"
+              ),
+
+              actionButton(
+                "generate_bleeding_risk",
+                "Blødningsrisiko",
+                class = "btn-screen"
+              )
+            ),
+
+            actionButton(
+              "generate_renal",
+              "Nyrefunktion fra pro.medicin.dk",
+              class = "btn-wide"
+            )
+          ),
+
+
+          div(
+            class = "panel-card",
+
+            tags$h2("Interaktioner"),
+
+            tags$p(
+              class = "panel-description",
+              paste(
+                "Åbn medicinlisten direkte i eksterne",
+                "interaktionsdatabaser."
+              )
+            ),
+
+            actionButton(
+              "generate_interaktionsdatabasen",
+              "Interaktionsdatabasen.dk  \u2197",
+              class = "btn-wide"
+            ),
+
+            actionButton(
+              "generate_interaksjoner",
+              "Interaksjoner.no  \u2197",
+              class = "btn-wide"
+            ),
+
+            actionButton(
+              "generate_stockleys",
+              "Stockley's Drug Interactions  \u2197",
+              class = "btn-wide"
+            )
+          ),
+
+
+          div(
+            class = "utility-row",
+
+            actionButton(
+              "mark_and_copy",
+              "Kopiér resultater",
+              class = "btn-utility"
+            ),
+
+            actionButton(
+              "clear_output",
+              "Ryd resultater",
+              class = "btn-utility"
+            )
+          )
+        ),
+
+
+        # ----------------------------------------------------------------
+        # Results
+        # ----------------------------------------------------------------
+
+        div(
+          id = "all_output",
+          class = "results-column",
+
+          conditionalPanel(
+  condition = "!input.atc_codes || input.atc_codes.trim().length === 0",
+
+  div(
+    class = "empty-state",
+
+    div(
+      class = "empty-state-title",
+      "Resultater vises her"
+    ),
+
+    div(
+      "Indtast ATC-koder og vælg en screening."
     )
-  ),
+  )
+),
 
-  # JavaScript for copying all content
-  tags$script(HTML("
-    document.getElementById('mark_and_copy').addEventListener('click', function() {
-      var allOutput = document.getElementById('all_output');
-      var range = document.createRange();
-      range.selectNodeContents(allOutput);
-      var sel = window.getSelection();
-      sel.removeAllRanges();
-      sel.addRange(range);
 
-      // Attempt to copy to clipboard
-      try {
-        document.execCommand('copy');
-        alert('Indhold kopieret til udklipsholderen');
-      } catch (err) {
-        alert('Indholdet kunne ikke kopieres til udklipsholderen');
-      }
-    });
-  "))
-))
+          div(
+            class = "result-card result-card-dynamic",
 
+            div(
+              class = "result-kicker",
+              "Medicinliste"
+            ),
+
+            uiOutput("drug_name_output"),
+            uiOutput("generic_atc_codes")
+          ),
+
+
+          div(
+            class = "result-card result-card-dynamic",
+
+            uiOutput("acb_output"),
+            uiOutput("acb_cat3_output"),
+            uiOutput("acb_cat2_output"),
+            uiOutput("acb_cat1_output")
+          ),
+
+
+          div(
+            class = "result-card result-card-dynamic",
+
+            uiOutput("seponeringslisten_output"),
+            uiOutput("seponeringslist_atc_codes")
+          ),
+
+
+          div(
+            class = "result-card result-card-dynamic",
+
+            uiOutput("qtc_output")
+          ),
+
+
+          div(
+            class = "result-card result-card-dynamic",
+
+            uiOutput("serotonergic_output"),
+            uiOutput("serotonergic_atc_codes")
+          ),
+
+
+          div(
+            class = "result-card result-card-dynamic",
+
+            uiOutput("bleeding_risk_output"),
+            uiOutput("bleeding_risk_atc_codes")
+          ),
+
+
+          div(
+            class = "result-card result-card-dynamic",
+
+            uiOutput("kidney_output")
+          )
+        )
+      )
+    ),
+
+
+    div(
+      id = "copy_toast",
+      class = "copy-toast",
+      "Resultater kopieret"
+    )
+  )
+)
+                     
 # Revised Server function
 server <- function(input, output, session) {
 
