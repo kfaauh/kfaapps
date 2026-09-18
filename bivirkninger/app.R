@@ -241,9 +241,24 @@ fetch_ade_table <- function(url, sleep_time = 1) {
 # -----------------------------------------------------------------------------
 
 # Read in the list of drugs
-drugs <- read.csv2("data/ListeOverGodkendteLaegemidler.csv", header = FALSE, sep = ";")
-drugs <- dplyr::select(drugs, Drugid = V1, drugname = V5, ATC = V7)
-drugs <- drugs[-1, ]
+drugs <- read.csv2(
+  "data/ListeOverGodkendteLaegemidler.csv",
+  header = TRUE,
+  check.names = FALSE,
+  colClasses = "character",
+  fileEncoding = "UTF-8-BOM"
+)
+
+stopifnot(all(
+  c("Drugid", "AktiveSubstanser", "ATC-kode") %in% names(drugs)
+))
+
+drugs <- dplyr::select(
+  drugs,
+  Drugid,
+  drugname = AktiveSubstanser,
+  ATC = `ATC-kode`
+)
 drugs <- drugs %>%
   dplyr::mutate(
     ATC = toupper(trimws(ATC)),
