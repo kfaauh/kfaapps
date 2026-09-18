@@ -18,7 +18,24 @@ credentials <- data.frame(
 )
 
 # Load your data from local files
-drugs_data <- read.csv2("data/ListeOverGodkendteLaegemidler.csv", header = FALSE, sep =";")
+drugs_data <- read.csv2(
+  "data/ListeOverGodkendteLaegemidler.csv",
+  header = TRUE,
+  check.names = FALSE,
+  colClasses = "character",
+  fileEncoding = "UTF-8-BOM"
+)
+
+stopifnot(all(
+  c("Drugid", "AktiveSubstanser", "ATC-kode") %in% names(drugs_data)
+))
+
+drugs_data <- drugs_data %>%
+  transmute(
+    V1 = trimws(Drugid),
+    V5 = trimws(AktiveSubstanser),
+    V7 = toupper(trimws(`ATC-kode`))
+  )
 # acb_data <- read_excel("data/anticholinergic_bcpt.xlsx", skip=1)  # Loading the Excel file
 acb_data <- read_excel("data/antikolinerg_IRF_2019.xlsx", skip=0)  # Loading the Excel file
 sepo_data <- read_delim("data/seponeringslisten_v2.csv", delim = ";")  # Semicolon-separated CSV
