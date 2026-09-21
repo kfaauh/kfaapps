@@ -223,7 +223,7 @@ cols_to_analyze <- c(
   "Forvagt*",
   "Bagvagt*",
   "Modtaget (*)",
-  "Færdig (*)",
+  "Sendt (*)",
   "Speciale (*)",
   "Speciale",
   "Kommune (hvis primærsektor, *)",
@@ -280,6 +280,8 @@ if ("id" %in% names(items_df)) {
   message("✓ Standardized 'ID' to 'Id' in main data")
 }
 
+# SharePoint column renamed "Færdig (*)" -> "Sendt (*)"; keep old name downstream
+names(items_df)[names(items_df) == "Sendt (*)"] <- "Færdig (*)"
 message("Final columns in items_df: ", paste(names(items_df), collapse = ", "))
 
 data.lmraad <- subset(
