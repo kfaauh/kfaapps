@@ -28,6 +28,7 @@ library(purrr)
 library(readr)
 library(DT)
 library(writexl)
+library(readxl)
 
 # Tillad flere CSV-dele og den tilhørende eksportoversigt.
 options(shiny.maxRequestSize = 200 * 1024^2)
@@ -777,6 +778,136 @@ validate_export_summaries <- function(summaries, long) {
   }
   invisible(NULL)
 }
+
+
+# Færdige Excel-udtræk og Taksten: bevar nul, NA og varenumre inkl. foranstillede nuller.
+parse_amount <- function(x, column = "nøgletal") {
+  raw <- trimws(as.character(x))
+  raw[raw %in% c("", "NA", "NaN")] <- NA_character_
+  raw <- gsub("[[:space:]\u00a0]", "", raw, perl = TRUE)
+  both <- !is.na(raw) & grepl(",", raw, fixed = TRUE) & grepl(".", raw, fixed = TRUE)
+  raw[both] <- gsub(".", "", raw[both], fixed = TRUE)
+  raw <- gsub(",", ".", raw, fixed = TRUE)
+  out <- suppressWarnings(as.numeric(raw))
+  if (any(!is.na(raw) & (is.na(out) | !is.finite(out)))) stop("Ugyldigt tal i ", column, ".")
+  out
+}
+
+normalise_product_number <- function(x) {
+  v <- trimws(as.character(x))
+  v <- sub("\\.0+$", "", v)
+  good <- !is.na(v) & grepl("^[0-9]{1,6}$", v)
+  v[good] <- stringr::str_pad(v[good], 6, pad = "0")
+  v
+}
+
+normalise_wide_export <- function(dat) {
+  dat <- tibble::as_tibble(dat)
+  names(dat) <- trimws(names(dat))
+  dat <- normalise_atc_columns(dat)
+  keys <- c("ATC-kode", "ATC-tekst", "År", "Måned", "Ydertype", "Bopælsregion")
+  if (length(setdiff(keys, names(dat)))) stop("Excel mangler: ", paste(setdiff(keys, names(dat)), collapse = ", "))
+  if (!nrow(dat) || !any(metric_cols %in% names(dat))) stop("Ingen salgstal eller nøgletal i Excel.")
+  dat <- normalise_year_month_columns(dat)
+  dat[["ATC-kode"]] <- toupper(trimws(as.character(dat[["ATC-kode"]])))
+  for (nm in c("ATC-tekst", "Ydertype", "Bopælsregion")) dat[[nm]] <- trimws(as.character(dat[[nm]]))
+  if (any(!stats::complete.cases(dat[keys])) ||
+      any(vapply(dat[keys], function(x) any(!nzchar(trimws(as.character(x)))), logical(1))) ||
+      any(!grepl("^[A-Z][0-9]{2}[A-Z]{2}[0-9]{2}$", dat[["ATC-kode"]]))) {
+    stop("Ugyldige eller manglende datanøgler.")
+  }
+  product <- c("Varenummer", "Navn (Præparat)", "Form", "Styrke", "Pakningsstørrelse")
+  has_product <- "Varenummer" %in% names(dat) &&
+    any(!is.na(dat[["Varenummer"]]) & nzchar(trimws(as.character(dat[["Varenummer"]]))))
+  if (has_product) {
+    if (length(setdiff(product, names(dat)))) stop("Ufuldstændige produktkolonner.")
+    dat[["Varenummer"]] <- normalise_product_number(dat[["Varenummer"]])
+    for (nm in setdiff(product, "Varenummer")) dat[[nm]] <- trimws(as.character(dat[[nm]]))
+    if (any(!grepl("^[0-9]{6}$", dat[["Varenummer"]])) ||
+        any(!stats::complete.cases(dat[product])) ||
+        any(vapply(dat[product], function(x) any(!nzchar(x)), logical(1)))) {
+      stop("Ugyldige varenumre eller manglende produktfelter.")
+    }
+  } else {
+    dat <- dplyr::select(dat, -dplyr::any_of(product))
+  }
+  for (nm in metric_cols) {
+    dat[[nm]] <- if (nm %in% names(dat)) parse_amount(dat[[nm]], nm) else rep(NA_real_, nrow(dat))
+  }
+  row_keys <- if (has_product) c(keys[1:2], product, keys[-c(1, 2)]) else keys
+  if (anyDuplicated(dat[row_keys])) stop("Overlappende datarækker. Samme vare, periode, region og ydertype må kun forekomme én gang.")
+  dat[[".month_order"]] <- match(dat[["Måned"]], month_names_da)
+  dat <- dplyr::arrange(dat, .data[["ATC-kode"]], .data[["År"]], .data[[".month_order"]], .data[["Bopælsregion"]])
+  dplyr::select(dat, -dplyr::all_of(".month_order"), dplyr::all_of(row_keys), dplyr::all_of(metric_cols))
+}
+
+read_sales_xlsx <- function(path) {
+  for (sheet in readxl::excel_sheets(path)) {
+    nms <- tryCatch(names(readxl::read_excel(path, sheet = sheet, n_max = 0)), error = function(e) character())
+    if (all(c("År", "Måned", "Ydertype", "Bopælsregion") %in% nms) &&
+        ("ATC-kode" %in% nms || "ATC, Niveau 5, kode & tekst" %in% nms) &&
+        any(metric_cols %in% nms)) {
+      return(normalise_wide_export(readxl::read_excel(path, sheet = sheet,
+        col_types = "text", .name_repair = "minimal")))
+    }
+  }
+  stop("Ingen medicinsalgstabel fundet i Excel-filen.")
+}
+
+takst_column <- function(columns, choices) {
+  idx <- match(tolower(choices), tolower(trimws(columns)))
+  idx <- idx[!is.na(idx)]
+  if (length(idx)) columns[idx[1]] else NA_character_
+}
+read_takst_xlsx <- function(path) {
+  dat <- NULL
+  for (sheet in readxl::excel_sheets(path)) {
+    for (skip in 0:5) {
+      nms <- tryCatch(names(readxl::read_excel(path, sheet = sheet, skip = skip, n_max = 0)), error = function(e) character())
+      if (!is.na(takst_column(nms, c("Varenr.", "Varenummer", "Varenr", "Vare nr.")))) {
+        dat <- readxl::read_excel(path, sheet = sheet, skip = skip,
+          col_types = "text", .name_repair = "minimal")
+        break
+      }
+    }
+    if (!is.null(dat)) break
+  }
+  if (is.null(dat)) stop("Taksten mangler Varenr. / Varenummer.")
+  names(dat) <- trimws(names(dat))
+  nms <- names(dat)
+  get <- function(options) {
+    nm <- takst_column(nms, options)
+    if (is.na(nm)) rep(NA_character_, nrow(dat)) else as.character(dat[[nm]])
+  }
+  prices <- c("ESP (kr.)", "TSP (kr.)", "Pris pr. DDD (kr.)")
+  if (all(vapply(c(prices, "Substitutionsgrp."), function(x) is.na(takst_column(nms, x)), logical(1)))) {
+    stop("Taksten mangler genkendelige pris-/substitutionskolonner.")
+  }
+  out <- tibble::tibble(
+    "Varenummer" = normalise_product_number(get(c("Varenr.", "Varenummer", "Varenr", "Vare nr."))),
+    "Takst · ATC-kode" = toupper(trimws(get(c("ATC-kode", "ATC")))),
+    "Takst · ESP (kr.)" = parse_amount(get(c("ESP (kr.)", "ESP", "Pris")), "ESP"),
+    "Takst · TSP (kr.)" = parse_amount(get(c("TSP (kr.)", "TSP")), "TSP"),
+    "Takst · Pris pr. DDD (kr.)" = parse_amount(get(c("Pris pr. DDD (kr.)", "Pris_pr_DDD")), "Pris pr. DDD"),
+    "Takst · Substitutionsgruppe" = get(c("Substitutionsgrp.", "Tilskudssubstitutionsgruppe", "Substitutionsgruppe"))
+  )
+  out <- dplyr::filter(out, grepl("^[0-9]{6}$", .data[["Varenummer"]]))
+  out <- dplyr::distinct(out)
+  if (!nrow(out)) stop("Ingen gyldige varenumre i Taksten.")
+  if (anyDuplicated(out[["Varenummer"]])) stop("Flere forskellige Takst-opslag for samme varenummer.")
+  dplyr::mutate(out, .takst_match = TRUE)
+}
+enrich_sales_with_takst <- function(sales, takst) {
+  if (!nrow(sales) || is.null(takst) || !"Varenummer" %in% names(sales)) return(sales)
+  out <- dplyr::left_join(sales, takst, by = "Varenummer")
+  out[["Takstmatch"]] <- !is.na(out[[".takst_match"]])
+  out[["ATC-afvigelse"]] <- out[["Takstmatch"]] &
+    !is.na(out[["Takst · ATC-kode"]]) &
+    out[["Takst · ATC-kode"]] != out[["ATC-kode"]]
+  dplyr::select(out, -dplyr::all_of(".takst_match"))
+}
+safe_total <- function(x) if (!length(x) || all(is.na(x))) NA_real_ else sum(x, na.rm = TRUE)
+format_metric <- function(x) if (is.na(x)) "—" else format(round(x), big.mark = ".", decimal.mark = ",", trim = TRUE, scientific = FALSE)
 
 # Samme farver, systemskrifter og kort som homepage og lister.
 kfa_theme <- bs_theme(
