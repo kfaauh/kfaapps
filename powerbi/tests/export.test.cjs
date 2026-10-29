@@ -99,6 +99,14 @@ async function runBatch(mode='success', options={}) {
   assert.equal(mapped[0]['Måned'],'Jan 2025');
   assert.equal(mapped[0]['Ydertype'],'Almen læge');
   assert.equal(mapped[0].value,1000);
+  for(const [literal,expected] of [['-1L',-1],['0L',0],['123L',123],['-1D',-1],['1.25D',1.25]]) {
+    const sample=structuredClone(fixture);
+    sample.results[0].result.data.dsr.DS[0].PH[0].DM0[0].C[5]=literal;
+    assert.equal(a.decodeResponse(sample)[0][5],expected);
+  }
+  const malformed=structuredClone(fixture);
+  malformed.results[0].result.data.dsr.DS[0].PH[0].DM0[0].C[5]='1xyzL';
+  assert.throws(()=>a.decodeResponse(malformed),/måleværdi/);
   const nullable=structuredClone(fixture), nr=nullable.results[0].result.data.dsr.DS[0].PH[0].DM0;
   nr[1].N=32;nr[1].C=[1];nr[2].C=[2,'0D'];
   const decoded=a.decodeResponse(nullable);

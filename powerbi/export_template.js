@@ -269,7 +269,7 @@
               return values[k];
             });
             if(out[out.length - 1]!=null){
-              const raw=String(out[out.length - 1]).replace(/D$/,"");
+              const raw=String(out[out.length - 1]).replace(/[DL]$/,"");
               if(!raw.trim() || !Number.isFinite(Number(raw)))throw Error("Ugyldig måleværdi: "+raw);
               out[out.length - 1]=Number(raw);
             }
