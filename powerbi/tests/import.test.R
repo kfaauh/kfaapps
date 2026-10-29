@@ -75,6 +75,36 @@ shiny::testServer(server, {
   session$setInputs(parsed_csv_files = rbind(upload, upload), import_btn = 2)
   stopifnot(nrow(parsed_data_val()) == 0L, identical(import_status_val()$ok, FALSE))
 })
+
+# Færdige Excel-udtræk (ATC5/varenummer) og Taksten – syntetiske tests.
+xfile <- tempfile(fileext = ".xlsx")
+writexl::write_xlsx(list("Medicinsalg" = out), xfile)
+xlsx <- read_sales_xlsx(xfile)
+stopifnot(nrow(xlsx) == nrow(out), identical(names(xlsx), names(out)),
+  identical(xlsx[["ATC-kode"]], out[["ATC-kode"]]))
+pfile <- tempfile(fileext = ".xlsx")
+writexl::write_xlsx(list("Ark1" = p), pfile)
+px <- read_sales_xlsx(pfile)
+stopifnot(all(px[["Varenummer"]] == "012345"), ncol(px) == 17L)
+takstfile <- tempfile(fileext = ".xlsx")
+takst_fixture <- data.frame(
+  "Varenr." = "012345", "ATC-kode" = "C09CA01", "ESP (kr.)" = "123,50",
+  "TSP (kr.)" = "125,00", "Pris pr. DDD (kr.)" = "1,25",
+  "Substitutionsgrp." = "123", check.names = FALSE
+)
+writexl::write_xlsx(takst_fixture, takstfile)
+takst <- read_takst_xlsx(takstfile)
+joined <- enrich_sales_with_takst(px, takst)
+stopifnot(all(joined$Takstmatch), !any(joined[["ATC-afvigelse"]]),
+  all(joined[["Takst · ESP (kr.)"]] == 123.5),
+  nrow(joined) == nrow(px))
+wrong <- takst; wrong[["Takst · ATC-kode"]] <- "N06BA04"
+stopifnot(all(enrich_sales_with_takst(px, wrong)[["ATC-afvigelse"]]))
+bad_excel <- out
+bad_excel <- dplyr::bind_rows(bad_excel, bad_excel[1, ])
+fail(normalise_wide_export(bad_excel), "Overlappende")
+stopifnot(identical(parse_amount(c("1.234,50", "0", NA)), c(1234.5, 0, NA_real_)))
+
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args)) {
   full <- read_export_csv(args[1]); wide <- finalise_parsed_long_export(full)
