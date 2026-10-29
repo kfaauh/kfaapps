@@ -5,8 +5,8 @@
 // Stop en kørende eksport med medicinsalgExport.stop().
 
 (async () => {
-  // Indsæt hele headeren lokalt i Console; send den aldrig til Shiny-appen.
-  const authorization = "INDSÆT_AUTHORIZATION_HER";
+  // Token opsamles kun i denne browsersession fra rapportens næste datakald.
+  let authorization = "";
   const url = "https://wabi-west-europe-g-primary-redirect.analysis.windows.net/explore/querydata";
 
   const selectedAtc = __ATC_JS__;
@@ -38,7 +38,8 @@
   }
 
   const headers = [
-    "ATC, Niveau 5, kode & tekst",
+    "ATC-kode",
+    "ATC-tekst",
     "Varenummer",
     "Navn (Præparat)",
     "Form",
@@ -246,12 +247,17 @@
               let v=cells[j++];
               if(s.DN){
                 const dict=dicts[s.DN];
-                if(!Array.isArray(dict))throw Error("Tekstordbog mangler: "+s.DN);
-                if(Number.isInteger(v) && dict.length){
-                  if(v<0 || v>=dict.length)throw Error("Ugyldigt ordbogsindeks.");
-                  v=dict[v];
-                } else if (v != null && s.T === 1) {
-                  throw Error("Ugyldig tekstreference: " + s.N);
+                // Power BI kan sende tekst direkte, også med DN og en tom ordbog.
+                // Kun numeriske celler i en ikke-tom ordbog er indeks.
+                if (typeof v === "string" || v == null) {
+                  // Direkte tekst, fx et varenummer med foranstillede nuller.
+                } else if (Array.isArray(dict) && dict.length) {
+                  if (!Number.isInteger(v) || v < 0 || v >= dict.length) throw Error("Ugyldigt ordbogsindeks: " + s.N);
+                  v = dict[v];
+                } else if (s.T === 1 && Array.isArray(dict) && !dict.length && Number.isFinite(v)) {
+                  v = String(v);
+                } else if (s.T === 1) {
+                  throw Error("Tekstordbog mangler eller er ugyldig: " + s.N);
                 }
               }
               values[s.N]=v;
@@ -275,6 +281,12 @@
     return output;
   }
 
+  function splitAtc(value) {
+    const match = String(value ?? "").trim().match(/^([A-Z][0-9]{2}[A-Z]{2}[0-9]{2})\s*(?:\((.+)\)|[-–—]\s*(.+))$/);
+    if (!match) throw Error("Ukendt ATC-kode og tekst i svaret.");
+    return [match[1], (match[2] || match[3]).trim()];
+  }
+
   function parseResponseToRows(response, meta) {
     return decodeResponse(response).map(values => {
       const offset = isVarenummerLevel ? 2 : 0;
@@ -291,7 +303,7 @@
         }
       }
       return Object.fromEntries(headers.map((key, i) => [key, [
-        String(values[0] ?? "").replace(/^(.+?) \((.+)\)$/, "$1 - $2"),
+        ...splitAtc(values[0]),
         ...product, values[1 + offset], values[2 + offset], values[3 + offset], values[4 + offset],
         outputMetricName(meta.opgoerelse, meta.normalisering), values[5 + offset],
         meta.atc, meta.region, Array.isArray(meta.year) ? meta.year.join(", ") : meta.year,
@@ -346,19 +358,86 @@
     }
   }
 
+  function captureAuthorization(signal) {
+    let resolveToken, rejectToken, settled = false, timer;
+    const promise = new Promise((resolve, reject) => { resolveToken = resolve; rejectToken = reject; });
+    const originalFetch = window.fetch;
+    const proto = window.XMLHttpRequest?.prototype;
+    const originalOpen = proto?.open, originalHeader = proto?.setRequestHeader;
+    const requestUrls = new WeakMap();
+    function matches(value) {
+      try {
+        const target = new URL(String(value), location.href), expected = new URL(url);
+        return target.origin === expected.origin && target.pathname === expected.pathname;
+      } catch { return false; }
+    }
+    function cleanup() {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", abort);
+      if (window.fetch === observedFetch) window.fetch = originalFetch;
+      if (proto?.open === observedOpen) proto.open = originalOpen;
+      if (proto?.setRequestHeader === observedHeader) proto.setRequestHeader = originalHeader;
+    }
+    function provide(value) {
+      if (settled || typeof value !== "string" || !/^(EmbedToken|Bearer)\s+\S+$/i.test(value.trim())) return false;
+      settled = true;
+      cleanup();
+      resolveToken(value.trim());
+      return true;
+    }
+    function abort() {
+      if (settled) return;
+      settled = true; cleanup(); rejectToken(new Error("Udtrækket blev stoppet af brugeren."));
+    }
+    function observedFetch(input, init) {
+      // Token observeres; rapportens forespørgsel videresendes helt uændret.
+      try {
+        if (matches(typeof input === "string" || input instanceof URL ? input : input.url)) {
+          const headers = new Headers(init?.headers ?? input?.headers);
+          provide(headers.get("authorization"));
+        }
+      } catch { /* Rapportens eget kald skal altid fortsætte. */ }
+      return originalFetch.apply(this, arguments);
+    }
+    function observedOpen(method, target) {
+      const result = originalOpen.apply(this, arguments);
+      requestUrls.set(this, target);
+      return result;
+    }
+    function observedHeader(name, value) {
+      const result = originalHeader.apply(this, arguments);
+      if (String(name).toLowerCase() === "authorization" && matches(requestUrls.get(this))) provide(value);
+      return result;
+    }
+    window.fetch = observedFetch;
+    if (proto) { proto.open = observedOpen; proto.setRequestHeader = observedHeader; }
+    signal.addEventListener("abort", abort, { once: true });
+    timer = setTimeout(() => {
+      if (settled) return;
+      settled = true; cleanup();
+      rejectToken(new Error("Intet adgangstoken opsamlet inden 2 minutter. Kør koden igen og skift et filter, eller brug den manuelle authorize-kommando."));
+    }, 120000);
+    if (signal.aborted) abort();
+    return { promise, provide, cleanup };
+  }
+
   const exportId = new Date().toISOString().replace(/[-:.]/g, "") + "_" + Math.random().toString(36).slice(2, 8);
 
   // Testene indlæser funktionerne ovenfor uden at køre netværkskald.
   // RUN_EXPORT
   if (location.origin !== "https://app.powerbi.com") throw Error("Vælg app.powerbi.com i Consoles frame-menu, og kør koden igen.");
-  if (!authorization.trim() || authorization.includes("INDSÆT_AUTHORIZATION")) throw Error("Indsæt hele Authorization-værdien i koden lokalt i Console først.");
   if (window.medicinsalgExport) throw Error("Et udtræk kører allerede. Stop det med medicinsalgExport.stop().");
 
   const total = selectedAtc.length * selectedRegions.length * selectedMetrics.length * normalisationOptions.length * (splitByYear ? selectedYears.length : 1);
   const summary = { version: 2, exportId, complete: false, expectedQueries: total, completedQueries: 0, requests: [], files: [] };
   const pendingFiles = [];
   let buffer = [], activeController = null, stopped = false, current = null;
-  window.medicinsalgExport = { stop() { stopped = true; activeController?.abort(); } };
+  const authorizationController = new AbortController();
+  const tokenCapture = captureAuthorization(authorizationController.signal);
+  window.medicinsalgExport = {
+    stop() { stopped = true; authorizationController.abort(); activeController?.abort(); },
+    authorize(value) { return tokenCapture.provide(value); }
+  };
 
   function stage(force) {
     while (buffer.length >= maxRowsPerCsv || (force && buffer.length)) {
@@ -370,6 +449,11 @@
   }
 
   try {
+    console.log("Skift nu et filter i Power BI-rapporten. Udtrækket starter, når rapportens adgangstoken er opsamlet.");
+    console.log('Hvis det ikke lykkes: kopiér Authorization fra Network og kør medicinsalgExport.authorize("INDSÆT_HELE_HEADEREN") i Console.');
+    authorization = await tokenCapture.promise;
+    if (stopped) throw Error("Udtrækket blev stoppet af brugeren.");
+    console.log("Adgangstoken opsamlet. Starter udtrækket.");
     const yearGroups = splitByYear ? selectedYears : [selectedYears];
     for (const atc of selectedAtc) for (const region of selectedRegions) for (const opgoerelse of selectedMetrics) for (const normalisering of normalisationOptions.map(x => x.value)) for (const year of yearGroups) {
       if (stopped) throw Error("Udtrækket blev stoppet af brugeren.");
@@ -401,6 +485,8 @@
     summary.files = [];
     console.error("STOP. Ingen CSV-filer er eksporteret. Ret fejlen og start igen:", summary.error, current);
   } finally {
+    tokenCapture.cleanup();
+    authorization = "";
     delete window.medicinsalgExport;
     downloadBlob(`medicinsalg_${exportId}_summary.json`, new Blob([JSON.stringify(summary, null, 2)], { type: "application/json;charset=utf-8" }));
   }

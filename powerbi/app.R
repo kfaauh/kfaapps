@@ -117,9 +117,503 @@ js_numeric_array <- function(x) {
   paste0("[", paste(as.integer(x), collapse = ", "), "]")
 }
 
+.medicinsalg_js_template <- r"---(
+// Power BI Medicinsalg i primærsektoren - direkte CSV-export
+// Kør i Chrome DevTools Console med app.powerbi.com valgt som frame.
+// Output: CSV-filer og en oversigt over alle kald, inklusive tomme resultater.
+// Stop en kørende eksport med medicinsalgExport.stop().
+
+(async () => {
+  // Token opsamles kun i denne browsersession fra rapportens næste datakald.
+  let authorization = "";
+  const url = "https://wabi-west-europe-g-primary-redirect.analysis.windows.net/explore/querydata";
+
+  const selectedAtc = __ATC_JS__;
+  const selectedMetrics = __METRICS_JS__;
+  const selectedRegions = __REGIONS_JS__;
+  const selectedYears = __YEARS_JS__;
+  const splitByYear = __SPLIT_JS__;
+  const outputLevel = __OUTPUT_LEVEL_JS__;
+  const isVarenummerLevel = outputLevel === "varenummer";
+
+  // Hold hver fil moderat i størrelse, så de kan uploades enkeltvis bagefter, hvis ønsket.
+  const maxRowsPerCsv = 50000;
+
+  const metricMap = {
+    "Mængdeforbrug": "Antal DDD",
+    "Regionalt tilskud": "Tilskudsbeløb - Regionalt",
+    "Omsætning": "Ekspeditionsbeløb"
+  };
+
+  const normalisationOptions = [
+    { value: "Ingen valg", suffix: "" },
+    { value: "Antal pr. 1.000", suffix: " pr. 1.000 borgere" }
+  ];
+
+  function outputMetricName(opgoerelse, normalisering) {
+    const base = metricMap[opgoerelse] || opgoerelse;
+    const opt = normalisationOptions.find(x => x.value === normalisering);
+    return base + (opt ? opt.suffix : "");
+  }
+
+  const headers = [
+    "ATC-kode",
+    "ATC-tekst",
+    "Varenummer",
+    "Navn (Præparat)",
+    "Form",
+    "Styrke",
+    "Pakningsstørrelse",
+    "År",
+    "Måned",
+    "Ydertype",
+    "Bopælsregion",
+    "nøgletal_output",
+    "value",
+    "atc_filter",
+    "region_filter",
+    "year_filter",
+    "opgoerelse",
+    "normalisering",
+    "opgoerelsesniveau",
+    "status",
+    "rowCountMarker",
+    "hasRestartToken",
+    "export_error",
+    "export_id"
+  ];
+
+  function literalValue(v) {
+    if (typeof v === "number") return `${v}L`;
+    const s = String(v).replaceAll("\\", "\\\\").replaceAll("'", "\\'");
+    return `'${s}'`;
+  }
+
+  function inFilter(source, property, values) {
+    return {
+      Condition: {
+        In: {
+          Expressions: [{ Column: { Expression: { SourceRef: { Source: source } }, Property: property } }],
+          Values: values.map(v => [{ Literal: { Value: literalValue(v) } }])
+        }
+      }
+    };
+  }
+
+  function startsWithFilter(source, property, value) {
+    return {
+      Condition: {
+        StartsWith: {
+          Left: { Column: { Expression: { SourceRef: { Source: source } }, Property: property } },
+          Right: { Literal: { Value: literalValue(value) } }
+        }
+      }
+    };
+  }
+
+  function atcTextFilter(source, property, value) {
+    const s = String(value || "").trim();
+    // Fuld Power BI-værdi: eksakt match. Ren ATC-kode: prefix-match på ATC5_Kode_Tekst.
+    if (s.includes("(") && s.includes(")")) return inFilter(source, property, [s]);
+    return startsWithFilter(source, property, s.toUpperCase());
+  }
+
+  function buildPayload({ atcValue, metricValues, regionValues, yearValues, normalisationValue }) {
+    const isPr1000 = normalisationValue === "Antal pr. 1.000";
+
+    // Vigtigt: "Antal pr. 1.000" er en separat calculation-group/table i Power BI.
+    // Hvis tabellen "Antal pr  1 000" medtages/filtreres ved totalværdier, kan de absolutte
+    // nøgletal ende som 0. Derfor bruges source "a" kun ved pr. 1.000-kald.
+    const fromItems = [
+      { Name: "#", Entity: "# Measures", Type: 0 },
+      { Name: "lm", Entity: "DimLaegemiddel", Type: 0 },
+      { Name: "dato", Entity: "DimDato", Type: 0 },
+      { Name: "ud", Entity: "DimUdstederType", Type: 0 },
+      { Name: "opg", Entity: "Opgørelse", Type: 0 },
+      { Name: "kron", Entity: "Kroniske sygdomme", Type: 0 },
+      { Name: "geo", Entity: "DimBorgerDemografi", Type: 0 },
+      { Name: "vol", Entity: "DimVolume", Type: 0 }
+    ];
+
+    const whereItems = [
+      inFilter("vol", "Volume_tekst_grp", ["DDD"]),
+      inFilter("opg", "CalculationItemColumn 1", metricValues),
+      inFilter("dato", "År_ID", yearValues),
+      inFilter("kron", "CalculationItemColumn 1", ["Ingen valg"]),
+      inFilter("geo", "Bopælsregion", regionValues),
+      atcTextFilter("lm", "ATC5_Kode_Tekst", atcValue),
+      inFilter("lm", "Flag_T3", ["Ja"])
+    ];
+
+    if (isPr1000) {
+      fromItems.push({ Name: "a", Entity: "Antal pr  1 000", Type: 0 });
+      whereItems.splice(3, 0, inFilter("a", "CalculationItemColumn 1", ["Antal pr. 1.000"]));
+    }
+
+    return {
+      version: "1.0.0",
+      queries: [{
+        Query: {
+          Commands: [{
+            SemanticQueryDataShapeCommand: {
+              Query: {
+                Version: 2,
+                From: fromItems,
+                Select: (() => {
+                  const selectItems = [
+                    { Column: { Expression: { SourceRef: { Source: "lm" } }, Property: "ATC5_Kode_Tekst" }, Name: "DimLaegemiddel.ATC5_Kode_Tekst" }
+                  ];
+                  if (isVarenummerLevel) {
+                    selectItems.push(
+                      { Column: { Expression: { SourceRef: { Source: "lm" } }, Property: "Varenummer" }, Name: "DimLaegemiddel.Varenummer", NativeReferenceName: "Varenummer" },
+                      { Column: { Expression: { SourceRef: { Source: "lm" } }, Property: "Laegemiddeltekst_samlet_unavne" }, Name: "DimLaegemiddel.Laegemiddeltekst_samlet_unavne", NativeReferenceName: "Laegemiddeltekst_samlet_unavne" }
+                    );
+                  }
+                  selectItems.push(
+                    { Column: { Expression: { SourceRef: { Source: "dato" } }, Property: "År_ID" }, Name: "DimDato.År_ID" },
+                    { Column: { Expression: { SourceRef: { Source: "dato" } }, Property: "MånedÅr" }, Name: "DimDato.MånedÅr" },
+                    { Column: { Expression: { SourceRef: { Source: "ud" } }, Property: "Udsteder_type" }, Name: "DimUdstederType.Udsteder_type" },
+                    { Column: { Expression: { SourceRef: { Source: "geo" } }, Property: "Bopælsregion" }, Name: "DimBorgerDemografi.Bopælsregion" },
+                    { Measure: { Expression: { SourceRef: { Source: "#" } }, Property: "SelectMeasure1" }, Name: "# Measures.SelectMeasure1" }
+                  );
+                  return selectItems;
+                })(),
+                Where: whereItems,
+                OrderBy: (() => {
+                  const orderItems = [
+                    { Direction: 1, Expression: { Column: { Expression: { SourceRef: { Source: "lm" } }, Property: "ATC5_Kode_Tekst" } } }
+                  ];
+                  if (isVarenummerLevel) {
+                    orderItems.push(
+                      { Direction: 1, Expression: { Column: { Expression: { SourceRef: { Source: "lm" } }, Property: "Varenummer" } } },
+                      { Direction: 1, Expression: { Column: { Expression: { SourceRef: { Source: "lm" } }, Property: "Laegemiddeltekst_samlet_unavne" } } }
+                    );
+                  }
+                  orderItems.push(
+                    { Direction: 1, Expression: { Column: { Expression: { SourceRef: { Source: "dato" } }, Property: "År_ID" } } },
+                    { Direction: 1, Expression: { Column: { Expression: { SourceRef: { Source: "dato" } }, Property: "MånedÅr" } } },
+                    { Direction: 1, Expression: { Column: { Expression: { SourceRef: { Source: "ud" } }, Property: "Udsteder_type" } } },
+                    { Direction: 1, Expression: { Column: { Expression: { SourceRef: { Source: "geo" } }, Property: "Bopælsregion" } } }
+                  );
+                  return orderItems;
+                })()
+              },
+              Binding: {
+                Primary: { Groupings: [{ Projections: isVarenummerLevel ? [0, 1, 2, 3, 4, 5, 6, 7] : [0, 1, 2, 3, 4, 5] }] },
+                DataReduction: { DataVolume: 4, Primary: { Window: { Count: 30000 } } },
+                Version: 1
+              },
+              ExecutionMetricsKind: 1
+            }
+          }]
+        },
+        QueryId: "",
+        ApplicationContext: {
+          DatasetId: "1bebf468-3f1e-4596-8d94-c43c4cce0759",
+          Sources: [{ ReportId: "870dd64d-7c9e-4e21-9711-270d8d9acb54" }]
+        }
+      }],
+      cancelQueries: [],
+      modelId: 1212197,
+      userPreferredLocale: "da-DK"
+    };
+  }
+
+  function decodeResponse(root) {
+    function check(x) {
+      if(!x || typeof x!=="object")return;
+      for(const [k,v] of Object.entries(x)){
+        if(/^errors?$/i.test(k) && v!=null && !(Array.isArray(v)&&!v.length))throw Error("Power BI-fejl: "+JSON.stringify(v));
+        if(k==="RT" && v!=null)throw Error("Svaret indeholder RestartToken. Udtrækket kan være afkortet.");
+        check(v);
+      }
+    }
+    check(root);
+    if(!Array.isArray(root.results) || !root.results.length)throw Error("Ukendt svarformat.");
+    const output=[];
+    for(const result of root.results){
+      const data=result.result?.data;
+      if(!data?.descriptor?.Select || !Array.isArray(data.dsr?.DS))throw Error("Dataschema mangler.");
+      const selects=data.descriptor.Select;
+      const fields = ["DimLaegemiddel.ATC5_Kode_Tekst"];
+      if (isVarenummerLevel) fields.push("DimLaegemiddel.Varenummer", "DimLaegemiddel.Laegemiddeltekst_samlet_unavne");
+      fields.push("DimDato.År_ID", "DimDato.MånedÅr", "DimUdstederType.Udsteder_type", "DimBorgerDemografi.Bopælsregion", "# Measures.SelectMeasure1");
+      const keys=fields.map(name=>{
+        const key=selects.find(s=>s.Name===name)?.Value;
+        if(!key)throw Error("Kolonne mangler: "+name);
+        return key;
+      });
+      for(const ds of data.dsr.DS){
+        if(!Array.isArray(ds.PH))throw Error("Ukendt grupperingsformat.");
+        const dicts=ds.ValueDicts||{};
+        for(const group of ds.PH){
+          if(!Array.isArray(group.DM0))throw Error("Forventede flade DM0-rækker.");
+          if(group.DM0.length>=30000)throw Error("Rækkegrænsen er nået; resultatet kan være afkortet.");
+          let schema=null,previous=null;
+          for(const row of group.DM0){
+            if(row.S)schema=row.S;
+            if(!schema || schema.length>31)throw Error("Ukendt rækkeskema.");
+            const cells=row.C||[], values={};let j=0;
+            for(let i=0;i<schema.length;i++){
+              const s=schema[i], reuse=(row.R||0)&(1<<i), blank=(row.N||0)&(1<<i);
+              if(reuse && blank)throw Error("Modstridende null-/gentagelsesmaske.");
+              if(reuse){
+                if(!previous || !Object.hasOwn(previous,s.N))throw Error("Manglende foregående værdi.");
+                values[s.N]=previous[s.N];continue;
+              }
+              if(blank){values[s.N]=null;continue;}
+              if(j>=cells.length)throw Error("For få celler i rækken.");
+              let v=cells[j++];
+              if(s.DN){
+                const dict=dicts[s.DN];
+                // Power BI kan sende tekst direkte, også med DN og en tom ordbog.
+                // Kun numeriske celler i en ikke-tom ordbog er indeks.
+                if (typeof v === "string" || v == null) {
+                  // Direkte tekst, fx et varenummer med foranstillede nuller.
+                } else if (Array.isArray(dict) && dict.length) {
+                  if (!Number.isInteger(v) || v < 0 || v >= dict.length) throw Error("Ugyldigt ordbogsindeks: " + s.N);
+                  v = dict[v];
+                } else if (s.T === 1 && Array.isArray(dict) && !dict.length && Number.isFinite(v)) {
+                  v = String(v);
+                } else if (s.T === 1) {
+                  throw Error("Tekstordbog mangler eller er ugyldig: " + s.N);
+                }
+              }
+              values[s.N]=v;
+            }
+            if(j!==cells.length)throw Error("Ekstra celler i rækken.");
+            previous=values;
+            const out=keys.map(k=>{
+              if(!Object.hasOwn(values,k))throw Error("Værdi mangler: "+k);
+              return values[k];
+            });
+            if(out[out.length - 1]!=null){
+              const raw=String(out[out.length - 1]).replace(/D$/,"");
+              if(!raw.trim() || !Number.isFinite(Number(raw)))throw Error("Ugyldig måleværdi: "+raw);
+              out[out.length - 1]=Number(raw);
+            }
+            output.push(out);
+          }
+        }
+      }
+    }
+    return output;
+  }
+
+  function splitAtc(value) {
+    const match = String(value ?? "").trim().match(/^([A-Z][0-9]{2}[A-Z]{2}[0-9]{2})\s*(?:\((.+)\)|[-–—]\s*(.+))$/);
+    if (!match) throw Error("Ukendt ATC-kode og tekst i svaret.");
+    return [match[1], (match[2] || match[3]).trim()];
+  }
+
+  function parseResponseToRows(response, meta) {
+    return decodeResponse(response).map(values => {
+      const offset = isVarenummerLevel ? 2 : 0;
+      let product = ["", "", "", "", ""];
+      if (isVarenummerLevel) {
+        const pieces = String(values[2] ?? "").split(/\s*\|\s*/);
+        if (pieces.length < 5) throw Error("Ukendt produkttekst; ingen produktdata eksporteres.");
+        product = [String(values[1] ?? "").padStart(6, "0"), pieces[1], pieces[2], pieces[3], pieces.slice(4).join(" | ")];
+        if (!/^\d{6}$/.test(product[0]) || product.slice(1).some(x => !x.trim())) {
+          throw Error("Ufuldstændige produktfelter; udtrækket er stoppet.");
+        }
+        if (/^\d+$/.test(pieces[0]) && pieces[0].padStart(6, "0") !== product[0]) {
+          throw Error("Varenummer og produkttekst stemmer ikke overens.");
+        }
+      }
+      return Object.fromEntries(headers.map((key, i) => [key, [
+        ...splitAtc(values[0]),
+        ...product, values[1 + offset], values[2 + offset], values[3 + offset], values[4 + offset],
+        outputMetricName(meta.opgoerelse, meta.normalisering), values[5 + offset],
+        meta.atc, meta.region, Array.isArray(meta.year) ? meta.year.join(", ") : meta.year,
+        meta.opgoerelse, meta.normalisering, outputLevel, 200, 0, false, "", exportId
+      ][i]]));
+    });
+  }
+
+  function csvEscape(v) {
+    if (v == null) return "";
+    if (typeof v === "number") v = String(v).replace(".", ",");
+    else v = String(v);
+    if (/[";\r\n]/.test(v)) v = '"' + v.replaceAll('"', '""') + '"';
+    return v;
+  }
+
+  function rowsToCsv(rows) {
+    const lines = [headers.map(csvEscape).join(";")];
+    for (const r of rows) lines.push(headers.map(h => csvEscape(r[h])).join(";"));
+    return "\ufeff" + lines.join("\r\n");
+  }
+
+
+  // Blobber dannes løbende, men CSV-filer downloades først, når alle kald er lykkedes.
+  function downloadBlob(filename, blob) {
+    const link = document.createElement("a");
+    const objectUrl = URL.createObjectURL(blob);
+    link.href = objectUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+  }
+
+  async function runOne(meta, controller) {
+    const yearValues = Array.isArray(meta.year) ? meta.year : [meta.year];
+    const payload = buildPayload({ atcValue: meta.atc, metricValues: [meta.opgoerelse], regionValues: [meta.region], yearValues, normalisationValue: meta.normalisering });
+    const timeout = setTimeout(() => controller.abort(), 60000);
+    try {
+      const response = await fetch(url, {
+        method: "POST", mode: "cors", credentials: "omit",
+        headers: { accept: "application/json", "content-type": "application/json;charset=UTF-8", authorization: authorization.trim() },
+        body: JSON.stringify(payload), signal: controller.signal
+      });
+      if (!response.ok) throw Error(`HTTP ${response.status}. Ved 401/403: kopiér en ny Authorization-værdi fra rapporten.`);
+      const rows = parseResponseToRows(await response.json(), meta);
+      rows.forEach(row => { row.rowCountMarker = rows.length; });
+      return { rows, meta: { ...meta, opgoerelsesniveau: outputLevel, status: 200, rowCountMarker: rows.length, hasRestartToken: false, parsedRows: rows.length, error: null } };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  function captureAuthorization(signal) {
+    let resolveToken, rejectToken, settled = false, timer;
+    const promise = new Promise((resolve, reject) => { resolveToken = resolve; rejectToken = reject; });
+    const originalFetch = window.fetch;
+    const proto = window.XMLHttpRequest?.prototype;
+    const originalOpen = proto?.open, originalHeader = proto?.setRequestHeader;
+    const requestUrls = new WeakMap();
+    function matches(value) {
+      try {
+        const target = new URL(String(value), location.href), expected = new URL(url);
+        return target.origin === expected.origin && target.pathname === expected.pathname;
+      } catch { return false; }
+    }
+    function cleanup() {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", abort);
+      if (window.fetch === observedFetch) window.fetch = originalFetch;
+      if (proto?.open === observedOpen) proto.open = originalOpen;
+      if (proto?.setRequestHeader === observedHeader) proto.setRequestHeader = originalHeader;
+    }
+    function provide(value) {
+      if (settled || typeof value !== "string" || !/^(EmbedToken|Bearer)\s+\S+$/i.test(value.trim())) return false;
+      settled = true;
+      cleanup();
+      resolveToken(value.trim());
+      return true;
+    }
+    function abort() {
+      if (settled) return;
+      settled = true; cleanup(); rejectToken(new Error("Udtrækket blev stoppet af brugeren."));
+    }
+    function observedFetch(input, init) {
+      // Token observeres; rapportens forespørgsel videresendes helt uændret.
+      try {
+        if (matches(typeof input === "string" || input instanceof URL ? input : input.url)) {
+          const headers = new Headers(init?.headers ?? input?.headers);
+          provide(headers.get("authorization"));
+        }
+      } catch { /* Rapportens eget kald skal altid fortsætte. */ }
+      return originalFetch.apply(this, arguments);
+    }
+    function observedOpen(method, target) {
+      const result = originalOpen.apply(this, arguments);
+      requestUrls.set(this, target);
+      return result;
+    }
+    function observedHeader(name, value) {
+      const result = originalHeader.apply(this, arguments);
+      if (String(name).toLowerCase() === "authorization" && matches(requestUrls.get(this))) provide(value);
+      return result;
+    }
+    window.fetch = observedFetch;
+    if (proto) { proto.open = observedOpen; proto.setRequestHeader = observedHeader; }
+    signal.addEventListener("abort", abort, { once: true });
+    timer = setTimeout(() => {
+      if (settled) return;
+      settled = true; cleanup();
+      rejectToken(new Error("Intet adgangstoken opsamlet inden 2 minutter. Kør koden igen og skift et filter, eller brug den manuelle authorize-kommando."));
+    }, 120000);
+    if (signal.aborted) abort();
+    return { promise, provide, cleanup };
+  }
+
+  const exportId = new Date().toISOString().replace(/[-:.]/g, "") + "_" + Math.random().toString(36).slice(2, 8);
+
+  // Testene indlæser funktionerne ovenfor uden at køre netværkskald.
+  // RUN_EXPORT
+  if (location.origin !== "https://app.powerbi.com") throw Error("Vælg app.powerbi.com i Consoles frame-menu, og kør koden igen.");
+  if (window.medicinsalgExport) throw Error("Et udtræk kører allerede. Stop det med medicinsalgExport.stop().");
+
+  const total = selectedAtc.length * selectedRegions.length * selectedMetrics.length * normalisationOptions.length * (splitByYear ? selectedYears.length : 1);
+  const summary = { version: 2, exportId, complete: false, expectedQueries: total, completedQueries: 0, requests: [], files: [] };
+  const pendingFiles = [];
+  let buffer = [], activeController = null, stopped = false, current = null;
+  const authorizationController = new AbortController();
+  const tokenCapture = captureAuthorization(authorizationController.signal);
+  window.medicinsalgExport = {
+    stop() { stopped = true; authorizationController.abort(); activeController?.abort(); },
+    authorize(value) { return tokenCapture.provide(value); }
+  };
+
+  function stage(force) {
+    while (buffer.length >= maxRowsPerCsv || (force && buffer.length)) {
+      const rows = buffer.splice(0, maxRowsPerCsv);
+      const filename = `medicinsalg_${exportId}_part_${String(pendingFiles.length + 1).padStart(3, "0")}.csv`;
+      pendingFiles.push({ filename, blob: new Blob([rowsToCsv(rows)], { type: "text/csv;charset=utf-8" }) });
+      summary.files.push({ filename, rows: rows.length });
+    }
+  }
+
+  try {
+    console.log("Skift nu et filter i Power BI-rapporten. Udtrækket starter, når rapportens adgangstoken er opsamlet.");
+    console.log('Hvis det ikke lykkes: kopiér Authorization fra Network og kør medicinsalgExport.authorize("INDSÆT_HELE_HEADEREN") i Console.');
+    authorization = await tokenCapture.promise;
+    if (stopped) throw Error("Udtrækket blev stoppet af brugeren.");
+    console.log("Adgangstoken opsamlet. Starter udtrækket.");
+    const yearGroups = splitByYear ? selectedYears : [selectedYears];
+    for (const atc of selectedAtc) for (const region of selectedRegions) for (const opgoerelse of selectedMetrics) for (const normalisering of normalisationOptions.map(x => x.value)) for (const year of yearGroups) {
+      if (stopped) throw Error("Udtrækket blev stoppet af brugeren.");
+      current = { atc, region, year, opgoerelse, normalisering };
+      console.log(`[${summary.completedQueries + 1}/${total}] Henter`, current);
+      activeController = new AbortController();
+      const result = await runOne(current, activeController);
+      summary.requests.push(result.meta);
+      summary.completedQueries++;
+      for (const row of result.rows) buffer.push(row);
+      stage(false);
+      if (!result.rows.length) console.warn("Ingen data for dette valg (ikke det samme som nul):", current);
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    if (stopped) throw Error("Udtrækket blev stoppet af brugeren.");
+    stage(true);
+    summary.complete = true;
+    for (const file of pendingFiles) {
+      downloadBlob(file.filename, file.blob);
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
+    const empty = summary.requests.filter(x => x.parsedRows === 0);
+    console.log(`Færdig: ${total} kald, ${summary.files.reduce((n, f) => n + f.rows, 0)} rækker, ${empty.length} tomme deludtræk.`, summary);
+    if (empty.length) console.table(empty);
+  } catch (error) {
+    summary.error = error.name === "AbortError" ? (stopped ? "Udtrækket blev stoppet." : "Tidsgrænsen på 60 sekunder blev overskredet.") : error.message;
+    summary.failedQuery = current;
+    // Fjern planlagte filer fra oversigten, da de aldrig blev downloadet.
+    summary.files = [];
+    console.error("STOP. Ingen CSV-filer er eksporteret. Ret fejlen og start igen:", summary.error, current);
+  } finally {
+    tokenCapture.cleanup();
+    authorization = "";
+    delete window.medicinsalgExport;
+    downloadBlob(`medicinsalg_${exportId}_summary.json`, new Blob([JSON.stringify(summary, null, 2)], { type: "application/json;charset=utf-8" }));
+  }
+})();)---"
+
 generate_js <- function(atc_powerbi, metrics, regions, years, split_by_year = TRUE, output_level = "atc5") {
   output_level <- match.arg(output_level, c("atc5", "varenummer"))
-  template <- paste(readLines("export_template.js", encoding = "UTF-8", warn = FALSE), collapse = "\n")
+  template <- .medicinsalg_js_template
   replacements <- list(
     "__ATC_JS__" = js_string_array(atc_powerbi),
     "__METRICS_JS__" = js_string_array(metrics),
@@ -167,8 +661,25 @@ read_export_csv <- function(path) {
   dat
 }
 
+normalise_atc_columns <- function(dat) {
+  legacy <- "ATC, Niveau 5, kode & tekst"
+  if (legacy %in% names(dat)) {
+    values <- str_trim(as.character(dat[[legacy]]))
+    code <- str_extract(values, "^[A-Z][0-9]{2}[A-Z]{2}[0-9]{2}")
+    label <- str_trim(str_remove(values, "^[A-Z][0-9]{2}[A-Z]{2}[0-9]{2}\\s*"))
+    label <- str_trim(str_remove(label, "^[-–—]\\s*"))
+    label <- str_replace(label, "^\\((.*)\\)$", "\\1")
+    if (!"ATC-kode" %in% names(dat)) dat[["ATC-kode"]] <- code
+    if (!"ATC-tekst" %in% names(dat)) dat[["ATC-tekst"]] <- label
+    if (any(is.na(code) | is.na(dat[["ATC-kode"]]) | code != dat[["ATC-kode"]])) stop("ATC-kolonnerne stemmer ikke overens.")
+    dat[[legacy]] <- NULL
+  }
+  dat
+}
+
 finalise_parsed_long_export <- function(long2) {
-  required <- c("ATC, Niveau 5, kode & tekst", "År", "Måned", "Ydertype", "Bopælsregion", "nøgletal_output", "value")
+  long2 <- normalise_atc_columns(long2)
+  required <- c("ATC-kode", "ATC-tekst", "År", "Måned", "Ydertype", "Bopælsregion", "nøgletal_output", "value")
   missing <- setdiff(required, names(long2))
   if (length(missing)) stop("CSV mangler kolonner: ", paste(missing, collapse = ", "))
   if (!nrow(long2)) return(tibble())
@@ -187,7 +698,7 @@ finalise_parsed_long_export <- function(long2) {
   }
   if (any(!is.na(long2$value) & !is.finite(long2$value))) stop("CSV indeholder ikke-endelige tal.")
   long2 <- normalise_year_month_columns(long2)
-  base_keys <- c("ATC, Niveau 5, kode & tekst", "År", "Måned", "Ydertype", "Bopælsregion")
+  base_keys <- c("ATC-kode", "ATC-tekst", "År", "Måned", "Ydertype", "Bopælsregion")
   product_keys <- c("Varenummer", "Navn (Præparat)", "Form", "Styrke", "Pakningsstørrelse")
   for (nm in product_keys) {
     if (!nm %in% names(long2)) long2[[nm]] <- NA_character_
@@ -202,9 +713,9 @@ finalise_parsed_long_export <- function(long2) {
   if (is_product) {
     if (any(!str_detect(coalesce(long2$Varenummer, ""), "^\\d{6}$")) || any(is.na(as.matrix(long2[product_keys])))) stop("Ufuldstændige produktfelter. Ingen rækker er fjernet automatisk.")
   }
-  keys <- if (is_product) c(base_keys[1], product_keys, base_keys[-1]) else base_keys
+  keys <- if (is_product) c(base_keys[1:2], product_keys, base_keys[-c(1, 2)]) else base_keys
   if (any(is.na(as.matrix(long2[base_keys]))) || any(str_trim(as.character(unlist(long2[base_keys]))) == "")) stop("En eller flere datanøgler mangler.")
-  if (any(str_detect(long2$Ydertype, "^\\d+$")) || any(!str_detect(long2[[base_keys[1]]], "^[A-Z][0-9]{2}[A-Z]{2}[0-9]{2}"))) stop("CSV indeholder uafkodede ATC-/ydertypeværdier. Hent data med den nye generator.")
+  if (any(str_detect(long2$Ydertype, "^\\d+$")) || any(!str_detect(long2[[base_keys[1]]], "^[A-Z][0-9]{2}[A-Z]{2}[0-9]{2}$"))) stop("CSV indeholder uafkodede ATC-/ydertypeværdier. Hent data med den nye generator.")
   if (any(is.na(long2$nøgletal_output) | !long2$nøgletal_output %in% metric_cols)) stop("CSV indeholder ukendte nøgletal.")
   if (anyDuplicated(long2[c(keys, "nøgletal_output")])) stop("Overlappende datarækker: upload ikke samme udtræk eller overlappende CSV-filer flere gange. Pr. 1.000-værdier må ikke summeres.")
 
@@ -261,42 +772,63 @@ validate_export_summaries <- function(summaries, long) {
   invisible(NULL)
 }
 
-pantone_287 <- "#0033A0"
-pantone_289 <- "#0C2340"
+# Samme farver, systemskrifter og kort som homepage og lister.
+kfa_theme <- bs_theme(
+  version = 5, bg = "#F6F8FB", fg = "#1F2933", primary = "#0033A0", secondary = "#667085",
+  base_font = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif",
+  heading_font = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"
+)
 
-ui <- page_sidebar(
-  title = "Power BI Medicinsalg: udtræk og Excel",
-  theme = bs_theme(
-    version = 5,
-    bg = "#FFFFFF",
-    fg = pantone_289,
-    primary = pantone_287,
-    secondary = pantone_289,
-    base_font = font_google("Inter"),
-    heading_font = font_google("Inter")
-  ),
-  
+ui <- fluidPage(
+  theme = kfa_theme,
   tags$head(
-    tags$style(HTML(paste0("
-      :root { --p287: ", pantone_287, "; --p289: ", pantone_289, "; }
-      body { background-color: #FFFFFF; }
-      .bslib-sidebar-layout > .sidebar { border-right: 4px solid var(--p287); }
-      .card { border: 1px solid rgba(12, 35, 64, 0.14); box-shadow: 0 0.25rem 0.9rem rgba(12, 35, 64, 0.08); }
-      .card-header { background: var(--p289); color: #FFFFFF; font-weight: 700; }
-      .btn-primary, .btn-default { background-color: var(--p287); border-color: var(--p287); color: #FFFFFF; }
-      .btn-primary:hover, .btn-default:hover { background-color: var(--p289); border-color: var(--p289); color: #FFFFFF; }
-      .btn-outline-secondary { color: var(--p289); border-color: var(--p289); background-color: #FFFFFF; }
-      .btn-outline-secondary:hover { background-color: var(--p289); border-color: var(--p289); color: #FFFFFF; }
-      .card-header #copy_js_btn { color: #FFFFFF !important; border-color: #FFFFFF !important; background-color: transparent !important; }
-      .card-header #copy_js_btn:hover, .card-header #copy_js_btn:focus { color: #FFFFFF !important; border-color: #FFFFFF !important; background-color: var(--p287) !important; }
-      h5, label, .control-label { color: var(--p289); }
-      textarea, .form-control { border-color: rgba(0, 51, 160, 0.35); }
-      code { color: var(--p287); }
-    ")) )
+    tags$title("Medicinsalg · Power BI | KFA apps"),
+    tags$meta(name = "viewport", content = "width=device-width, initial-scale=1"),
+    tags$style(HTML("
+      body { background:#F6F8FB; color:#1F2933; }
+      .container-fluid { padding:0; }
+      .kfa-shell { width:100%; max-width:1440px; margin:0 auto; padding:28px 28px 60px; }
+      .kfa-topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:30px; }
+      .home-link { color:#667085; text-decoration:none; font-size:.88rem; font-weight:550; }
+      .home-link:hover { color:#0033A0; }
+      .kfa-label { color:#98A2B3; font-size:.78rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase; }
+      .app-heading { margin-bottom:30px; }
+      .app-heading h1 { margin:0; color:#182230; font-size:clamp(2rem,4vw,2.75rem); font-weight:700; letter-spacing:-.035em; }
+      .app-heading p { margin:10px 0 0; max-width:760px; color:#667085; line-height:1.6; }
+      .bslib-sidebar-layout { border:0; background:transparent; gap:24px; overflow:visible; }
+      .bslib-sidebar-layout > .sidebar { background:#FFF; border:1px solid #E3E8EF; border-radius:14px; box-shadow:0 5px 18px rgba(16,24,40,.035); }
+      .bslib-sidebar-layout > .main { padding:0; overflow:visible; }
+      .card { background:#FFF; border:1px solid #E3E8EF; border-radius:14px; box-shadow:0 5px 18px rgba(16,24,40,.035); }
+      .card-header { background:#FFF; color:#182230; border-bottom:1px solid #E3E8EF; font-weight:650; padding:18px 22px; }
+      .card-body { padding:20px 22px; }
+      .btn { border-radius:9px; font-weight:550; }
+      .btn-primary { background:#0033A0; border-color:#0033A0; }
+      .btn-primary:hover { background:#002774; border-color:#002774; }
+      .btn-default { background:#FFF; color:#344054; border:1px solid #D0D5DD; }
+      .btn-outline-secondary { color:#344054; border-color:#D0D5DD; background:#FFF; }
+      .btn-outline-secondary:hover { color:#0033A0; border-color:#9CB6E8; background:#EDF3FF; }
+      .form-control { border-color:#D0D5DD; border-radius:9px; box-shadow:none; }
+      .form-control:focus { border-color:#7295DA; box-shadow:0 0 0 3px rgba(0,51,160,.10); }
+      h5, label, .control-label { color:#182230; }
+      h5 { font-size:1rem; font-weight:650; }
+      code { color:#0033A0; }
+      .alert { border-radius:10px; font-size:.9rem; }
+      .alert-info { color:#344054; background:#EDF3FF; border-color:#DCE7FD; }
+      .kfa-footer { margin-top:28px; color:#7A8494; font-size:.82rem; }
+      @media(max-width:760px) { .kfa-shell {padding:22px 16px 40px;} .kfa-topbar {margin-bottom:22px;} }
+"))
   ),
-  
+  div(class = "kfa-shell",
+    div(class = "kfa-topbar",
+      tags$a(class = "home-link", href = "https://kfaapps.au.dk/", "← Alle apps"),
+      tags$span(class = "kfa-label", "Klinisk Farmakologi")
+    ),
+    div(class = "app-heading", h1("Medicinsalg · Power BI"),
+      p("Hent medicinsalgsdata på ATC5- eller varenummerniveau og saml udtrækket i en tabel til Excel.")
+    ),
+    layout_sidebar(fillable = FALSE,
   sidebar = sidebar(
-    width = 390,
+    width = 360,
     
     h5("1. Dataudtræk"),
     
@@ -362,18 +894,19 @@ ui <- page_sidebar(
     
     hr(),
     
-    h5("2. Importér CSV til tabel og Excel"),
+    h5("2. Åbn udtræksfilen"),
     
     fileInput(
       "parsed_csv_files",
-      "Upload alle CSV-dele fra udtrækket (kan vælge flere)",
+      "Vælg udtræksfilen fra browseren (.csv)",
       accept = c(".csv"),
       multiple = TRUE
     ),
     
+    p(class = "text-muted small", "Filen vises ofte med Excel-ikon. Store udtræk kan være delt i flere filer; vælg i så fald alle delene."),
     fileInput("summary_files", "Valgfrit: eksportoversigt (*_summary.json)", accept = c(".json"), multiple = TRUE),
     
-    actionButton("import_btn", "Importér CSV", class = "btn-primary"),
+    actionButton("import_btn", "Indlæs udtræk", class = "btn-primary"),
     
     hr(),
     
@@ -390,16 +923,19 @@ ui <- page_sidebar(
       div(
         tags$ol(
           tags$li(tags$a(href = "https://sundhedsdatabank.dk/medicin/medicinsalg-og-udgifter-menu/medicinsalg", target = "_blank", rel = "noopener", "Åbn rapporten Medicinsalg i Sundhedsdatabanken.")),
-          tags$li("Tryk F12 → Network, filtrér på querydata, og ændr ét filter i rapporten. Vælg et kald med status 200."),
-          tags$li("Under Headers → Request Headers kopierer du hele Authorization-værdien, inklusive præfikset."),
-          tags$li("Vælg Console og app.powerbi.com i frame-menuen øverst (ofte står der top)."),
-          tags$li("Kopiér koden nedenfor til Console eller en lokal teksteditor. Erstat INDSÆT_AUTHORIZATION_HER med den kopierede værdi, og kør hele koden. Indsæt ikke værdien i denne Shiny-app."),
-          tags$li("Vent til Console skriver Færdig. Tillad flere downloads, hvis browseren spørger. CSV-filerne er allerede afkodet og kan bruges direkte."),
-          tags$li("Upload eventuelt alle CSV-dele og eksportoversigten her, og klik Importér CSV for at samle nøgletallene i én tabel og hente Excel.")
+          tags$li("Tryk F12 → Console, og vælg app.powerbi.com i frame-menuen øverst (ofte står der top)."),
+          tags$li("Kopiér koden nedenfor til Console, og kør hele koden."),
+          tags$li("Ændr nu ét filter i Power BI-rapporten. Koden forsøger automatisk at opsamle rapportens adgangstoken og starter derefter udtrækket."),
+          tags$li("Vent til Console skriver Færdig. Browseren downloader en udtræksfil (.csv, som kan åbnes i Excel) og en eksportoversigt. Store udtræk kan give flere datafiler."),
+          tags$li("Vælg udtræksfilen under Åbn udtræksfilen, og klik Indlæs udtræk. Hent derefter Excel for at få en tabel med alle nøgletallene i hver sin kolonne.")
         ),
-        p("Authorization bruges kun i din browser. Ved 401/403 kopierer du en ny værdi fra et fungerende kald og starter igen. Stop et udtræk med ", tags$code("medicinsalgExport.stop()"), "."),
-        p("Koden stopper ved fejl eller tegn på afkortning. Ingen CSV downloades før alle deludtræk er færdige. Oversigten viser også tomme deludtræk; tomme svar omdannes ikke til nul."),
-        p("Varenummerniveau er bevaret, men er endnu ikke kontrolleret mod et levende svar efter flytningen. Test et enkelt lægemiddel, år og region først.")
+        p("Adgangstokenet udløber og kan derfor ikke gemmes permanent i appen. Det opsamles kun i Power BI-fanen og gemmes ikke i filer. Stop udtrækket med ", tags$code("medicinsalgExport.stop()"), "."),
+        tags$details(tags$summary("Hvis automatisk opsamling ikke virker"),
+          p("I Network: filtrér på querydata, ændr et filter, og vælg et kald med status 200. Kopiér hele Authorization-værdien under Request Headers. Mens udtrækskoden venter, kør denne kommando i Console med værdien indsat:"),
+          tags$pre('medicinsalgExport.authorize("INDSÆT_HELE_AUTHORIZATION_HEADEREN")'),
+          p("Ved 401/403 er tokenet muligvis udløbet. Kør udtrækskoden igen, og skift et filter. Indsæt ikke tokenet i Shiny-appen.")
+        ),
+        p("Ingen datafiler downloades før alle deludtræk er færdige. Eksportoversigten viser også tomme deludtræk; tomme svar omdannes ikke til nul.")
       )
     ),
     
@@ -456,9 +992,12 @@ ui <- page_sidebar(
     ),
     
     card(
-      card_header("Data til CSV og Excel"),
+      card_header("Samlet tabel"),
       DTOutput("parsed_table")
     )
+  )
+    ),
+    div(class = "kfa-footer", "KFA apps · Klinisk Farmakologisk Afdeling, AUH")
   )
 )
 
