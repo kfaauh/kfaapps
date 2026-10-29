@@ -1,0 +1,671 @@
+{
+  "_fixture_note": "SYNTHETIC DATA. All measurement values are artificial; not actual medicine sales.",
+  "results": [
+    {
+      "result": {
+        "data": {
+          "descriptor": {
+            "Select": [
+              {
+                "Kind": 1,
+                "Depth": 0,
+                "Value": "G0",
+                "GroupKeys": [
+                  {
+                    "Source": {
+                      "Entity": "DimLaegemiddel",
+                      "Property": "ATC5_Kode_Tekst"
+                    },
+                    "Calc": "G0",
+                    "IsSameAsSelect": true
+                  }
+                ],
+                "Name": "DimLaegemiddel.ATC5_Kode_Tekst"
+              },
+              {
+                "Kind": 1,
+                "Depth": 0,
+                "Value": "G1",
+                "GroupKeys": [
+                  {
+                    "Source": {
+                      "Entity": "DimDato",
+                      "Property": "År_ID"
+                    },
+                    "Calc": "G1",
+                    "IsSameAsSelect": true
+                  }
+                ],
+                "Name": "DimDato.År_ID"
+              },
+              {
+                "Kind": 1,
+                "Depth": 0,
+                "Value": "G2",
+                "GroupKeys": [
+                  {
+                    "Source": {
+                      "Entity": "DimDato",
+                      "Property": "MånedÅr"
+                    },
+                    "Calc": "G2",
+                    "IsSameAsSelect": true
+                  }
+                ],
+                "Name": "DimDato.MånedÅr"
+              },
+              {
+                "Kind": 1,
+                "Depth": 0,
+                "Value": "G3",
+                "GroupKeys": [
+                  {
+                    "Source": {
+                      "Entity": "DimUdstederType",
+                      "Property": "Udsteder_type"
+                    },
+                    "Calc": "G3",
+                    "IsSameAsSelect": true
+                  }
+                ],
+                "Name": "DimUdstederType.Udsteder_type"
+              },
+              {
+                "Kind": 1,
+                "Depth": 0,
+                "Value": "G4",
+                "GroupKeys": [
+                  {
+                    "Source": {
+                      "Entity": "DimBorgerDemografi",
+                      "Property": "Bopælsregion"
+                    },
+                    "Calc": "G4",
+                    "IsSameAsSelect": true
+                  }
+                ],
+                "Name": "DimBorgerDemografi.Bopælsregion"
+              },
+              {
+                "Kind": 2,
+                "Value": "M0",
+                "DynamicFormat": {
+                  "Format": "M1"
+                },
+                "Name": "# Measures.SelectMeasure1"
+              }
+            ],
+            "Expressions": {
+              "Primary": {
+                "Groupings": [
+                  {
+                    "Keys": [
+                      {
+                        "Source": {
+                          "Entity": "DimLaegemiddel",
+                          "Property": "ATC5_Kode_Tekst"
+                        },
+                        "Select": 0
+                      },
+                      {
+                        "Source": {
+                          "Entity": "DimDato",
+                          "Property": "År_ID"
+                        },
+                        "Select": 1
+                      },
+                      {
+                        "Source": {
+                          "Entity": "DimDato",
+                          "Property": "MånedÅr"
+                        },
+                        "Select": 2
+                      },
+                      {
+                        "Source": {
+                          "Entity": "DimUdstederType",
+                          "Property": "Udsteder_type"
+                        },
+                        "Select": 3
+                      },
+                      {
+                        "Source": {
+                          "Entity": "DimBorgerDemografi",
+                          "Property": "Bopælsregion"
+                        },
+                        "Select": 4
+                      }
+                    ],
+                    "Member": "DM0"
+                  }
+                ]
+              }
+            },
+            "Version": 2
+          },
+          "dsr": {
+            "Version": 2,
+            "MinorVersion": 1,
+            "DS": [
+              {
+                "N": "DS0",
+                "PH": [
+                  {
+                    "DM0": [
+                      {
+                        "S": [
+                          {
+                            "N": "G0",
+                            "T": 1,
+                            "DN": "D0"
+                          },
+                          {
+                            "N": "G1",
+                            "T": 4
+                          },
+                          {
+                            "N": "G2",
+                            "T": 1,
+                            "DN": "D1"
+                          },
+                          {
+                            "N": "G3",
+                            "T": 1,
+                            "DN": "D2"
+                          },
+                          {
+                            "N": "G4",
+                            "T": 1,
+                            "DN": "D3"
+                          },
+                          {
+                            "N": "M0",
+                            "T": 13,
+                            "DN": "D4"
+                          },
+                          {
+                            "N": "M1",
+                            "T": 1,
+                            "DN": "D5"
+                          }
+                        ],
+                        "C": [
+                          0,
+                          2025,
+                          0,
+                          0,
+                          0,
+                          "1000D",
+                          0
+                        ]
+                      },
+                      {
+                        "C": [
+                          1,
+                          "1010D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          2,
+                          "1020D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          3,
+                          "0D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          4,
+                          "1040D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          1,
+                          0,
+                          "1050D"
+                        ],
+                        "R": 83
+                      },
+                      {
+                        "C": [
+                          1,
+                          "1060D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          2,
+                          "1070D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          3,
+                          "1080D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          4,
+                          "1090D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          2,
+                          0,
+                          "1100D"
+                        ],
+                        "R": 83
+                      },
+                      {
+                        "C": [
+                          1,
+                          "1110D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          2,
+                          "1120D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          3,
+                          "1130D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          4,
+                          "1140D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          3,
+                          0,
+                          "1150D"
+                        ],
+                        "R": 83
+                      },
+                      {
+                        "C": [
+                          1,
+                          "1160D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          2,
+                          "1170D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          3,
+                          "1180D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          4,
+                          "1190D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          4,
+                          0,
+                          "1200D"
+                        ],
+                        "R": 83
+                      },
+                      {
+                        "C": [
+                          1,
+                          "1210D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          2,
+                          "1220D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          3,
+                          "1230D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          4,
+                          "1240D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          5,
+                          0,
+                          "1250D"
+                        ],
+                        "R": 83
+                      },
+                      {
+                        "C": [
+                          1,
+                          "1260D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          2,
+                          "1270D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          3,
+                          "1280D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          4,
+                          "1290D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          6,
+                          0,
+                          "1300D"
+                        ],
+                        "R": 83
+                      },
+                      {
+                        "C": [
+                          1,
+                          "1310D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          2,
+                          "1320D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          3,
+                          "1330D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          4,
+                          "1340D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          7,
+                          0,
+                          "1350D"
+                        ],
+                        "R": 83
+                      },
+                      {
+                        "C": [
+                          1,
+                          "1360D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          2,
+                          "1370D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          3,
+                          "1380D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          4,
+                          "1390D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          8,
+                          0,
+                          "1400D"
+                        ],
+                        "R": 83
+                      },
+                      {
+                        "C": [
+                          1,
+                          "1410D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          2,
+                          "1420D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          3,
+                          "1430D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          4,
+                          "1440D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          9,
+                          0,
+                          "1450D"
+                        ],
+                        "R": 83
+                      },
+                      {
+                        "C": [
+                          1,
+                          "1460D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          2,
+                          "1470D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          3,
+                          "1480D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          4,
+                          "1490D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          10,
+                          0,
+                          "1500D"
+                        ],
+                        "R": 83
+                      },
+                      {
+                        "C": [
+                          1,
+                          "1510D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          2,
+                          "1520D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          3,
+                          "1530D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          4,
+                          "1540D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          11,
+                          0,
+                          "1550D"
+                        ],
+                        "R": 83
+                      },
+                      {
+                        "C": [
+                          1,
+                          "1560D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          2,
+                          "1570D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          3,
+                          "1580D"
+                        ],
+                        "R": 87
+                      },
+                      {
+                        "C": [
+                          4,
+                          "1590D"
+                        ],
+                        "R": 87
+                      }
+                    ]
+                  }
+                ],
+                "IC": true,
+                "HAD": true,
+                "ValueDicts": {
+                  "D0": [
+                    "C09CA01 (Losartan)"
+                  ],
+                  "D1": [
+                    "Jan 2025",
+                    "Feb 2025",
+                    "Mar 2025",
+                    "Apr 2025",
+                    "Maj 2025",
+                    "Jun 2025",
+                    "Jul 2025",
+                    "Aug 2025",
+                    "Sep 2025",
+                    "Okt 2025",
+                    "Nov 2025",
+                    "Dec 2025"
+                  ],
+                  "D2": [
+                    "Almen læge",
+                    "Hospitalslæge",
+                    "Øvrige udstedere",
+                    "Speciallæge",
+                    "Ukendt"
+                  ],
+                  "D3": [
+                    "Region Midtjylland"
+                  ],
+                  "D4": [],
+                  "D5": [
+                    "#,##0"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
