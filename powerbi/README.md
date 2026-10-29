@@ -6,7 +6,7 @@ Shiny-app til at generere browserudtræk fra Medicinsalg og samle data til CSV/E
 
 **Appen kræver kun `app.R`.** JavaScript er indbygget i filen. Mappestrukturen på Shiny-serveren skal derfor ikke ændres: behold `powerbi/app.R`. Der skal ikke ligge CSV-, JSON- eller CJS-filer på serveren for at starte appen.
 
-R-pakker: `shiny`, `bslib`, `jsonlite`, `dplyr`, `tidyr`, `stringr`, `purrr`, `readr`, `DT`, `writexl`. R skal være mindst 4.0.
+R-pakker: `shiny`, `bslib`, `jsonlite`, `dplyr`, `tidyr`, `stringr`, `purrr`, `readr`, `DT`, `writexl`, `readxl`. R skal være mindst 4.0.
 
 ```r
 install.packages(c("shiny", "bslib", "jsonlite", "dplyr", "tidyr",
@@ -15,6 +15,17 @@ shiny::runApp(file.choose(), launch.browser = TRUE)
 ```
 
 Vælg den downloadede R-fil i dialogen. Samme fil kan installeres som `app.R` på Shiny Server; filen slutter med et Shiny-appobjekt og starter ikke en indlejret `runApp()`-proces.
+
+
+## Færdige Excel-filer og Taksten (2026-10-29)
+
+- Appen kan indlæse både rå semikolonseparerede browser-CSV'er og færdige XLSX-tabeller med 12 (ATC5) eller 17 (varenummer) kolonner. Den forsøger at vælge salgstabellen frem for metadataarket \`Udtræk\`.
+- De to niveauer må ikke blandes i samme import. Overlappende observationer afvises; der aggregeres aldrig stiltiende på identiske nøgler.
+- Varenummerformatet bevares som seks tegn, herunder foranstillede nuller.
+- Med en valgfri upload af Taksten (.xlsx) kobles ESP, TSP, pris pr. DDD og substitutionsgruppe, i det omfang standardkolonnerne findes. Dækning og eventuelle ATC-afvigelser vises. En Takst-pris er prisen fra det uploadede Takst-øjebliksbillede og **må ikke** bruges som et estimat for historisk ekspeditionsbeløb.
+- KPI-kort, ATC-/regions-/årsfiltre og månedlig udviklingskurve i absolutte nøgletal vises efter import. Eksporteret Excel og CSV følger aktive filtre.
+- \`readxl\` kræves nu på Shiny-serveren. Bibliotekerne til Power BI-generatoren og JavaScript-templaten er uændrede.
+- Kontroller særskilt mod de aktuelle eksempelfiler: \`medicinsalg_20261029_eksempel100.xlsx\` og \`medicinsalg_20261029_eksempelatc5.xlsx\`. Testsættet indeholder syntetiske Excel- og Takst-fixtures, men kræver et R-miljø for at køre.
 
 ## Arbejdsgang
 
