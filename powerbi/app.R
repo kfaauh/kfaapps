@@ -952,6 +952,16 @@ ui <- fluidPage(
       .alert { border-radius:10px; font-size:.9rem; }
       .alert-info { color:#344054; background:#EDF3FF; border-color:#DCE7FD; }
       .kfa-footer { margin-top:28px; color:#7A8494; font-size:.82rem; }
+      .app-heading { background:#FFF; border:1px solid #E3E8EF; border-radius:18px; padding:29px 34px; box-shadow:0 8px 28px rgba(16,24,40,.045); }
+      .kfa-kpi-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:15px; }
+      .kfa-kpi { background:#FFF; border:1px solid #E3E8EF; border-radius:13px; padding:17px 20px; }
+      .kfa-kpi-title { color:#667085; font-size:.78rem; font-weight:600; }
+      .kfa-kpi-number { color:#182230; font-size:1.55rem; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums; }
+      .kfa-control-row { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; }
+      .kfa-control-row .form-group { margin-bottom:5px; }
+      .kfa-help { color:#667085; font-size:.81rem; line-height:1.5; margin-top:8px; }
+      @media(max-width:920px) { .kfa-kpi-grid,.kfa-control-row { grid-template-columns:1fr; } }
+      @media(max-width:760px) { .app-heading { padding:23px 20px; } }
       @media(max-width:760px) { .kfa-shell {padding:22px 16px 40px;} .kfa-topbar {margin-bottom:22px;} }
 "))
   ),
@@ -961,7 +971,7 @@ ui <- fluidPage(
       tags$span(class = "kfa-label", "Klinisk Farmakologi")
     ),
     div(class = "app-heading", h1("Medicinsalg · Power BI"),
-      p("Hent medicinsalgsdata på ATC5- eller varenummerniveau og saml udtrækket i en tabel til Excel.")
+      p("Generér Power BI-udtræk, åbn færdige Excel-filer og analysér medicinsalget. På varenummerniveau kan du tilføje Taksten.")
     ),
     layout_sidebar(fillable = FALSE,
   sidebar = sidebar(
@@ -1035,15 +1045,20 @@ ui <- fluidPage(
     
     fileInput(
       "parsed_csv_files",
-      "Vælg udtræksfilen fra browseren (.csv)",
-      accept = c(".csv"),
+      "Vælg færdig Excel (.xlsx) eller rå eksport (.csv)",
+      accept = c(".csv", ".xlsx"),
       multiple = TRUE
     ),
     
-    p(class = "text-muted small", "Filen vises ofte med Excel-ikon. Store udtræk kan være delt i flere filer; vælg i så fald alle delene."),
+    p(class = "text-muted small", "Vælg færdige Excel-filer eller samtlige rå CSV-dele. Upload ikke både CSV og Excel fra samme udtræk."),
     fileInput("summary_files", "Valgfrit: eksportoversigt (*_summary.json)", accept = c(".json"), multiple = TRUE),
     
-    actionButton("import_btn", "Indlæs udtræk", class = "btn-primary"),
+    actionButton("import_btn", "Indlæs og kontrollér data", class = "btn-primary"),
+
+    hr(),
+    h5("3. Valgfrit: Taksten"),
+    fileInput("takst_file", "Tilføj Taksten (.xlsx)", accept = ".xlsx"),
+    p(class = "kfa-help", "På varenummerniveau matches Taksten på varenummer. Aktuelle priser må ikke fortolkes som historiske salgspriser."),
     
     hr(),
     
@@ -1064,7 +1079,7 @@ ui <- fluidPage(
           tags$li("Kopiér koden nedenfor til Console, og kør hele koden."),
           tags$li("Ændr nu ét filter i Power BI-rapporten. Koden forsøger automatisk at opsamle rapportens adgangstoken og starter derefter udtrækket."),
           tags$li("Vent til Console skriver Færdig. Browseren downloader en udtræksfil (.csv, som kan åbnes i Excel) og en eksportoversigt. Store udtræk kan give flere datafiler."),
-          tags$li("Vælg udtræksfilen under Åbn udtræksfilen, og klik Indlæs udtræk. Hent derefter Excel for at få en tabel med alle nøgletallene i hver sin kolonne.")
+          tags$li("Åbn en færdig Excel-fil eller alle browserens CSV-dele, klik Indlæs og kontrollér data, og tilføj eventuelt Taksten.")
         ),
         p("Adgangstokenet udløber og kan derfor ikke gemmes permanent i appen. Det opsamles kun i Power BI-fanen og gemmes ikke i filer. Stop udtrækket med ", tags$code("medicinsalgExport.stop()"), "."),
         tags$details(tags$summary("Hvis automatisk opsamling ikke virker"),
@@ -1129,7 +1144,22 @@ ui <- fluidPage(
     ),
     
     card(
-      card_header("Samlet tabel"),
+      card_header("Analyse og datakvalitet"),
+      uiOutput("kpi_cards"),
+      div(class = "kfa-control-row",
+        selectInput("view_atc", "ATC-kode", choices = c("Alle" = "")),
+        selectInput("view_region", "Bopælsregion", choices = c("Alle" = "")),
+        selectInput("view_year", "År", choices = c("Alle" = ""))
+      ),
+      selectInput("view_metric", "Nøgletal i udviklingskurve",
+        choices = stats::setNames(unname(metric_map), unname(metric_map)), selected = "Antal DDD"),
+      plotOutput("sales_trend", height = "280px"),
+      uiOutput("takst_status"),
+      p(class = "kfa-help", "Udviklingskurven summerer kun absolutte målinger. Pr. 1.000 borgere må ikke summeres på tværs af regioner."),
+      uiOutput("quality_message")
+    ),
+    card(
+      card_header("Samlet tabel · filtrér og eksportér"),
       DTOutput("parsed_table")
     )
   )
