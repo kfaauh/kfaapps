@@ -1207,32 +1207,42 @@ server <- function(input, output, session) {
   import_notice_val <- reactiveVal(NULL)
 
   observeEvent(input$import_btn, {
-    has_csv <- !is.null(input$parsed_csv_files) && nrow(input$parsed_csv_files) > 0
+    uploaded <- input$parsed_csv_files
+    has_files <- !is.null(uploaded) && nrow(uploaded) > 0
     has_summary <- !is.null(input$summary_files) && nrow(input$summary_files) > 0
-    req(has_csv || has_summary)
+    req(has_files || has_summary)
     metadata_val(tibble()); parsed_data_val(tibble()); import_status_val(NULL); import_notice_val(NULL)
     tryCatch({
-      long <- if (has_csv) map_dfr(input$parsed_csv_files$datapath, read_export_csv) else tibble()
-      summaries <- if (has_summary) map(input$summary_files$datapath, read_export_summary) else list()
-      validate_export_summaries(summaries, long)
-      parsed <- if (has_csv) finalise_parsed_long_export(long) else tibble()
-      meta <- if (has_summary) bind_rows(map(summaries, "meta")) else csv_metadata(long)
-      metadata_val(meta); parsed_data_val(parsed)
-      import_status_val(list(ok = TRUE, message = paste0("Importeret: ", nrow(long), " datarækker fordelt på ", nrow(parsed), " tabelrækker. Manglende værdier og nulværdier er bevaret hver for sig.")))
-      notice <- character()
-      if (!has_summary) notice <- c(notice, "Ingen eksportoversigt uploadet: CSV'en viser kun de kald, der returnerede data. Tomme udtræk og manglende CSV-dele kan derfor ikke kontrolleres.")
-      if (has_summary && any(meta$parsedRows == 0)) notice <- c(notice, paste0(sum(meta$parsedRows == 0), " deludtræk gav ingen rækker. Berørte ATC-valg: ", paste(unique(meta$atc[meta$parsedRows == 0]), collapse = ", "), ". Ingen rækker er ikke det samme som et forbrug på nul."))
-      if (nrow(parsed)) {
-        month_no <- match(parsed$`Måned`, month_names_da)
-        dates <- as.Date(sprintf("%04d-%02d-01", parsed$`År`, month_no))
-        notice <- c(notice, paste0("Observeret periode i filerne: ", format(min(dates), "%m/%Y"), "–", format(max(dates), "%m/%Y"), ". Dækningen kan variere mellem lægemidler og regioner."))
-        absent <- metric_cols[colSums(!is.na(parsed[metric_cols])) == 0]
-        if (length(absent)) notice <- c(notice, paste0("Ingen værdier for: ", paste(absent, collapse = "; "), "."))
+      longs <- list(); wides <- list()
+      if (has_files) for (i in seq_len(nrow(uploaded))) {
+        ext <- tolower(tools::file_ext(uploaded$name[i]))
+        if (ext == "csv") longs[[length(longs) + 1L]] <- read_export_csv(uploaded$datapath[i])
+        else if (ext == "xlsx") wides[[length(wides) + 1L]] <- read_sales_xlsx(uploaded$datapath[i])
+        else stop("Ukendt filtype: ", uploaded$name[i])
       }
-      import_notice_val(notice)
+      long <- if (length(longs)) dplyr::bind_rows(longs) else tibble()
+      summaries <- if (has_summary) purrr::map(input$summary_files$datapath, read_export_summary) else list()
+      if (has_summary && !length(longs)) stop("Eksportoversigt kræver tilhørende rå CSV-filer.")
+      validate_export_summaries(summaries, long)
+      if (length(longs)) wides <- c(wides, list(finalise_parsed_long_export(long)))
+      if (!length(wides)) stop("Ingen salgstal indlæst.")
+      modes <- vapply(wides, function(x) "Varenummer" %in% names(x), logical(1))
+      if (length(unique(modes)) > 1L) stop("ATC5- og varenummerdata skal indlæses hver for sig.")
+      parsed <- normalise_wide_export(dplyr::bind_rows(wides))
+      meta <- if (has_summary) dplyr::bind_rows(purrr::map(summaries, "meta")) else if (length(longs)) csv_metadata(long) else tibble()
+      metadata_val(meta); parsed_data_val(parsed)
+      import_status_val(list(ok = TRUE, message = paste0("Importeret ", nrow(parsed), " rækker fra ", nrow(uploaded), " fil(er). Niveau: ", if (modes[1]) "varenummer" else "ATC5", ". Manglende målinger og nulværdier er bevaret.")))
+      notices <- character()
+      if (length(longs) && !has_summary) notices <- c(notices, "Ingen eksportoversigt: tomme Power BI-kald og manglende CSV-dele kan ikke kontrolleres.")
+      if (has_summary && any(meta$parsedRows == 0)) notices <- c(notices, paste0(sum(meta$parsedRows == 0), " deludtræk gav ingen rækker; dette er ikke det samme som nul forbrug."))
+      dates <- as.Date(sprintf("%04d-%02d-01", parsed[["År"]], match(parsed[["Måned"]], month_names_da)))
+      notices <- c(notices, paste0("Observeret periode: ", format(min(dates), "%m/%Y"), "–", format(max(dates), "%m/%Y"), ". Dækningen kan variere mellem varer og regioner."))
+      absent <- metric_cols[colSums(!is.na(parsed[metric_cols])) == 0]
+      if (length(absent)) notices <- c(notices, paste0("Ingen målinger for: ", paste(absent, collapse = "; "), "."))
+      import_notice_val(notices)
     }, error = function(e) {
       metadata_val(tibble()); parsed_data_val(tibble())
-      import_status_val(list(ok = FALSE, message = paste("Importfejl:", e$message)))
+      import_status_val(list(ok = FALSE, message = paste("Importfejl:", conditionMessage(e))))
     })
   })
   output$import_status <- renderUI({
@@ -1243,18 +1253,97 @@ server <- function(input, output, session) {
     notices <- import_notice_val(); if (!length(notices)) return(NULL)
     div(class = "alert alert-info", lapply(notices, tags$p))
   })
+  takst_result <- reactive({
+    if (is.null(input$takst_file)) return(list(data = NULL, error = NULL))
+    tryCatch(list(data = read_takst_xlsx(input$takst_file$datapath), error = NULL),
+      error = function(e) list(data = NULL, error = conditionMessage(e)))
+  })
+  enriched_data <- reactive({
+    dat <- parsed_data_val()
+    if (!nrow(dat)) return(dat)
+    enrich_sales_with_takst(dat, takst_result()$data)
+  })
+  observeEvent(parsed_data_val(), {
+    dat <- parsed_data_val()
+    if (!nrow(dat)) return()
+    atcs <- sort(unique(dat[["ATC-kode"]]))
+    regions <- sort(unique(dat[["Bopælsregion"]]))
+    years <- sort(unique(dat[["År"]]))
+    updateSelectInput(session, "view_atc", choices = c("Alle" = "", stats::setNames(atcs, atcs)), selected = "")
+    updateSelectInput(session, "view_region", choices = c("Alle" = "", stats::setNames(regions, regions)), selected = "")
+    updateSelectInput(session, "view_year", choices = c("Alle" = "", stats::setNames(as.character(years), as.character(years))), selected = "")
+  })
+  filtered_data <- reactive({
+    dat <- enriched_data()
+    if (!nrow(dat)) return(dat)
+    if (nzchar(input$view_atc %||% "")) dat <- dplyr::filter(dat, .data[["ATC-kode"]] == input$view_atc)
+    if (nzchar(input$view_region %||% "")) dat <- dplyr::filter(dat, .data[["Bopælsregion"]] == input$view_region)
+    if (nzchar(input$view_year %||% "")) dat <- dplyr::filter(dat, .data[["År"]] == as.integer(input$view_year))
+    dat
+  })
+  output$kpi_cards <- renderUI({
+    dat <- filtered_data()
+    if (!nrow(dat)) return(NULL)
+    totals <- vapply(unname(metric_map), function(m) safe_total(dat[[m]]), numeric(1))
+    labels <- c("DDD i udvalget", "Regionalt tilskud · kr.", "Ekspeditionsbeløb · kr.")
+    div(class = "kfa-kpi-grid", lapply(seq_along(labels), function(i)
+      div(class = "kfa-kpi", div(class = "kfa-kpi-title", labels[i]),
+        div(class = "kfa-kpi-number", format_metric(totals[i])))))
+  })
+  output$sales_trend <- renderPlot({
+    dat <- filtered_data()
+    if (!nrow(dat)) return(invisible(NULL))
+    m <- input$view_metric %||% "Antal DDD"
+    shiny::validate(shiny::need(m %in% unname(metric_map), "Vælg et nøgletal."))
+    date <- as.Date(sprintf("%04d-%02d-01", dat[["År"]], match(dat[["Måned"]], month_names_da)))
+    grouped <- data.frame(date = date, value = dat[[m]])
+    grouped <- grouped[!is.na(grouped$value), , drop = FALSE]
+    if (!nrow(grouped)) {
+      graphics::plot.new(); graphics::text(0.5, 0.5, "Ingen målinger for det valgte nøgletal.")
+      return(invisible(NULL))
+    }
+    summed <- stats::aggregate(value ~ date, grouped, sum)
+    summed <- summed[order(summed$date), , drop = FALSE]
+    graphics::plot(summed$date, summed$value, type = "o", pch = 16,
+      col = "#0033A0", lwd = 2, cex = .65, xlab = "Måned", ylab = m,
+      main = "", las = 1, panel.first = graphics::grid(col = "#E3E8EF"))
+  })
+  output$takst_status <- renderUI({
+    dat <- parsed_data_val()
+    if (!nrow(dat) || is.null(input$takst_file)) return(NULL)
+    if (!is.null(takst_result()$error))
+      return(div(class = "alert alert-danger", paste("Takstimport:", takst_result()$error)))
+    if (!"Varenummer" %in% names(dat))
+      return(div(class = "alert alert-info", "Taksten kan kun kobles på varenummerniveau."))
+    joined <- enriched_data()
+    total <- length(unique(joined[["Varenummer"]]))
+    hit <- length(unique(joined[["Varenummer"]][joined[["Takstmatch"]]]))
+    mismatch <- length(unique(joined[["Varenummer"]][joined[["ATC-afvigelse"]]]))
+    div(class = if (mismatch) "alert alert-warning" else "alert alert-info",
+      paste0("Taksten: ", hit, " af ", total, " unikke varenumre matchet. ",
+        mismatch, " har afvigende ATC-kode. Takstpriserne er ikke historiske salgspriser."))
+  })
+  output$quality_message <- renderUI({
+    dat <- filtered_data()
+    if (!nrow(dat)) return(NULL)
+    x <- as.matrix(dat[metric_cols])
+    empty <- sum(rowSums(!is.na(x)) == 0)
+    zeros <- sum(rowSums(!is.na(x)) > 0 & rowSums(replace(x, is.na(x), 0)) == 0)
+    div(class = "kfa-help", paste0("Rækker: ", format(nrow(dat), big.mark = "."),
+      " · Uden nøgletal: ", empty, " · Kun registrerede nulværdier: ", zeros, "."))
+  })
   output$metadata_table <- renderDT({
     req(nrow(metadata_val()) > 0)
     datatable(metadata_val(), options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE)
   })
   output$parsed_table <- renderDT({
     req(nrow(parsed_data_val()) > 0)
-    datatable(parsed_data_val(), options = list(pageLength = 25, scrollX = TRUE, order = list()), rownames = FALSE)
+    datatable(filtered_data(), options = list(pageLength = 25, scrollX = TRUE, order = list()), rownames = FALSE)
   })
   output$download_csv <- downloadHandler(
     filename = function() paste0("medicinsalg_", format(Sys.Date(), "%Y%m%d"), ".csv"),
     content = function(file) {
-      dat <- parsed_data_val(); if (!nrow(dat)) stop("Importér CSV-data først.")
+      dat <- filtered_data(); if (!nrow(dat)) stop("Importér data først.")
       readr::write_excel_csv2(dat, file, na = "")
     }
   )
@@ -1262,7 +1351,7 @@ server <- function(input, output, session) {
     filename = function() paste0("medicinsalg_", format(Sys.Date(), "%Y%m%d"), ".xlsx"),
     content = function(file) {
       dat <- parsed_data_val(); if (!nrow(dat)) stop("Importér CSV-data først.")
-      writexl::write_xlsx(list("Medicinsalg" = dat, "Udtræk" = metadata_val()), path = file)
+      out <- list("Medicinsalg" = dat); if (nrow(metadata_val())) out[["Udtræk"]] <- metadata_val(); writexl::write_xlsx(out, path = file)
     }
   )
 }
