@@ -1,52 +1,52 @@
-# Medicinsalg: Power BI-udtræk og CSV-import
+# Medicinsalg · Power BI
 
-Appen genererer JavaScript til Sundhedsdatabankens Power BI-rapport og importerer den færdige CSV til en bred tabel med seks nøgletal og Excel-eksport.
+Shiny-app til at generere browserudtræk fra Medicinsalg og samle data til CSV/Excel.
 
-## Kør appen
+## Installation og lokal afprøvning
 
-Behold `app.R` og `export_template.js` i samme mappe. `shiny::runApp("powerbi")` sætter arbejdsmappe korrekt. Pakkerne står øverst i `app.R`; denne revision kræver ingen nye R-pakker.
+**Appen kræver kun `app.R`.** JavaScript er indbygget i filen. Mappestrukturen på Shiny-serveren skal derfor ikke ændres: behold `powerbi/app.R`. Der skal ikke ligge CSV-, JSON- eller CJS-filer på serveren for at starte appen.
 
-## Udtræk
+R-pakker: `shiny`, `bslib`, `jsonlite`, `dplyr`, `tidyr`, `stringr`, `purrr`, `readr`, `DT`, `writexl`. R skal være mindst 4.0.
 
-1. Vælg ATC-koder, regioner, periode og ATC5-/varenummerniveau i appen.
-2. Åbn [Medicinsalg](https://sundhedsdatabank.dk/medicin/medicinsalg-og-udgifter-menu/medicinsalg). Åbn DevTools → Network, filtrér på `querydata`, og ændr et filter i rapporten.
-3. Fra et fungerende kald (HTTP 200) kopieres hele `Authorization`-headeren, inklusive præfikset.
-4. Vælg `app.powerbi.com` i Console-kontekstmenuen. Kopiér generatorens kode til Console eller en lokal teksteditor, erstat `INDSÆT_AUTHORIZATION_HER`, og kør koden.
-5. Vent på `Færdig`. Browseren downloader CSV-dele og en `*_summary.json` med alle forespørgsler, inklusive tomme svar. Tillad flere downloads, hvis browseren spørger.
-6. CSV kan bruges direkte. Upload eventuelt alle CSV-dele og oversigten til Shiny for at samle nøgletal i kolonner og downloade Excel.
+```r
+install.packages(c("shiny", "bslib", "jsonlite", "dplyr", "tidyr",
+                   "stringr", "purrr", "readr", "DT", "writexl"))
+shiny::runApp(file.choose(), launch.browser = TRUE)
+```
 
-Authorization indtastes **ikke** i Shiny og gemmes ikke i generatoren på serveren, CSV eller oversigten. Brug en ny værdi fra rapporten ved HTTP 401/403. Stop en kørsel med `medicinsalgExport.stop()`; genindlæsning af rapporten stopper også koden. Én kørsel tillades ad gangen i den valgte frame.
+Vælg den downloadede R-fil i dialogen. Samme fil kan installeres som `app.R` på Shiny Server; filen slutter med et Shiny-appobjekt og starter ikke en indlejret `runApp()`-proces.
 
-Browserkoden bruger den verificerede Power BI Service-adresse, model `1212197`, dataset `1bebf468-3f1e-4596-8d94-c43c4cce0759` og rapport `870dd64d-7c9e-4e21-9711-270d8d9acb54`. Det er rapportens interne API, ikke en stabil, dokumenteret eksportkontrakt. En senere flytning kan kræve nye værdier i `export_template.js`.
+## Arbejdsgang
 
-## Parsing og dataintegritet
+1. Vælg ATC-koder, år, regioner og niveau i appen.
+2. Åbn Medicinsalg i Sundhedsdatabanken. Vælg `app.powerbi.com` som frame i DevTools Console.
+3. Kør den genererede kode. Ændr derefter ét filter i rapporten. Koden opsamler Authorization fra rapportens næste querydata-kald via fetch eller XMLHttpRequest. Tokenet lever kun i udtrækkets hukommelse; det gemmes ikke i filer eller sendes til Shiny. Observerne fjernes efter opsamling, afbrydelse eller timeout.
+4. Hvis automatisk opsamling ikke virker, kopier Authorization fra et fungerende querydata-kald i Network og kør `medicinsalgExport.authorize("HELE_HEADEREN")` i Console, mens koden venter. Ventetiden er 2 minutter. Ved 401/403 køres koden igen med et aktuelt token. Power BI-tokens udløber og kan ikke hardcodes permanent.
+5. Vent på Færdig. Browseren downloader CSV samt en oversigt i JSON. CSV vises ofte med Excel-ikon i Windows. Store udtræk deles ved 50.000 rækker. Ingen CSV downloades, før alle kald er lykkedes.
+6. Indlæs datafilen (eller alle dele) i appen. Oversigten er valgfri, men gør det muligt at kontrollere manglende dele og se tomme deludtræk. Hent en samlet Excel-fil med nøgletallene i separate kolonner.
 
-- Power BI DSR afkodes **kun i browseren**. R-parseren og importen af gamle rå JSON-udtræk er fjernet. JSON-oversigten indeholder kun metadata om udtrækket.
-- Afkodningen følger `descriptor.Select`, rækkeskemaet `S`, kolonnens `DN`/`ValueDicts`, gentagelsesmasken `R` og nullmasken `N`. Ekstra formatkolonner som `M1` forbruges, men eksporteres ikke som målinger.
-- API-/HTTP-fejl, ukendt skema, ugyldige ordbogsreferencer og afkortning stopper hele kørslen. CSV-filer downloades først efter alle datakald er lykkedes. Ved fejl downloades kun en oversigt markeret `complete: false`.
-- CSV-dele har højst 50.000 rækker. De dannes som Blobber under kørslen og beholdes i browserhukommelsen indtil afslutning. Meget store udtræk bør stadig opdeles på flere ATC-valg/perioder.
-- Shiny bevarer reelle nuller og manglende værdier hver for sig. Rækker med seks nuller beholdes. Ukendte eller manglende nøgletal bliver ikke til nul.
-- CSV-import accepterer dansk decimalkomma, bevarer tekstidentifikatorer og sorterer måneder kronologisk. `Jan 2025` bliver `År = 2025`, `Måned = Januar`. Kildens ydertypebetegnelser bevares.
-- Overlappende datanøgler afvises i stedet for at summere dem. Dette forhindrer blandt andet dobbelttælling af værdier pr. 1.000 borgere. ATC5- og varenummerniveau kan ikke blandes i samme import.
-- Med en tilhørende oversigt kontrolleres eksport-ID, gennemførte kald og det samlede antal CSV-rækker. Uden oversigt kan tomme kald og manglende CSV-dele ikke identificeres; appen viser denne begrænsning.
+Stop med `medicinsalgExport.stop()`. Alle kald udføres sekventielt, med 60 sekunders timeout per kald. API-fejl, RestartToken og rækkegrænse stopper eksporten. Tomme svar er ikke nulværdier.
 
-## Validering
+## Data og udseende
 
-Kør fra mappen `powerbi`:
+- ATC-kode og ATC-tekst eksporteres i to kolonner. Tidligere CSV med den kombinerede ATC-kolonne kan stadig indlæses.
+- Varer bevarer deres sekscifrede varenummer, inklusive foranstillede nuller. Dekoderen håndterer både ordbogsindeks og direkte tekstceller, også når schemaet angiver en tom ordbog.
+- Manglende værdier og reelle nulværdier holdes adskilt. Overlappende data afvises, og værdier pr. 1.000 summeres ikke. Måneder sorteres kronologisk.
+- Temaet følger homepage og lister: lys grå baggrund, hvide kort, blå accent, systemskrifter og afrundede kontroller.
+
+## Udvikling og kontrol
+
+`export_template.js` er en læsbar udviklingskopi. Runtime læser den ikke. Ved ændring skal indholdet også opdateres i R-variablen `.medicinsalg_js_template`; R-testen kontrollerer, at kopierne er ens.
+
+`tests/` og `tests/fixtures/` er kun udviklingsfiler og behøver ikke kopieres til serveren. Fixtures indeholder kunstige måleværdier. Der er ikke indsat brugerens Authorization eller medicinsalgsudtræk.
+
+Kør fra `powerbi/`:
 
 ```sh
 node tests/export.test.cjs
 Rscript tests/import.test.R
-# Valgfri kontrol mod det konkrete acceptudtræk (ikke en del af repository):
-Rscript tests/import.test.R /sti/til/medicinsalg_atc5.csv
+# Valgfrit lokalt accepttjek med en privat CSV, som ikke committes:
+Rscript tests/import.test.R /sti/til/medicinsalg.csv
 ```
 
-De medfølgende fixtures bruger **kunstige måleværdier**, som ikke er faktiske medicinsalgstal. Strukturen følger det observerede Power BI-svar: kolonnedefinitioner, tekstordbøger, gentagelsesmasker og en ekstra formateringskolonne. Testene kontrollerer hver af de 60 syntetiske DDD-værdier, nuller, manglende værdier, fejl/afkortning, stop, filopdeling, CSV-import, generatoren og Shiny-importhandlingen.
-
-Et fuldt brugerleveret udtræk er desuden valideret lokalt. Brugerens rå svar og CSV er ikke inkluderet i repository. Det valgfri filargument kontrollerer et lokalt udtræk uden at gemme det i repository.
-
-Varenummerforespørgslen er bevaret fra den tidligere app og dens afkodning er testet med en **syntetisk** fixture. Den er ikke afprøvet mod et levende varenummersvar efter flytningen. Kontrollér første varenummerudtræk mod rapporten.
-
-## Installation på den eksisterende server
-
-Deploy begge runtime-filer (`app.R` og `export_template.js`) samlet til den eksisterende `powerbi`-mappe. Ved Git-deployment skal ændringen først indgå i den branch, serveren henter. Denne revision ændrer ikke serverkonfigurationen og deployer ikke automatisk.
+Kontrollerne omfatter direkte tekst i varefelter, ordbøger, null/gentagelsesmasker, ATC-opdeling, tokenopsamling via fetch/XHR, manuel fallback, oprydning ved stop/timeout, fejlstop, import og Excel-skrivning. Varenummerrettelsen og tokenopsamlingen skal desuden afprøves mod den aktuelle rapport i brugerens browser; testene kalder ikke Power BI.

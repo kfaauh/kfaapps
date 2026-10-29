@@ -9,9 +9,18 @@ stopifnot(identical(normalise_atc_input("c09ca01; C09CA01; r05db29"), c("C09CA01
 fail(normalise_atc_input("junk"), "Ugyldig ATC")
 long <- read_export_csv("tests/fixtures/synthetic_sample.csv")
 out <- finalise_parsed_long_export(long)
-stopifnot(nrow(long) == 30L, nrow(out) == 5L, ncol(out) == 11L,
+stopifnot(nrow(long) == 30L, nrow(out) == 5L, ncol(out) == 12L,
           all(out$`Måned` == "Januar"), all(out$`År` == 2025L),
           out$`Antal DDD`[out$Ydertype == "Almen læge"] == 1000)
+stopifnot(identical(names(out)[1:2], c("ATC-kode", "ATC-tekst")), all(out$`ATC-tekst` == "Losartan"))
+separate <- normalise_atc_columns(long)
+stopifnot(identical(finalise_parsed_long_export(separate), out))
+ramipril <- long; ramipril[["ATC, Niveau 5, kode & tekst"]] <- "C09AA05 - Ramipril"
+r <- finalise_parsed_long_export(ramipril)
+stopifnot(all(r$`ATC-kode` == "C09AA05"), all(r$`ATC-tekst` == "Ramipril"))
+parenthesis <- long; parenthesis[["ATC, Niveau 5, kode & tekst"]] <- "C09AA05 (Ramipril)"
+stopifnot(identical(finalise_parsed_long_export(parenthesis), r))
+stopifnot(identical(.medicinsalg_js_template, paste(readLines("export_template.js", encoding="UTF-8", warn=FALSE), collapse="\n")))
 nullable <- long; nullable$value[1] <- NA_character_; nullable$value[2] <- "0"
 n <- finalise_parsed_long_export(nullable)
 stopifnot(is.na(n$`Antal DDD`[n$Ydertype == "Almen læge"]), n$`Antal DDD`[n$Ydertype == "Hospitalslæge"] == 0)
@@ -33,10 +42,11 @@ product$`Navn (Præparat)` <- "Testprodukt"; product$Form <- "Tabletter"
 product$Styrke <- "50 mg"; product$Pakningsstørrelse <- "100 stk"
 p <- finalise_parsed_long_export(product); stopifnot(all(p$Varenummer == "012345"))
 product$Form[1] <- NA_character_; fail(finalise_parsed_long_export(product), "produktfelter")
-fail(finalise_parsed_long_export(bind_rows(long, transform(long, opgoerelsesniveau = "varenummer"))), "niveau")
+mixed <- long; mixed$opgoerelsesniveau <- "varenummer"
+fail(finalise_parsed_long_export(bind_rows(long, mixed)), "niveau")
 for (level in c("atc5", "varenummer")) {
   js <- generate_js("C09CA01", names(metric_map), "Region Midtjylland", 2025, TRUE, level)
-  stopifnot(!grepl("__[A-Z_]+__", js), !grepl("powerbi.esundhed.dk", js), grepl("INDSÆT_AUTHORIZATION_HER", js, fixed = TRUE))
+  stopifnot(!grepl("__[A-Z_]+__", js), !grepl("powerbi.esundhed.dk", js), grepl("captureAuthorization", js, fixed = TRUE))
   file <- tempfile(fileext = ".js"); writeLines(js, file)
   stopifnot(system2("node", c("--check", shQuote(file))) == 0)
 }
@@ -57,7 +67,7 @@ summary$complete <- FALSE; jsonlite::write_json(summary, f, auto_unbox = TRUE)
 fail(read_export_summary(f), "fuldført")
 shiny::testServer(server, {
   session$setInputs(atc = "C09CA01", regions = "Region Midtjylland", years_range = c(2025, 2025), output_level = "atc5")
-  stopifnot(grepl("INDSÆT_AUTHORIZATION_HER", generated_js(), fixed = TRUE))
+  stopifnot(grepl("captureAuthorization", generated_js(), fixed = TRUE))
   upload <- data.frame(name = "sample.csv", size = file.info("tests/fixtures/synthetic_sample.csv")$size,
     type = "text/csv", datapath = normalizePath("tests/fixtures/synthetic_sample.csv"))
   session$setInputs(parsed_csv_files = upload, import_btn = 1)
@@ -68,10 +78,10 @@ shiny::testServer(server, {
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args)) {
   full <- read_export_csv(args[1]); wide <- finalise_parsed_long_export(full)
-  stopifnot(nrow(full) == nrow(full), nrow(wide) == nrow(distinct(full, across(all_of(c("ATC, Niveau 5, kode & tekst", "År", "Måned", "Ydertype", "Bopælsregion"))))), ncol(wide) == 11L,
-    !anyDuplicated(wide[c("ATC, Niveau 5, kode & tekst", "År", "Måned", "Ydertype", "Bopælsregion")]),
+  stopifnot(nrow(full) == nrow(full), nrow(wide) == nrow(distinct(full, across(all_of(c("ATC, Niveau 5, kode & tekst", "År", "Måned", "Ydertype", "Bopælsregion"))))), ncol(wide) == 12L,
+    !anyDuplicated(wide[c("ATC-kode", "ATC-tekst", "År", "Måned", "Ydertype", "Bopælsregion")]),
     all(vapply(wide[metric_cols], is.numeric, logical(1))))
-  pick <- wide$`ATC, Niveau 5, kode & tekst` == "C09CA01 - Losartan" & wide$`År` == 2025 & wide$Bopælsregion == "Region Midtjylland"
+  pick <- wide$`ATC-kode` == "C09CA01" & wide$`ATC-tekst` == "Losartan" & wide$`År` == 2025 & wide$Bopælsregion == "Region Midtjylland"
   expected <- full |>
     filter(atc_filter == "C09CA01", `År` == "2025", Bopælsregion == "Region Midtjylland", nøgletal_output == "Antal DDD") |>
     pull(value)
