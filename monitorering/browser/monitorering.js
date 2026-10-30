@@ -276,7 +276,7 @@
         let schema=null,previous=null;
         for(const row of ph.DM0) {
           if(row.S) schema=row.S;
-          if(!Array.isArray(schema)||schema.length>31||schema.length!==6) throw Error("Unknown DSR schema");
+          if(!Array.isArray(schema)||schema.length>31||schema.length===0) throw Error("Unknown DSR schema");
           for(const mask of [row.R??0,row.N??0]) if(!Number.isInteger(mask)||mask<0||mask>=2**schema.length) throw Error("Invalid DSR mask bits");
           const cells=row.C||[], values={}; let j=0;
           for(let i=0;i<schema.length;i++) {

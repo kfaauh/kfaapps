@@ -70,3 +70,11 @@ test('401 never retries and never emits; an empty complete result remains explic
  let calls=0;await assert.rejects(p.collect([task],{wait:async()=>{},request:async()=>{calls++;throw Object.assign(Error('expired'),{status:401});},emit:async()=>assert.fail()}),/expired/);assert.equal(calls,1);
  const out=await p.makeExport(p.recordsFromResponse(response([]),task),task);assert.equal(out.manifest.allow_empty,true);assert.equal(out.manifest.row_count,0);
 });
+
+test('wire schema can contain auxiliary fields while all six requested projections remain validated',()=>{
+ const r=response(fixture.slice(0,1)),row=r.results[0].result.data.dsr.DS[0].PH[0].DM0[0];
+ row.S.push({N:'Auxiliary'});row.C.push(123);
+ assert.equal(p.recordsFromResponse(r,task).length,1);
+ row.S.splice(0,1);row.C.splice(0,1);
+ assert.throws(()=>p.recordsFromResponse(r,task),/Descriptor\/schema mismatch/);
+});
