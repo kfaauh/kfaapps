@@ -1,0 +1,10 @@
+/runtime/
+/inbox/
+/archive/
+/backups/
+*.duckdb*
+*.wal
+*.lock
+.env
+.Renviron
+node_modules/

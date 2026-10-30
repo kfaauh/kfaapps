@@ -1,0 +1,8 @@
+[Unit]
+Description=Import newly delivered Monitorering consumption files
+[Timer]
+OnCalendar=*-*-* 04:30:00 Europe/Copenhagen
+Persistent=true
+RandomizedDelaySec=300
+[Install]
+WantedBy=timers.target

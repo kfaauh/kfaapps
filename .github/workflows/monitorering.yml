@@ -1,0 +1,29 @@
+name: Monitorering data infrastructure
+on:
+  pull_request:
+    paths: ['monitorering/**', '.github/workflows/monitorering.yml']
+  push:
+    branches: ['main']
+    paths: ['monitorering/**', '.github/workflows/monitorering.yml']
+permissions:
+  contents: read
+jobs:
+  offline-tests:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        r-version: ['release', '4.6.1']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: ${{ matrix.r-version }}
+          use-public-rspm: true
+      - run: Rscript monitorering/scripts/install.R
+      - run: node --test monitorering/tests/export.test.cjs
+      - run: node --test powerbi/tests/export.test.cjs
+      - run: Rscript monitorering/tests/integration.R
+      - run: bash monitorering/tests/cli.sh

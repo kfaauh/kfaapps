@@ -1,0 +1,2 @@
+# Preserve the supplied byte-exact browser CSV (BOM + CRLF) and its checksum.
+tests/fixtures/monitorering_forbrug_N06_2025-01.csv -text whitespace=cr-at-eol
