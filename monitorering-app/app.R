@@ -27,7 +27,7 @@ ui <- fluidPage(
     tabPanel('Datastatus',textOutput('latest_observation'),p('Forespørgselsdækning dokumenterer indlæst afgrænsning; fuld populationsdækning kræver uafhængig kontrol.'),DTOutput('coverage'),tags$details(tags$summary('Import- og revisionshistorik'),DTOutput('extracts'))),
     tabPanel('Forbrug og tilskud',plotOutput('series',height='440px'),DTOutput('monthly'),h4('Samme måneder året før'),p('Sammenligningen viser observerede summer. Manglende produktmålinger og ændret dækning kan påvirke forskellen.'),plotOutput('year_series',height='360px'),DTOutput('year_comparison'),h4('ATC / varenummer'),DTOutput('details'),h4('Varenumre'),DTOutput('products')),
     tabPanel('Takster og kobling',p('Takster med ukendt gyldighed vises i historikken, men bruges ikke som historiske priser. Dagsvægtning antager jævnt salg over måneden.'),DTOutput('tariffs'),h4('Historisk kobling'),DTOutput('historical'),h4('Produkt- og prisændringer'),DTOutput('changes')),
-    tabPanel('Fremskrivning og scenarie',h4('Fremskrivning af faktisk regionalt tilskud'),verbatimTextOutput('forecast'),h4('Estimat fra observerede tilskudssummer · ufuldstændighed mulig'),verbatimTextOutput('observed_estimate'),plotOutput('estimate_series',height='300px'),
+    tabPanel('Fremskrivning og scenarie',h4('Fremskrivning af faktisk regionalt tilskud'),verbatimTextOutput('forecast'),h4('Estimat fra observerede tilskudssummer · ufuldstændighed mulig'),verbatimTextOutput('observed_estimate'),uiOutput('estimate_plot_ui'),
       h4('Prisbaseret scenarie · observeret DDD × senest observeret tilskudspris/DDD'),
       p('Dette er et prisgrundlag ved observeret mængde, ikke faktisk regionalt tilskud og ikke en valideret prognose. Prisens observationsdato bevares. Anvendelse på tidligere måneder er et kontrafaktisk scenarie. Afledt DDD = ekspeditionspris / ekspeditionspris pr. DDD kan bruges som estimat; kildeafrunding kan påvirke resultatet. Manglende grundlag udelades.'),
       p('Matchandelene nedenfor gælder en tilgængelig pris/DDD og samme ATC; DDD-definitionens sammenlignelighed skal stadig vurderes.'),
@@ -175,6 +175,10 @@ server <- function(input,output,session) {
      '\nManglende produktmålinger af tilskud:',format_da(x$missing),'· heraf i de seneste tre måneder:',format_da(x$recent_missing),
      '\nAntallet beskriver kun kendte produktrækker; eventuelt helt uobserverede produkter kan ikke tælles.')
  })
+ output$estimate_plot_ui <- renderUI({
+   f<-filters();x<-observed_subsidy_estimate(monthly(),as.integer(substr(f$to,1,4)))
+   if(x$available && !nzchar(f$product))plotOutput('estimate_series',height='300px')
+ })
  output$estimate_series <- renderPlot({
    f<-filters();d<-monthly();year<-as.integer(substr(f$to,1,4))
    x<-observed_subsidy_estimate(d,year)
@@ -183,8 +187,9 @@ server <- function(input,output,session) {
    last<-as.integer(substr(x$last_month,6,7));actual<-rep(NA_real_,12);future<-actual
    actual[as.integer(substr(m$month,6,7))]<-m$actual_subsidy_kr/1e6
    if(last<12L) future[seq.int(last+1L,12L)]<-x$monthly_rate/1e6
+   ylim<-range(c(0,actual,future),na.rm=TRUE);ylim[2]<-max(1e-6,ylim[2]*1.2)
    par(mar=c(4,5,2,1));matplot(1:12,cbind(actual,future),type='o',pch=c(16,1),lty=c(1,2),
-     col=c('#0033a0','#b45309'),xaxt='n',xlab='',ylab='Mio. kr. pr. måned',ylim=range(c(0,actual,future),na.rm=TRUE))
+     col=c('#0033a0','#b45309'),xaxt='n',xlab='',ylab='Mio. kr. pr. måned',ylim=ylim)
    axis(1,at=1:12,labels=sprintf('%d-%02d',year,1:12),las=2,cex.axis=.75)
    abline(v=last+.5,col='#667085',lty=3)
    legend('topleft',c('Observerede summer · kan være ufuldstændige','Estimat · seneste tre måneders gennemsnit'),
@@ -203,6 +208,7 @@ server <- function(input,output,session) {
      previous<-d[[if(k=='ddd')'previous_ddd'else'previous_subsidy_kr']]
      y<-cbind(d[[k]],previous)/1e6
      ylim<-if(all(is.na(y)))c(0,1)else range(c(0,y),na.rm=TRUE);if(diff(ylim)==0)ylim<-c(0,1)
+     ylim[2]<-ylim[2]+diff(ylim)*.2
      matplot(x,y,type='o',pch=c(16,1),lty=c(1,2),col=c('#0033a0','#667085'),xaxt='n',xlab='',
        ylab=if(k=='ddd')'Mio. DDD'else'Mio. kr.',ylim=ylim)
      axis(1,at=x,labels=d$month,las=2,cex.axis=.75)
