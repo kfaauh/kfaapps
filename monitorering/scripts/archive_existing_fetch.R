@@ -22,7 +22,9 @@ env <- new.env(parent=globalenv())
 fetchargs <- normalizePath(a[1:2],mustWork=FALSE)
 env$commandArgs <- function(trailingOnly=FALSE) if(trailingOnly) fetchargs else base::commandArgs()
 start <- Sys.time()
-for(e in exprs) eval(e,env)
+# Evaluate the script as one expression vector so top-level on.exit cleanup
+# runs after all statements, not between download and read_excel.
+eval(exprs,env)
 must(exists('samlet',env,inherits=FALSE)&&exists('xlsx_file',env,inherits=FALSE),'Existing fetch did not finish')
 # The legacy scraper may skip failed groups. Never certify them as complete.
 missing <- setdiff(env$udleveringsgrupper,names(env$alle_data))

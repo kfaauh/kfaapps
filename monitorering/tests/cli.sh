@@ -34,6 +34,15 @@ if run import-consumption monitorering/tests/fixtures/monitorering_forbrug_N06_2
  echo 'FAIL: invalid manifest was accepted'; exit 1
 fi
 run validate
+run publish-analysis "$test_dir/analysis.rds"
+before_publication=$(sha256sum "$test_dir/analysis.rds" | cut -d' ' -f1)
+mkdir "$test_dir/rejected-inbox"
+cp monitorering/tests/fixtures/monitorering_forbrug_N06_2025-01.csv "$test_dir/rejected-inbox/monitorering_forbrug_bad.csv"
+cp "$test_dir/bad.json" "$test_dir/rejected-inbox/monitorering_manifest_bad.json"
+if "$RSCRIPT" monitorering/scripts/import_and_publish.R "$test_dir/rejected-inbox" "$test_dir/analysis.rds"; then
+ echo 'FAIL: rejected inbox batch was published'; exit 1
+fi
+test "$before_publication" = "$(sha256sum "$test_dir/analysis.rds" | cut -d' ' -f1)"
 node monitorering/tests/write_v2.cjs "$test_dir/v2"
 run import-inbox "$test_dir/v2"
 run import-inbox "$test_dir/v2"

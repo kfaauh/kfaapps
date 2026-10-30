@@ -1,10 +1,10 @@
 name: Monitorering data infrastructure
 on:
   pull_request:
-    paths: ['monitorering/**', '.github/workflows/monitorering.yml']
+    paths: ['monitorering/**', 'monitorering-app/**', '.github/workflows/monitorering.yml']
   push:
     branches: ['main']
-    paths: ['monitorering/**', '.github/workflows/monitorering.yml']
+    paths: ['monitorering/**', 'monitorering-app/**', '.github/workflows/monitorering.yml']
 permissions:
   contents: read
 jobs:
@@ -25,5 +25,11 @@ jobs:
       - run: Rscript monitorering/scripts/install.R
       - run: node --test monitorering/tests/export.test.cjs
       - run: node --test powerbi/tests/export.test.cjs
+      - run: Rscript -e 'install.packages(c("shiny", "bslib", "DT"))'
+      - run: Rscript monitorering/tests/publication.R
       - run: Rscript monitorering/tests/integration.R
+      - run: Rscript monitorering/tests/tariff_archive.R
+      - run: Rscript monitorering/tests/fetch_eval.R
+      - run: Rscript monitorering/tests/tariff_job.R
+      - run: python3 monitorering/tests/test_tariff_admin.py
       - run: bash monitorering/tests/cli.sh

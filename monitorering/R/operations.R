@@ -1,5 +1,5 @@
 validate_db <- function(con,cfg,archives=TRUE) {
-  must(identical(as.integer(DBI::dbGetQuery(con,'SELECT version FROM schema_version')$version),1L),'Schema version mismatch')
+  must(all(as.integer(DBI::dbGetQuery(con,'SELECT version FROM schema_version')$version) %in% c(1L,2L)),'Schema version mismatch')
   bad <- DBI::dbGetQuery(con,paste('SELECT count(*) n FROM consumption_extract e LEFT JOIN',
     '(SELECT extract_id,count(*) n FROM consumption_observation GROUP BY extract_id) o USING(extract_id)',
     'WHERE e.row_count<>coalesce(o.n,0)'))$n

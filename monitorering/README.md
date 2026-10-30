@@ -1,6 +1,8 @@
+> Ny forbrugsarbejdsgang og separat analyseapp: se [CONSUMPTION_WORKFLOW.md](docs/CONSUMPTION_WORKFLOW.md). Den oprindelige installation nedenfor beskriver datalaget.
+
 # Monitorering — historisk datagrundlag
 
-Implementerbart R/DuckDB-datalag til nationale månedsdata og takstsnapshots. Ingen Shiny-app eller ændring af eksisterende apps. Start med den medfølgende Test 8: N06, januar 2025, 1.143 målingsrækker, 25.198.980 DDD og 80.632.838 kr. i faktisk regionalt tilskud. Koden indeholder ikke adgangstokens eller takstdata.
+Implementerbart R/DuckDB-datalag til nationale månedsdata og takstsnapshots. Separat læsende Shiny-app findes i `monitorering-app/`; eksisterende apps ændres ikke. Start med den medfølgende Test 8: N06, januar 2025, 1.143 målingsrækker, 25.198.980 DDD og 80.632.838 kr. i faktisk regionalt tilskud. Koden indeholder ikke adgangstokens eller takstdata.
 
 ## 1. Installation på Ubuntu 24.04
 
@@ -114,7 +116,7 @@ Tilpas `/opt/kfaapps` og Rscript-stien i servicefilen først. Alternativ cron un
 
 Genbrug allerede hentet `Taksten_YYYY-MM-DD.xlsx` (foretrukket), `clean_data2.rds` eller normaliseret semikolon-CSV. Hver fil kræver et sidecar-JSON efter [config/tariff.metadata.example.json](config/tariff.metadata.example.json). Datoen i filnavnet er ikke tilstrækkeligt bevis for gyldighedsperioden. Eksempelfilen må ikke bruges uændret til reelle data.
 
-Obligatorisk metadata: `schema_version:1`, `source`, UTC `observed_at`, faktisk `nominal_from`/`nominal_to`, `validity_kind` og `complete`. Ved `complete:true` kræves `completeness_evidence`. Standard er `validity_kind:"observed_only"`, uden effective-datoer. Til dokumenterede kilder med faktiske effektive priser bruges `"source_interval"` med `effective_from`, `effective_to` og `validity_evidence`; et dagsudtræk kan have samme fra/til-dato. Tilskudspriser kan skifte inden for en takstperiode, så udvid aldrig intervallet på grundlag af prisperiodens datoer alene.
+Obligatorisk metadata: `schema_version:1`, `source`, UTC `observed_at`, faktisk `nominal_from`/`nominal_to`, `validity_kind` og `complete`. Undtagelsen er ældre arkiver med dokumenteret ukendt periode; se afsnittet nederst. Ved `complete:true` kræves `completeness_evidence`. Standard er `validity_kind:"observed_only"`, uden effective-datoer. Til dokumenterede kilder med faktiske effektive priser bruges `"source_interval"` med `effective_from`, `effective_to` og `validity_evidence`; et dagsudtræk kan have samme fra/til-dato. Tilskudspriser kan skifte inden for en takstperiode, så udvid aldrig intervallet på grundlag af prisperiodens datoer alene.
 
 ```bash
 Rscript monitorering/scripts/monitor.R import-tariff \
@@ -160,3 +162,17 @@ Rå takster, databaser, inbox, logs, backups og credentials skal ligge i git-ign
 En senere Shiny-app kan forespørge SQL-visninger via DBI/DuckDB. Brug en publiceret read-only kopi eller koordinér korte forbindelser med opdateringer: et separat Shiny-process med en permanent åben databaseforbindelse kan blokere den eksterne writer.
 
 Se [datamodel og beregningskontrakt](docs/ARCHITECTURE.md), [adgangsforhold og kilder](docs/SOURCES.md) og [teknisk status](docs/STATUS.md).
+
+## Arkiverede takstfiler uden kendt prisperiode
+
+Tag først backup med den gamle kode. Efter opdatering kør `monitor.R init` for den transaktionelle opgradering til databaseskema 2. Eksisterende forbrugs- og taksthistorik bevares. Herefter:
+
+```bash
+Rscript monitorering/scripts/import_archived_tariff.R /sti/til/Taksten_2026-08-06.xlsx
+```
+
+Kommandoen læser originalfilen uden at ændre den og arkiverer priser og alle råfelter i databasen. Nominel og effektiv gyldighed forbliver NULL. Filens ændringstid bruges kun som tydeligt mærket proxy for indsamlingstid, ikke som verificeret prisgyldighed. Fuldstændighed er ukendt (`complete=false`), så disse arkiver indgår ikke i automatiske historiske eller aktuelle prisberegninger. Gentagen import af samme uændrede fil er idempotent. De kan senere gennemgås og suppleres med dokumenteret kildeinformation. Filnavnets dato bruges aldrig til at gætte en takstperiode.
+
+## Samlet dagligt prisjob
+
+Se [DAILY_TARIFF.md](docs/DAILY_TARIFF.md) for den nye strenge indsamler, manuel serviceprøve og efterfølgende aktivering. Den gamle opt-in-wrapper bevares til fejlsøgning; den er ikke det daglige job.

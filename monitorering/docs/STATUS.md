@@ -1,3 +1,5 @@
+> Updated consumption/UI work: see [CONSUMPTION_WORKFLOW.md](CONSUMPTION_WORKFLOW.md) for current implementation, local verification and outstanding live/server acceptance. Earlier sections below describe the original infrastructure delivery.
+
 # Technical status — 2026-10-30
 
 ## Delivered
@@ -29,3 +31,9 @@ The automated CLI suite passed, including cross-process writer exclusion, comman
 4. Tariff tests use explicit synthetic price intervals. No real tariff source files or historical source validity evidence were attached. Existing clean RDS DDD is conservatively unverified. Daily historical valuation remains NULL until genuine daily interval/DDD evidence is imported. The wrapper creates observed-only snapshots; it does not certify those captures as full historical day intervals.
 5. ATC matches cannot independently verify DDD-definition compatibility. Current-price scenarios expose capture date and require review for stale/future captures. Actual regional subsidy must never be replaced with DDD times subsidy price.
 6. Run the acceptance commands on Ubuntu/R 4.6.1, verify a newly collected small month against the report and verify one authorized tariff capture. Establish supported bulk access/capacity with the publisher before scaling. Then add a read-only publication copy for the later Shiny app, schedule imports/backups, and collect genuine tariff snapshots forward in time. Historical backfill is limited to original archived or otherwise verified source files.
+
+## Controlled daily tariff job
+
+The branch now includes `update_tariff.R`, a strict source-group collector, current banner checks, raw/app validation, atomic app publication with rollback, weekly full backups and per-publication app backups. A Python installer configures a user-run systemd service with root-only credentials and restricted write paths; activation is separate and requires a successful service receipt. It removes only the recognized legacy fetch_data2 cron invocation, retaining unrelated jobs. The collector does not hardcode the seven manually observed empty groups.
+
+Local checks passed: source-empty/error/wrong-group/login cases, a real synthetic Excel response, raw/app price consistency, publication and restart-failure rollback; three Python tests for precise/idempotent/fail-closed cron edits; existing consumption/revision/migration/backup/CLI suites. No live subscription requests or privileged setup were executed by the development environment. The first server service run is required to validate the actual source's empty-result text and authenticated markup. An unrecognized format rejects publication and records a limited diagnostic. No automatic external failure notification is configured.

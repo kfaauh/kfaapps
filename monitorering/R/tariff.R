@@ -93,10 +93,17 @@ import_tariff <- function(con,cfg,path,metadata) {
   m <- read_meta(metadata)
   must(identical(as.integer(m$schema_version),1L),'Unsupported tariff metadata schema')
   scalar(m$source,'source'); iso_time(m$observed_at)
-  for(k in c('nominal_from','nominal_to')) {
-    must(is.character(m[[k]]) && length(m[[k]])==1L && grepl('^[0-9]{4}-[0-9]{2}-[0-9]{2}$',m[[k]]) && !is.na(as.Date(m[[k]])),paste('Missing/invalid',k))
+  unknown_period <- is.null(m$nominal_from) && is.null(m$nominal_to)
+  if(unknown_period) {
+    must(identical(m$validity_kind,'observed_only'),'Unknown nominal period is allowed only for observed-only archives')
+    scalar(m$unknown_period_reason,'reason for unknown nominal period')
+    m$nominal_from <- NA_character_; m$nominal_to <- NA_character_
+  } else {
+    for(k in c('nominal_from','nominal_to')) {
+      must(is.character(m[[k]]) && length(m[[k]])==1L && grepl('^[0-9]{4}-[0-9]{2}-[0-9]{2}$',m[[k]]) && !is.na(as.Date(m[[k]])),paste('Missing/invalid',k))
+    }
+    must(as.Date(m$nominal_to)>=as.Date(m$nominal_from),'Reversed nominal tariff period')
   }
-  must(as.Date(m$nominal_to)>=as.Date(m$nominal_from),'Reversed nominal tariff period')
   must(is.logical(m$complete) && length(m$complete)==1 && !is.na(m$complete),'Explicit complete flag required')
   if(isTRUE(m$complete)) scalar(m$completeness_evidence,'tariff completeness evidence')
   must(m$validity_kind %in% c('source_interval','observed_only'),'Explicit tariff validity kind required')
