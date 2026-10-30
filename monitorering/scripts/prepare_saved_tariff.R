@@ -1,0 +1,26 @@
+#!/usr/bin/env Rscript
+# Reuse the legacy RDS preparation on a saved raw workbook; no medicine-price login or re-export.
+a <- commandArgs(trailingOnly=TRUE)
+if(length(a)!=3) stop('Usage: prepare_saved_tariff.R RAW_XLSX CATALOG_XLSX NEW_OUTPUT_DIR')
+script <- sub('^--file=','',commandArgs()[grepl('^--file=',commandArgs())][1])
+root <- normalizePath(file.path(dirname(script),'..'))
+raw <- normalizePath(a[1],mustWork=TRUE);catalog <- normalizePath(a[2],mustWork=TRUE)
+out <- normalizePath(a[3],mustWork=FALSE)
+if(file.exists(file.path(out,'clean_data2.rds'))) stop('Output already exists; use a new output directory')
+exprs <- parse(file.path(root,'..','data-scripts','fetch_data2.R'),keep.source=FALSE)
+assignment <- function(name) which(vapply(exprs,function(e) is.call(e)&&identical(e[[1]],as.name('<-'))&&identical(e[[2]],as.name(name)),logical(1)))
+credentials <- assignment('email');prep <- assignment('cat_data')
+stopifnot(length(credentials)==1L,length(prep)==1L,credentials>1L,prep>credentials)
+env <- new.env(parent=globalenv())
+env$commandArgs <- function(trailingOnly=FALSE) if(trailingOnly) c(out,catalog) else base::commandArgs()
+env$samlet <- as.data.frame(readxl::read_excel(raw,col_types='text'))
+env$cookie_file <- tempfile()
+# Whole-vector evaluation preserves the downloaded substitution file until it is read.
+# The initial helper definitions precede credential assignments; no login is executed.
+selected <- c(exprs[seq_len(credentials-1L)],exprs[seq.int(prep,length(exprs))])
+eval(selected,env)
+stopifnot(file.exists(file.path(out,'clean_data2.rds')))
+cat('Prepared from saved workbook:',raw,'\n')
+cat('Rows:',nrow(env$clean_data2),'\n')
+cat('Output:',normalizePath(file.path(out,'clean_data2.rds')),'\n')
+cat('No live app data files were changed. No medicine-price groups were downloaded.\n')
