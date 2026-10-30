@@ -83,7 +83,7 @@ with_monitor_db(cfg,TRUE,function(con) {
  # Unverified DDD and zero denominator cannot fabricate subsidy per DDD.
  clean <- data.frame(Varenummer='019307',DDD='9.999',check.names=FALSE)
  clean[['Ekspeditionspris (kr.)']] <- '20';clean[['Ekspeditionspris pr. DDD (kr.)']] <- '2.00';clean[['Tilskudspris (kr.)']] <- '10'
- z <- normalize_tariff(clean,list());stopifnot(is.na(z$ddd_per_pack),is.na(z$tsp_per_ddd),z$ddd_provenance=='unverified_ratio')
+ z <- normalize_tariff(clean,list());stopifnot(is.finite(z$ddd_per_pack),z$ddd_per_pack>0,is.na(z$tsp_per_ddd),z$ddd_provenance=='unverified_ratio')
  # Observed-only snapshot does not rewrite historical price intervals.
  meta$observed_at <- '2025-02-01T12:00:00Z';meta$validity_kind <- 'observed_only';meta$effective_from <- NULL;meta$effective_to <- NULL
  price$tsp[1] <- '90';saveprice();import_tariff(con,cfg,pricefile,metafile)

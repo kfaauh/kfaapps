@@ -55,6 +55,9 @@ normalize_tariff <- function(d,m) {
   esp_source <- number_tariff(get('source_esp_per_ddd','Pris pr. DDD (kr.)','Ekspeditionspris pr. DDD (kr.)'))
   tsp_source <- number_tariff(get('source_tsp_per_ddd','Tilskudspris pr. DDD (kr.)'))
   valid_num <- function(x) !is.na(x) & is.finite(x) & x>=0 & x<1e14
+  derived <- provenance %in% c('missing','unverified_ratio') & valid_num(esp) & esp>0 & valid_num(esp_source) & esp_source>0
+  provenance[derived] <- 'unverified_ratio'
+  ddd[derived] <- esp[derived]/esp_source[derived]
   trusted <- provenance %in% c('source','verified') & !is.na(ddd) & is.finite(ddd) & ddd>0 & ddd<1e12
   # Provenance assertions require a written source/validation record.
   if(any(provenance %in% c('source','verified'))) scalar(m$ddd_evidence,'DDD provenance evidence')
@@ -63,7 +66,7 @@ normalize_tariff <- function(d,m) {
     if(!valid_num(esp)[i]) 'esp_missing_or_invalid',
     if(!valid_num(tsp)[i]) 'tsp_missing_or_invalid'
   ),collapse=';'),character(1))
-  ddd[!trusted] <- NA_real_
+  ddd[!trusted & !derived] <- NA_real_
   esp[!valid_num(esp)] <- NA_real_; tsp[!valid_num(tsp)] <- NA_real_
   esp_source[!valid_num(esp_source)] <- NA_real_; tsp_source[!valid_num(tsp_source)] <- NA_real_
   expddd <- ifelse(trusted,esp/ddd,esp_source)

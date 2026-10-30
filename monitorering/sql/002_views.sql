@@ -76,11 +76,26 @@ SELECT atc5,varenummer,month,extract_id,max(ddd) AS ddd,
  max(ddd)*calendar_weighted_tsp_per_ddd AS modelled_subsidy_basis_kr,
  'uniform_daily_volume, DDD_definition_not_independently_verified' AS assumptions
 FROM linked GROUP BY atc5,varenummer,month,extract_id;
+-- Scenario-only fallback also works on archived snapshots imported before this fix.
+-- Strict historical prices above never use the ratio-derived denominator.
 CREATE OR REPLACE VIEW v_consumption_current_price AS
+WITH prices AS (
+ SELECT *, CASE WHEN tsp_per_ddd IS NOT NULL THEN tsp_per_ddd
+ WHEN ddd_provenance IN ('missing','unverified_ratio')
+ AND esp>0 AND source_esp_per_ddd>0 AND tsp>=0
+ AND isfinite(esp/source_esp_per_ddd) AND isfinite(tsp*source_esp_per_ddd/esp)
+ THEN tsp*source_esp_per_ddd/esp END AS scenario_price,
+ CASE WHEN tsp_per_ddd IS NULL AND ddd_provenance IN ('missing','unverified_ratio')
+ AND esp>0 AND source_esp_per_ddd>0 AND tsp>=0
+ THEN 'unverified_ratio' ELSE ddd_provenance END AS scenario_provenance
+ FROM v_tariff_latest
+)
 SELECT c.*,t.snapshot_id AS price_snapshot_id,t.observed_at AS price_observed_at,
  t.validity_kind,t.nominal_from,t.nominal_to,t.atc AS tariff_atc,
- t.tsp_per_ddd,t.ddd_provenance,
- CASE WHEN c.atc5=t.atc THEN c.ddd*t.tsp_per_ddd END AS current_price_subsidy_basis_kr,
+ t.scenario_price AS tsp_per_ddd,t.scenario_provenance AS ddd_provenance,
+ CASE WHEN c.atc5=t.atc THEN c.ddd*t.scenario_price END AS current_price_subsidy_basis_kr,
  CASE WHEN t.snapshot_id IS NULL THEN 'missing_product' WHEN t.atc IS DISTINCT FROM c.atc5 THEN 'atc_mismatch'
- WHEN t.tsp_per_ddd IS NULL THEN 'no_valid_ddd_price' ELSE 'review_ddd_definition_and_price_date' END AS linkage_status
-FROM v_consumption c LEFT JOIN v_tariff_latest t USING(varenummer);
+ WHEN t.scenario_price IS NULL THEN 'no_valid_ddd_price'
+ WHEN t.scenario_provenance='unverified_ratio' THEN 'estimated_from_price_ratio'
+ ELSE 'review_ddd_definition_and_price_date' END AS linkage_status
+FROM v_consumption c LEFT JOIN prices t USING(varenummer);
