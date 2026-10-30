@@ -27,4 +27,5 @@ jobs:
       - run: node --test powerbi/tests/export.test.cjs
       - run: Rscript monitorering/tests/integration.R
       - run: Rscript monitorering/tests/tariff_archive.R
+      - run: Rscript monitorering/tests/fetch_eval.R
       - run: bash monitorering/tests/cli.sh
