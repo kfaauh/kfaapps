@@ -158,14 +158,14 @@ publish_tariff <- function(source,target,backup_dir,restart,restart_fn=function(
   on.exit(unlink(tmp),add=TRUE)
   must(file.copy(source,tmp,copy.mode=FALSE),'Staged app copy failed')
   must(identical(sha(source),sha(tmp)),'Staged app checksum mismatch')
-  Sys.chmod(tmp,'0640')
+  must(Sys.chmod(tmp,'0640',use_umask=FALSE),'Cannot set app file permissions')
   must(file.rename(tmp,target),'Atomic app publication failed')
   # Restart only the target app. Record error even though the validated data was published.
   restarted <- tryCatch(isTRUE(restart_fn(restart)),error=function(e) FALSE)
   if(!restarted) {
     rollback <- tempfile('.monitorering-rollback-',tmpdir=dirname(target));on.exit(unlink(rollback),add=TRUE)
     restored <- file.copy(backup,rollback,copy.mode=FALSE)
-    if(restored) {Sys.chmod(rollback,'0640');restored <- file.rename(rollback,target)}
+    if(restored) {restored <- isTRUE(Sys.chmod(rollback,'0640',use_umask=FALSE));if(restored) restored <- file.rename(rollback,target)}
     stop(if(restored) 'App restart failed; previous app file restored' else 'App restart and rollback failed; restore from app backup',call.=FALSE)
   }
   invisible(backup)

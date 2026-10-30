@@ -19,12 +19,17 @@ def detach_legacy(cron):
     lines[i]=line
     return ''.join(lines),True
 
+def service_succeeded(values):
+    # systemd may discard oneshot timestamps after unloading an inactive unit.
+    # The recent publication receipt is checked separately before cron changes.
+    return values.get('Result')=='success' and values.get('ExecMainStatus')=='0'
+
 def main():
     if os.getuid()==0:
         raise SystemExit('Run this as your normal AU user, without sudo.')
     show=subprocess.check_output(['sudo','systemctl','show','monitorering-priser.service','--property=Result,ExecMainStatus,ExecMainStartTimestamp'],text=True)
     values=dict(line.split('=',1) for line in show.splitlines() if '=' in line)
-    if values.get('Result')!='success' or values.get('ExecMainStatus')!='0' or not values.get('ExecMainStartTimestamp'):
+    if not service_succeeded(values):
         raise SystemExit('A successful manual service run is required before activation.')
     runtime=pathlib.Path.home()/'monitorering-data'
     receipt=json.loads((runtime/'last-tariff-success.json').read_text())
