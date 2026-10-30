@@ -276,7 +276,7 @@
         let schema=null,previous=null;
         for(const row of ph.DM0) {
           if(row.S) schema=row.S;
-          if(!Array.isArray(schema)||schema.length>31||schema.length!==6) throw Error("Unknown DSR schema");
+          if(!Array.isArray(schema)||schema.length>31||schema.length===0) throw Error("Unknown DSR schema");
           for(const mask of [row.R??0,row.N??0]) if(!Number.isInteger(mask)||mask<0||mask>=2**schema.length) throw Error("Invalid DSR mask bits");
           const cells=row.C||[], values={}; let j=0;
           for(let i=0;i<schema.length;i++) {
@@ -431,17 +431,26 @@
     }
     return state;
   }
+  function resumeTasks(checkpoint) {
+    if(checkpoint?.version!==1 || checkpoint.query_contract!=="compact-national-v1" ||
+       !Array.isArray(checkpoint.pending) || !Array.isArray(checkpoint.completed)) throw Error("Invalid checkpoint");
+    const clean = list => list.map(t=>{
+      if(!prefixOK(t?.prefix)||!periodOK(t?.period)) throw Error("Invalid checkpoint task");
+      return {prefix:t.prefix,period:t.period};
+    });
+    const pending=clean(checkpoint.pending),completed=clean(checkpoint.completed),byMonth=new Map();
+    if(pending.length+completed.length>5000) throw Error("Checkpoint too large");
+    for(const t of [...pending,...completed]) byMonth.set(t.period,[...(byMonth.get(t.period)||[]),t.prefix]);
+    for(const [period,prefixes] of byMonth) plan(prefixes,period,period);
+    return {pending,completed};
+  }
   async function start(options={}) {
     if(location.origin!=="https://app.powerbi.com") throw Error("Select app.powerbi.com console frame");
     if(root.monitoreringCollector) throw Error("Collector already active");
     const resumed=options.resume;
-    if(resumed && (resumed.version!==1||resumed.query_contract!=="compact-national-v1"||!Array.isArray(resumed.pending)))
-      throw Error("Invalid checkpoint");
-    const tasks=resumed?resumed.pending:plan(options.prefixes||["N06"],options.from||"2025-01",options.to||options.from||"2025-01");
-    // Revalidate resume scopes and dates; exclude overlap within each month.
-    const byMonth=new Map();
-    for(const t of tasks) {config(t,options);byMonth.set(t.period,[...(byMonth.get(t.period)||[]),t.prefix]);}
-    for(const [p,prefixes] of byMonth) plan(prefixes,p,p);
+    const clean=resumed?resumeTasks(resumed):null;
+    const tasks=clean?clean.pending:plan(options.prefixes||["N06"],options.from||"2025-01",options.to||options.from||"2025-01");
+    if(!tasks.length) throw Error("Ingen udestående opgaver i checkpointet.");
     const cfg=config(tasks[0]||{prefix:"N06",period:"2025-01"},options);
     const endpoint=new URL(cfg.api);
     if(endpoint.protocol!=="https:"||!endpoint.hostname.endsWith(".analysis.windows.net")||endpoint.pathname!=="/explore/querydata")
@@ -455,7 +464,7 @@
     try {
       authorization=await capture.promise;
       return await collect(tasks,{...options,signal:controller.signal,
-        checkpoint(s){latest=s;},
+        checkpoint(s){latest={...s,completed:[...(clean?.completed||[]),...s.completed]};options.onProgress?.(structuredClone(latest));},
         async request(task,signal) {
           const local=new AbortController();const abort=()=>local.abort();signal.addEventListener("abort",abort,{once:true});
           const timer=setTimeout(abort,60000),started=performance.now();
@@ -478,17 +487,77 @@
         },
         async emit(result,task) {
           const key=taskKey(task);
-          download(`monitorering_forbrug_${key}.csv`,result.csv,"text/csv;charset=utf-8");
-          download(`monitorering_manifest_${key}.json`,JSON.stringify(result.manifest,null,2),"application/json");
+          if(options.onExport) await options.onExport(result,task);
+          else {
+            download(`monitorering_forbrug_${key}.csv`,result.csv,"text/csv;charset=utf-8");
+            download(`monitorering_manifest_${key}.json`,JSON.stringify(result.manifest,null,2),"application/json");
+          }
           console.log("Validated download offered:",key,result.manifest.row_count);
         }
       });
     } finally {
-      capture.cleanup();authorization="";save();delete root.monitoreringCollector;
+      capture.cleanup();authorization="";options.onCheckpoint?.(structuredClone(latest));save();delete root.monitoreringCollector;
       console.log("Checkpoint download offered. Verify that every CSV/manifest pair reached disk before resuming.");
     }
   }
-  const api={buildPayload,inspectResponse,decodeResponse,recordsFromResponse,rowsToCsv,makeExport,children,plan,collect,start,SplitRequired,REGIONS,EXPECTED,config};
+  // Runs inside the user's already authorized report frame. No external scripts/storage.
+  function panel() {
+    if(document.getElementById("monitorering-panel")) return;
+    const box=document.createElement("section");box.id="monitorering-panel";
+    box.style.cssText="position:fixed;right:20px;top:20px;z-index:2147483647;background:#f6f8fb;color:#1f2933;padding:22px;border:2px solid #0033a0;border-radius:14px;width:390px;max-height:85vh;overflow:auto;font:14px system-ui;box-shadow:0 10px 40px #0004";
+    box.innerHTML=`<h2 style="margin-top:0">Monitorering · udtræk</h2>
+      <p>Alle fem regioner · DDD og regionalt tilskud · Flag T3: Ja</p>
+      <label>ATC-præfikser (adskil med komma) <input data-field="prefixes" value="N06"></label><br>
+      <label>Fra <input data-field="from" type="month" value="2025-01"></label>
+      <label>Til <input data-field="to" type="month" value="2025-01"></label>
+      <p><button data-action="start">Start udtræk</button> <button data-action="stop">Stop</button></p>
+      <label>Genoptag fra checkpoint <input data-field="resume" type="file" accept=".json"></label>
+      <p><button data-action="checkpoint">Gem checkpoint</button> <button data-action="close">Luk</button></p>
+      <p role="status">Start med N06, januar 2025. Skift derefter et filter i rapporten for adgang.</p>
+      <p>Højst 60 requests pr. kørsel. Gem begge filer for hver færdig opgave. Downloads kan gentages her, mens panelet er åbent. Genindlæsning af siden mister filerne i hukommelsen.</p>
+      <div data-files></div>`;
+    document.body.appendChild(box);
+    const field=k=>box.querySelector(`[data-field="${k}"]`),status=box.querySelector('[role="status"]');
+    let resume=null,latest=null,running=false;
+    const setStatus=text=>{status.textContent=text;};
+    field('resume').onchange=async()=>{
+      try {
+        const f=field('resume').files[0];if(!f)return;
+        if(f.size>2000000) throw Error('Checkpoint er for stort');
+        const raw=JSON.parse(await f.text()),clean=resumeTasks(raw);
+        resume={version:1,query_contract:'compact-national-v1',...clean};latest=resume;
+        setStatus(`Checkpoint: ${clean.pending.length} opgaver mangler. Start genoptager disse.`);
+      } catch(e){resume=null;setStatus(e.message);}
+    };
+    box.querySelector('[data-action="start"]').onclick=async()=>{
+      if(running)return;running=true;
+      box.querySelector('[data-action="start"]').disabled=true;
+      setStatus('Skift et filter i rapporten inden to minutter for at opsamle adgang.');
+      try {
+        await start({prefixes:field('prefixes').value.toUpperCase().split(',').map(s=>s.trim()),from:field('from').value,to:field('to').value,resume,
+          onProgress(s){latest=s;setStatus(`${s.completed.length} færdige · ${s.pending.length} mangler · ${s.requests}/60 requests i denne kørsel`);},
+          onCheckpoint(s){latest=s;resume=s;},
+          async onExport(result,task){
+            const row=document.createElement('p');row.textContent=`${taskKey(task)} · ${result.manifest.row_count} rækker `;
+            for(const [label,name,content,type] of [
+              ['Gem CSV',`monitorering_forbrug_${taskKey(task)}.csv`,result.csv,'text/csv;charset=utf-8'],
+              ['Gem manifest',`monitorering_manifest_${taskKey(task)}.json`,JSON.stringify(result.manifest,null,2),'application/json']]) {
+              const button=document.createElement('button');button.textContent=label;button.onclick=()=>download(name,content,type);row.appendChild(button);
+            }
+            box.querySelector('[data-files]').appendChild(row);
+          }});
+        setStatus('Udtræk færdigt. Gem CSV og manifest med knapperne nedenfor.');
+      } catch(e){setStatus(`${e.message}. Gem checkpoint og alle færdige filpar. Ved HTTP 401/403: genoptag og opsaml ny adgang.`);}
+      finally {running=false;box.querySelector('[data-action="start"]').disabled=false;}
+    };
+    box.querySelector('[data-action="stop"]').onclick=()=>root.monitoreringCollector?.stop();
+    box.querySelector('[data-action="checkpoint"]').onclick=()=>{
+      if(latest)download('monitorering_checkpoint.json',JSON.stringify(latest,null,2),'application/json');
+    };
+    box.querySelector('[data-action="close"]').onclick=()=>{if(!running)box.remove();else setStatus('Stop udtrækket før panelet lukkes.');};
+    return box;
+  }
+  const api={panel,resumeTasks,buildPayload,inspectResponse,decodeResponse,recordsFromResponse,rowsToCsv,makeExport,children,plan,collect,start,SplitRequired,REGIONS,EXPECTED,config};
   if(typeof module!=="undefined"&&module.exports) module.exports=api;
   else {root.Monitorering=api;console.log('Monitorering loaded. Start a small batch with Monitorering.start({prefixes:["N06"],from:"2025-01",to:"2025-01"}).');}
 })(typeof window!=="undefined"?window:globalThis);

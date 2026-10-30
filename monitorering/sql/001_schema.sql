@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY);
-INSERT INTO schema_version VALUES (1) ON CONFLICT DO NOTHING;
+INSERT INTO schema_version VALUES (2) ON CONFLICT DO NOTHING;
 CREATE SEQUENCE IF NOT EXISTS import_sequence START 1;
 CREATE TABLE IF NOT EXISTS consumption_extract (
  extract_id VARCHAR PRIMARY KEY,
@@ -38,8 +38,9 @@ CREATE TABLE IF NOT EXISTS tariff_snapshot (
  source VARCHAR NOT NULL,
  observed_at TIMESTAMPTZ NOT NULL,
  imported_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
- nominal_from DATE NOT NULL,
- nominal_to DATE NOT NULL CHECK(nominal_to>=nominal_from),
+ nominal_from DATE,
+ nominal_to DATE CHECK(nominal_to>=nominal_from),
+ CHECK((nominal_from IS NULL AND nominal_to IS NULL) OR (nominal_from IS NOT NULL AND nominal_to IS NOT NULL)),
  effective_from DATE,
  effective_to DATE,
  validity_kind VARCHAR NOT NULL CHECK(validity_kind IN ('source_interval','observed_only')),
@@ -49,7 +50,7 @@ CREATE TABLE IF NOT EXISTS tariff_snapshot (
  archive_raw VARCHAR NOT NULL,
  archive_metadata VARCHAR NOT NULL,
  CHECK((validity_kind='observed_only' AND effective_from IS NULL AND effective_to IS NULL) OR
-       (validity_kind='source_interval' AND effective_from IS NOT NULL AND effective_to>=effective_from))
+       (validity_kind='source_interval' AND nominal_from IS NOT NULL AND effective_from IS NOT NULL AND effective_to>=effective_from))
 );
 CREATE TABLE IF NOT EXISTS tariff_product (
  snapshot_id VARCHAR REFERENCES tariff_snapshot(snapshot_id),
