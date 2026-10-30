@@ -93,11 +93,12 @@ price_projection <- function(prices,months,year,today=Sys.Date()) {
     volume<-if(complete)mean(d$ddd)*(12-last) else NA_real_
     price<-d$tsp_per_ddd[1]
     eligible<-complete && is.finite(volume) && volume>=0 && !is.na(price) &&
-      all(d$linkage_status=='review_ddd_definition_and_price_date')
+      all(d$linkage_status %in% c('review_ddd_definition_and_price_date','estimated_from_price_ratio'))
     data.frame(atc5=d$atc5[1],varenummer=d$varenummer[1],recent_ddd=observed_sum(d$ddd),
       future_ddd=volume,price_per_ddd=price,modelled_future_basis_kr=if(eligible)volume*price else NA_real_,
+      ddd_provenance=if(any(d$linkage_status=='estimated_from_price_ratio'))'unverified_ratio'else 'source_or_verified',
       status=if(!complete)'Manglende nylig produktmåling'else if(!eligible)'Intet egnet pris/DDD-grundlag'else 'Scenarie beregnet')
   }))
   list(available=TRUE,products=products,remaining=12-last,
-    reason='Resten af året: gennemsnitlig produkt-DDD i seneste tre valgte afsluttede måneder × resterende måneder × senest observeret tilskudspris/DDD. Uændret pris og fortsat produktanvendelse er antagelser; nye/udgåede produkter modelleres ikke uden tilstrækkelige målinger.')
+    reason='Resten af året: gennemsnitlig produkt-DDD i seneste tre valgte afsluttede måneder × resterende måneder × senest observeret tilskudspris/DDD. Afledt DDD kan indgå og er påvirket af kildeafrunding. Uændret pris og fortsat produktanvendelse er antagelser; nye/udgåede produkter modelleres ikke uden tilstrækkelige målinger.')
 }

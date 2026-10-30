@@ -29,8 +29,8 @@ ui <- fluidPage(
     tabPanel('Takster og kobling',p('Takster med ukendt gyldighed vises i historikken, men bruges ikke som historiske priser. Dagsvægtning antager jævnt salg over måneden.'),DTOutput('tariffs'),h4('Historisk kobling'),DTOutput('historical'),h4('Produkt- og prisændringer'),DTOutput('changes')),
     tabPanel('Fremskrivning og scenarie',h4('Fremskrivning af faktisk regionalt tilskud'),verbatimTextOutput('forecast'),
       h4('Prisbaseret scenarie · observeret DDD × senest observeret tilskudspris/DDD'),
-      p('Dette er et prisgrundlag ved observeret mængde, ikke faktisk regionalt tilskud og ikke en valideret prognose. Prisen tilbagedateres ikke. Manglende eller usikkert DDD-grundlag udelades.'),
-      p('Matchandelene nedenfor gælder en kontrolleret pris/DDD og samme ATC; DDD-definitionens sammenlignelighed skal stadig vurderes.'),
+      p('Dette er et prisgrundlag ved observeret mængde, ikke faktisk regionalt tilskud og ikke en valideret prognose. Prisen tilbagedateres ikke. Afledt DDD = ekspeditionspris / ekspeditionspris pr. DDD kan bruges som estimat; kildeafrunding kan påvirke resultatet. Manglende grundlag udelades.'),
+      p('Matchandelene nedenfor gælder en tilgængelig pris/DDD og samme ATC; DDD-definitionens sammenlignelighed skal stadig vurderes.'),
       verbatimTextOutput('scenario'),DTOutput('current'),h4('Prisbaseret scenarie for resten af året'),verbatimTextOutput('future_scenario'),DTOutput('future_products'))))))
 server <- function(input,output,session) {
  # One immutable object per read. A failed refresh keeps the last validated object.
@@ -94,7 +94,8 @@ server <- function(input,output,session) {
      recent_ddd='Observeret DDD i tre måneder',future_ddd='Forventet DDD resten af året',price_per_ddd='Anvendt tilskudspris/DDD (kr.)',modelled_future_basis_kr='Prisgrundlag resten af året (kr.)',esp='Ekspeditionspris (kr.)',tsp='Tilskudspris (kr.)',previous_esp='Forrige ekspeditionspris (kr.)',previous_tsp='Forrige tilskudspris (kr.)',change='Ændring')
    if('validity_kind' %in% names(d)) d$validity_kind<-ifelse(d$validity_kind=='source_interval','Dokumenteret prisinterval','Kun observeret pris')
    if('change' %in% names(d)) d$change<-unname(c(added='Tilkommet',removed='Udgået',changed='Ændret',unchanged='Uændret')[d$change])
-   if('linkage_status' %in% names(d)) d$linkage_status<-unname(c(missing_product='Intet produktmatch',atc_mismatch='ATC-uoverensstemmelse',no_valid_ddd_price='Intet verificeret DDD-prisgrundlag',review_ddd_definition_and_price_date='Kontrollér DDD-definition og prisdato')[d$linkage_status])
+   if('linkage_status' %in% names(d)) d$linkage_status<-unname(c(estimated_from_price_ratio='Estimat fra prisforhold · kildeafrunding',missing_product='Intet produktmatch',atc_mismatch='ATC-uoverensstemmelse',no_valid_ddd_price='Intet verificeret DDD-prisgrundlag',review_ddd_definition_and_price_date='Kontrollér DDD-definition og prisdato')[d$linkage_status])
+   if('ddd_provenance' %in% names(d)) d$ddd_provenance<-ifelse(d$ddd_provenance=='unverified_ratio','Afledt af prisforhold · estimat',d$ddd_provenance)
    names(d)<-ifelse(names(d) %in% names(labels),unname(labels[names(d)]),names(d))
    table<-datatable(d,rownames=FALSE,options=list(pageLength=12,lengthMenu=c(12,25,50,100),scrollX=TRUE,
      language=list(search='Søg:',lengthMenu='Vis _MENU_ rækker',info='_START_–_END_ af _TOTAL_ rækker',infoEmpty='Ingen rækker',
@@ -151,6 +152,7 @@ server <- function(input,output,session) {
    paste('Rækker med prisgrundlag:',sum(ok),'/',nrow(d),
      '\nObserveret DDD med prisgrundlag:',observed_sum(d$ddd[ok]),'/',observed_sum(d$ddd),
      '\nPrisgrundlag på matchede rækker:',observed_sum(d$current_price_subsidy_basis_kr),'kr.',
+     '\nHeraf rækker med afledt DDD (estimat):',sum(ok & d$ddd_provenance=='unverified_ratio',na.rm=TRUE),
      '\nUdeladte rækker:',sum(!ok),'· manglende/ukendt DDD eller pris, ATC-uoverensstemmelse eller manglende produkt.',
      '\nSe kolonnen Anvendt pris observeret (UTC) for prisens observationsdato. Ingen automatisk antagelse om, at prisen fortsat gælder.')
  })

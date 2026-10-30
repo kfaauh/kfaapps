@@ -26,6 +26,7 @@ jobs:
       - run: node --test monitorering/tests/export.test.cjs
       - run: node --test powerbi/tests/export.test.cjs
       - run: Rscript -e 'install.packages(c("shiny", "bslib", "DT"))'
+      - run: Rscript monitorering/tests/derived_ddd.R
       - run: Rscript monitorering/tests/publication.R
       - run: Rscript monitorering/tests/integration.R
       - run: Rscript monitorering/tests/tariff_archive.R

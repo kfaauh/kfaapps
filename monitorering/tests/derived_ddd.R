@@ -1,0 +1,37 @@
+# Synthetic ratio prices; never claim independently verified package DDD.
+script <- sub('^--file=','',commandArgs()[grepl('^--file=',commandArgs())][1])
+source(file.path(dirname(normalizePath(script)),'..','R','core.R'))
+work<-tempfile('derived-ddd-');dir.create(work)
+cfg<-list(db=file.path(work,'test.duckdb'),archive=file.path(work,'archive'),log=file.path(work,'events.jsonl'))
+f<-file.path(work,'prices.csv');meta<-file.path(work,'meta.json')
+writeLines(c('varenummer;atc;esp;tsp;source_esp_per_ddd','019307;N06AA04;20;10;2','070374;N06AA04;0;10;2'),f)
+m<-list(schema_version=1,source='synthetic',observed_at='2025-01-01T00:00:00Z',nominal_from='2025-01-01',nominal_to='2025-01-31',effective_from='2025-01-01',effective_to='2025-01-31',validity_kind='source_interval',complete=TRUE,completeness_evidence='synthetic fixture',validity_evidence='synthetic full-month interval')
+jsonlite::write_json(m,meta,auto_unbox=TRUE)
+with_monitor_db(cfg,TRUE,function(con){
+ init_db(con)
+ fix<-file.path(monitor_root,'tests','fixtures')
+ import_consumption(con,cfg,file.path(fix,'monitorering_forbrug_N06_2025-01.csv'),file.path(fix,'monitorering_manifest_N06_2025-01.json'))
+ import_tariff(con,cfg,f,meta)
+ p<-DBI::dbGetQuery(con,"SELECT * FROM tariff_product WHERE varenummer='019307'")
+ stopifnot(p$ddd_per_pack==10,p$ddd_provenance=='unverified_ratio',is.na(p$tsp_per_ddd))
+ check<-function(){
+  z<-DBI::dbGetQuery(con,"SELECT * FROM v_consumption_current_price WHERE varenummer='019307'")
+  stopifnot(z$tsp_per_ddd==1,z$current_price_subsidy_basis_kr==z$ddd,z$linkage_status=='estimated_from_price_ratio')
+  h<-DBI::dbGetQuery(con,"SELECT * FROM v_consumption_price_month WHERE varenummer='019307'")
+  stopifnot(h$compatible_tsp_days==0,is.na(h$modelled_subsidy_basis_kr))
+  bad<-DBI::dbGetQuery(con,"SELECT * FROM v_consumption_current_price WHERE varenummer='070374'")
+  stopifnot(is.na(bad$tsp_per_ddd))
+ }
+ check()
+ # Emulate old imported snapshot. Rebuild views without modifying source history.
+ DBI::dbExecute(con,"UPDATE tariff_product SET ddd_per_pack=NULL,ddd_provenance='missing' WHERE varenummer='019307'")
+ init_db(con);check()
+ publish_analysis(con,file.path(work,'analysis.rds'))
+ z<-readRDS(file.path(work,'analysis.rds'))$tables$current_prices
+ z<-z[z$varenummer=='019307',];z<-z[rep(1,3),];z$month<-as.Date(c('2026-01-01','2026-02-01','2026-03-01'))
+ months<-data.frame(month=sprintf('2026-%02d',1:3),status='query_complete_population_unverified')
+ projected<-price_projection(z,months,2026,as.Date('2026-04-01'))
+ stopifnot(projected$available,projected$products$ddd_provenance=='unverified_ratio',!is.na(projected$products$modelled_future_basis_kr))
+})
+unlink(work,recursive=TRUE)
+cat('PASS: derived scenario, legacy snapshot, strict history, invalid denominator, publication and projection.\n')
