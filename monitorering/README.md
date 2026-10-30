@@ -170,3 +170,7 @@ Rscript monitorering/scripts/import_archived_tariff.R /sti/til/Taksten_2026-08-0
 ```
 
 Kommandoen læser originalfilen uden at ændre den og arkiverer priser og alle råfelter i databasen. Nominel og effektiv gyldighed forbliver NULL. Filens ændringstid bruges kun som tydeligt mærket proxy for indsamlingstid, ikke som verificeret prisgyldighed. Fuldstændighed er ukendt (`complete=false`), så disse arkiver indgår ikke i automatiske historiske eller aktuelle prisberegninger. Gentagen import af samme uændrede fil er idempotent. De kan senere gennemgås og suppleres med dokumenteret kildeinformation. Filnavnets dato bruges aldrig til at gætte en takstperiode.
+
+## Samlet dagligt prisjob
+
+Se [DAILY_TARIFF.md](docs/DAILY_TARIFF.md) for den nye strenge indsamler, manuel serviceprøve og efterfølgende aktivering. Den gamle opt-in-wrapper bevares til fejlsøgning; den er ikke det daglige job.

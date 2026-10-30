@@ -28,4 +28,6 @@ jobs:
       - run: Rscript monitorering/tests/integration.R
       - run: Rscript monitorering/tests/tariff_archive.R
       - run: Rscript monitorering/tests/fetch_eval.R
+      - run: Rscript monitorering/tests/tariff_job.R
+      - run: python3 monitorering/tests/test_tariff_admin.py
       - run: bash monitorering/tests/cli.sh
