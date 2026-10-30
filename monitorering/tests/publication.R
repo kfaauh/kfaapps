@@ -61,3 +61,22 @@ shiny::testServer(app,{
  stopifnot(monthly()$ddd[1]==25198980,nzchar(problem()))
 })
 cat('PASS: atomic publication, strict umask, retained previous file, concurrent reader, coverage, forecast guards and Shiny startup/reactives.\n')
+# Optional post-tariff publication uses the same writer lock and keeps last good file.
+source(file.path(monitor_root,'R','tariff_job.R'))
+stopifnot(is.null(republish_tariff_analysis(cfg,'')))
+republish_tariff_analysis(cfg,path)
+before<-sha(path)
+error<-try(republish_tariff_analysis(cfg,path,before_replace=function(p)stop('synthetic failure')),silent=TRUE)
+stopifnot(inherits(error,'try-error'),identical(before,sha(path)))
+contender<-file.path(work,'contender.R')
+writeLines(c(paste0('source(',deparse(file.path(monitor_root,'R','core.R')),')'),
+ paste0('source(',deparse(file.path(monitor_root,'R','tariff_job.R')),')'),
+ 'a<-commandArgs(TRUE)',
+ 'cfg<-list(db=a[1],archive=a[2],log=a[3])',
+ 'error<-try(republish_tariff_analysis(cfg,a[4]),silent=TRUE)',
+ 'stopifnot(inherits(error,"try-error"))'),contender)
+with_monitor_db(cfg,TRUE,function(con) {
+  status<-system2(file.path(R.home('bin'),'Rscript'),c(shQuote(contender),shQuote(cfg$db),shQuote(cfg$archive),shQuote(cfg$log),shQuote(path)))
+  stopifnot(status==0,identical(before,sha(path)))
+})
+cat('PASS: opt-in post-tariff publication, writer contention and retained last good analysis.\n')

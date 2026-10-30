@@ -7,7 +7,7 @@ const {chromium}=require('playwright');const assert=require('node:assert/strict'
   await p.getByRole('link',{name:'Forbrug og tilskud',exact:true}).click();
   await p.locator('#monthly').getByText('25.198.980,00',{exact:true}).waitFor();
   await p.locator('#monthly').getByText('80.632.838,00',{exact:true}).waitFor();
-  await p.locator('#to').fill('2025-02');await p.locator('#to').press('Tab');
+  await p.locator('#to').selectOption('2025-02');
   await p.locator('#monthly').getByText('Ingen indlæst afgrænsning',{exact:true}).waitFor();
   for(const tab of ['Takster og kobling','Fremskrivning og scenarie','Datastatus']){
    await p.getByRole('link',{name:tab,exact:true}).click();await p.waitForTimeout(250);

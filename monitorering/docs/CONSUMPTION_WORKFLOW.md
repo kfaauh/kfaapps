@@ -71,7 +71,7 @@ sudo -u shiny env R_LIBS_USER=/home/au323402/monitorering-r-library /usr/bin/Rsc
 
 Åbn `/monitorering/` og bekræft at appen faktisk starter, at N06/januar viser referencesummerne (eller dokumenteret revision), og at februar vises manglende. Kontroller også `/kfaapps/lmgrupper2/` på dens faktiske URL efter installation. Se Shiny-log ved fejl; filtilstedeværelse er ikke en accepttest af appopstart. Eksisterende homepage ændres ikke.
 
-Appen genlæser filen hvert 30. sekund og bevarer seneste validerede objekt ved læsefejl. Ny session uden læsbar fil viser ventestatus. Ved publicering af ny takst skal operatøren foreløbigt køre `monitor.R publish-analysis /var/lib/monitorering-public/analysis.rds`; der installeres ingen ny timer eller ændring af takstjobbet. Datastatus viser derfor **senest indlæste/publicerede** takst og er ikke en kontrol af servicekvitteringen `last-tariff-success.json`.
+Appen genlæser filen hvert 30. sekund og bevarer seneste validerede objekt ved læsefejl. Ny session uden læsbar fil viser ventestatus. Takstjobbet kan nu genpublicere analysefilen med `MONITOR_PUBLICATION` og eksplicit skriveret i systemd; se `OBSERVATIONS_UPDATE.md`. Indtil det er aktiveret, kræves manuel `monitor.R publish-analysis /var/lib/monitorering-public/analysis.rds`. Datastatus viser derfor **senest indlæste/publicerede** takst og er ikke en kontrol af servicekvitteringen `last-tariff-success.json`.
 
 Rollback af publiceret analysedata, under samme operatør og uden aktiv publicering:
 
