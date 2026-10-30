@@ -26,7 +26,7 @@ as_num <- function(x) {
 cat_data <- read_excel(cat_file)
 
 # 1) Hent seneste Medicinpriser-fil
-url_price <- "https://sundhedsdatabank.dk/medicin/medicinpriser"
+url_price <- "https://sundhedsdatabank.dk/medicin/medicinpriser-menu/medicinpriser"
 
 page <- read_html(url_price)
 nodes <- page %>% html_elements("a")
