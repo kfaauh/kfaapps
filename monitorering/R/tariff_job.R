@@ -170,3 +170,13 @@ publish_tariff <- function(source,target,backup_dir,restart,restart_fn=function(
   }
   invisible(backup)
 }
+# Explicit opt-in: existing tariff services keep working until their operator adds
+# MONITOR_PUBLICATION and permits this directory in the systemd sandbox.
+republish_tariff_analysis <- function(cfg,destination=Sys.getenv('MONITOR_PUBLICATION',''),
+                                      before_replace=function(path) NULL) {
+  if(!nzchar(destination)) return(NULL)
+  with_monitor_db(cfg,TRUE,function(con) {
+    validate_db(con,cfg)
+    publish_analysis(con,destination,before_replace=before_replace)
+  })
+}

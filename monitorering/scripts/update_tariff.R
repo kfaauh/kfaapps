@@ -35,7 +35,8 @@ job <- function() {
  meta <- file.path(run,'metadata.json');jsonlite::write_json(m,meta,auto_unbox=TRUE,pretty=TRUE,null='null')
  id <- with_monitor_db(cfg,TRUE,function(con) {init_db(con);import_tariff(con,cfg,env$xlsx_file,meta)})
  app_backup <- publish_tariff(env$rds_file,target,file.path(dirname(cfg$db),'app-backups'),restart)
- summary <- list(status='published',time=format(Sys.time(),'%Y-%m-%dT%H:%M:%SZ',tz='UTC'),snapshot_id=id,
+ analysis_publication <- republish_tariff_analysis(cfg)
+ summary <- list(analysis_publication=analysis_publication,status='published',time=format(Sys.time(),'%Y-%m-%dT%H:%M:%SZ',tz='UTC'),snapshot_id=id,
    rows=nrow(env$samlet),run=run,nominal_period=env$.job_period,app_backup=app_backup,group_checks=env$group_checks)
  tmp <- tempfile(tmpdir=dirname(cfg$db));jsonlite::write_json(summary,tmp,auto_unbox=TRUE,pretty=TRUE,null='null')
  must(file.rename(tmp,file.path(dirname(cfg$db),'last-tariff-success.json')),'Could not record publication receipt')

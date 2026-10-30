@@ -61,3 +61,48 @@ shiny::testServer(app,{
  stopifnot(monthly()$ddd[1]==25198980,nzchar(problem()))
 })
 cat('PASS: atomic publication, strict umask, retained previous file, concurrent reader, coverage, forecast guards and Shiny startup/reactives.\n')
+# Optional post-tariff publication uses the same writer lock and keeps last good file.
+source(file.path(monitor_root,'R','tariff_job.R'))
+stopifnot(is.null(republish_tariff_analysis(cfg,'')))
+republish_tariff_analysis(cfg,path)
+before<-sha(path)
+error<-try(republish_tariff_analysis(cfg,path,before_replace=function(p)stop('synthetic failure')),silent=TRUE)
+stopifnot(inherits(error,'try-error'),identical(before,sha(path)))
+contender<-file.path(work,'contender.R')
+writeLines(c(paste0('source(',deparse(file.path(monitor_root,'R','core.R')),')'),
+ paste0('source(',deparse(file.path(monitor_root,'R','tariff_job.R')),')'),
+ 'a<-commandArgs(TRUE)',
+ 'cfg<-list(db=a[1],archive=a[2],log=a[3])',
+ 'error<-try(republish_tariff_analysis(cfg,a[4]),silent=TRUE)',
+ 'stopifnot(inherits(error,"try-error"))'),contender)
+with_monitor_db(cfg,TRUE,function(con) {
+  status<-system2(file.path(R.home('bin'),'Rscript'),c(shQuote(contender),shQuote(cfg$db),shQuote(cfg$archive),shQuote(cfg$log),shQuote(path)))
+  stopifnot(status==0,identical(before,sha(path)))
+})
+cat('PASS: opt-in post-tariff publication, writer contention and retained last good analysis.\n')
+# Synthetic UI calendar: repeated fixture volumes are NOT live 2026 observations.
+synthetic<-readRDS(path)
+for(name in c('consumption','historical_prices','current_prices')) {
+  original<-synthetic$tables[[name]]
+  synthetic$tables[[name]]<-do.call(rbind,lapply(1:7,function(i){
+    d<-original;d$month<-as.Date(sprintf('2026-%02d-01',i));d
+  }))
+}
+original<-synthetic$tables$extracts[1,,drop=FALSE]
+synthetic$tables$extracts<-do.call(rbind,lapply(1:9,function(i){
+  d<-original;d$month<-as.Date(sprintf('2026-%02d-01',i));if(i>7)d$row_count<-0L;d
+}))
+validate_analysis_bundle(synthetic);saveRDS(synthetic,path)
+# Fix the app's clock for stable calendar assertions in future CI years.
+Sys.Date<-function()as.Date('2026-10-30')
+shiny::testServer(shiny::shinyAppDir(app_path),{
+ session$setInputs(prefix='N06',from='2026-01',to='2026-09',product='',level='7')
+ stopifnot(grepl('2026-07',output$latest_observation),
+  grepl('Scenarie august–december 2026',output$observed_estimate),
+  grepl('Manglende produktmålinger',output$observed_estimate),
+  grepl('Utilstrækkeligt',output$forecast),
+  grepl('Scenarie august–december 2026',output$future_heading),
+  !is.null(output$estimate_series),!is.null(output$year_series),!is.null(output$year_comparison))
+})
+rm(Sys.Date)
+cat('PASS: synthetic July observation boundary, separate estimate text, strict forecast guard and comparison/scenario plots in Shiny.\n')

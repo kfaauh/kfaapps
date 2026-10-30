@@ -16,7 +16,7 @@ Kør derefter:
 /usr/bin/Rscript monitorering/scripts/monitor.R init
 /usr/bin/Rscript monitorering/scripts/monitor.R publish-analysis /var/lib/monitorering-public/analysis.rds
 sudo install -o root -g root -m 0644 monitorering-app/app.R monitorering-app/analysis.R /srv/shiny-server/monitorering/
-sudo touch /srv/shiny-server/monitorering/restart.txt
+sudo touch /srv/shiny-server/monitorering/tmp/restart.txt
 ```
 
 `init` genopbygger SQL-visningerne under writer-lås; det sletter ikke indlæste observationer. Brug appens genindlæsning og kontrollér matchantal, estimerede rækker og uændrede tilskudssummer. Historisk prisgrundlag skal fortsat være tomt uden dokumenterede gyldighedsintervaller og verificeret DDD.

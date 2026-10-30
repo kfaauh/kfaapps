@@ -54,3 +54,12 @@ cat "$HOME/monitorering-data/last-tariff-success.json"
 Successful oneshot services normally show `inactive (dead)` after exit; check `Result=success`, the receipt and the journal. Failed updates remain visible in systemd/journal; no email/Slack alert is configured. Follow up failures and disk space. To stop scheduling: `sudo systemctl disable --now monitorering-priser.timer` (this does not undo an already completed publication). Avoid changing checkout branches while a service run is active. After changing code, rerun local/offline tests and one manual service run before relying on the schedule.
 
 Source HTML may change. If the zero-result wording/container does not match, the job deliberately rejects publication and leaves the current app data in place. Inspect its private diagnostic and update the classifier using a real sanitized source example; do not turn all HTML into zero.
+
+## Optional Monitorering analysis publication
+
+See [OBSERVATIONS_UPDATE.md](OBSERVATIONS_UPDATE.md) for the opt-in
+`MONITOR_PUBLICATION` setting and the systemd writable-directory drop-in.
+After tariff-app publication, the existing writer lock guards analysis validation
+and atomic RDS publication. A failure preserves the old analysis and fails the
+service; the tariff app may already have been updated. The success receipt now
+includes `analysis_publication` when enabled. No credentials need replacing.
