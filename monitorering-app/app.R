@@ -74,7 +74,7 @@ server <- function(input,output,session) {
    from<-isolate(input$from);to<-isolate(input$to)
    if(is.null(from)) from<-max(months[1],paste0(substr(last,1,4),'-01'))
    if(is.null(to)) to<-last
-   tagList(selectInput('from','Fra måned',choices,selected=from),selectInput('to','Til måned',choices,selected=to))
+   tagList(selectInput('from','Fra måned',choices,selected=from,selectize=FALSE),selectInput('to','Til måned',choices,selected=to,selectize=FALSE))
  })
  filters <- reactive({
    p<-toupper(trimws(input$prefix));a<-input$from;b<-input$to;v<-trimws(input$product)
