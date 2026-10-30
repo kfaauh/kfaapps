@@ -1,0 +1,16 @@
+[Unit]
+Description=Monitorering validated consumption inbox import
+After=local-fs.target
+[Service]
+Type=oneshot
+User=monitorering
+Group=monitorering
+WorkingDirectory=/opt/kfaapps
+EnvironmentFile=/etc/monitorering.env
+ExecStart=/usr/bin/Rscript /opt/kfaapps/monitorering/scripts/monitor.R import-inbox /var/lib/monitorering/inbox
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/monitorering /var/log/monitorering

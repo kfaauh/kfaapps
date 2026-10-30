@@ -1,0 +1,8 @@
+{
+  "description": "Reported historic checks. Only Test 8 has supplied raw observations. Never synthesize rows to match these aggregates.",
+  "test4": {"prefix":"N06BA04","from":"2025-01","to":"2025-12","ddd":42508263,"regionalt_tilskud_kr":272790640,"product_months":3336},
+  "test5": {"from":"2025-01","to":"2025-12","rows":25512,"methylphenidate_ddd":42508263,"methylphenidate_subsidy":272790640,"scope_note":"Five ATC5 codes; full code list and raw output not supplied"},
+  "test6": {"from":"2025-01","to":"2025-12","rows":5935,"ddd":682645581,"regionalt_tilskud_kr":348766685,"scope_note":"Same five ATC5 codes, zero-filtered; raw output not supplied"},
+  "test7": {"prefix":"N06B","from":"2025-01","to":"2025-12","atc5_count":7,"rows":4461,"ddd":71730427,"regionalt_tilskud_kr":769438733},
+  "test8": {"prefix":"N06","from":"2025-01","to":"2025-01","atc5_count":29,"rows":1143,"ddd":25198980,"regionalt_tilskud_kr":80632838,"ddd_rows":576,"subsidy_rows":567,"methylphenidate_january_ddd":3340703}
+}

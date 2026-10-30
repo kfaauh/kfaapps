@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "source": "Sundhedsdatabanken PowerBI Medicinsalg",
+  "extracted_at": "2026-10-30T09:36:42.895Z",
+  "atc_prefix": "N06",
+  "period": "2025-01",
+  "region_filter": [
+    "Region Hovedstaden",
+    "Region Sjælland",
+    "Region Syddanmark",
+    "Region Midtjylland",
+    "Region Nordjylland"
+  ],
+  "metrics": [
+    "ddd",
+    "regionalt_tilskud_kr"
+  ],
+  "zero_filter": true,
+  "omitted_zero_or_blank_values": "Fravær er ikke automatisk dokumenteret nul",
+  "complete_query_response": true,
+  "row_count": 1143,
+  "atc5_count": 29,
+  "total_ddd": 25198980,
+  "total_regionalt_tilskud_kr": 80632838,
+  "http": 200,
+  "duration_ms": 11165,
+  "response_kb": 37,
+  "max_group_rows": 1143
+}

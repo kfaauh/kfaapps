@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "source": "erhverv.medicinpriser.dk / existing fetch_data2.R",
+  "observed_at": "2026-10-30T10:00:00Z",
+  "nominal_from": "2026-10-26",
+  "nominal_to": "2026-11-08",
+  "validity_kind": "observed_only",
+  "complete": false,
+  "notes": "EXAMPLE ONLY. Replace with observed source metadata. A capture date is not a price effective date. Do not set complete without evidence for all requested groups."
+}
