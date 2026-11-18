@@ -73,7 +73,7 @@ export MONITOR_LOG="$MONITOR_RUNTIME/events.jsonl"
 Rscript monitorering/scripts/monitor.R init
 Rscript monitorering/scripts/import_and_publish.R "${PILOT_INBOX:?Angiv mappen med pilotens filpar}" "$MONITOR_RUNTIME/analysis.rds"
 Rscript monitorering/scripts/monitor.R coverage N06BA04 2025-01 2025-01 MJ
-Rscript monitorering/scripts/publication_metrics.R "$MONITOR_RUNTIME/analysis.rds" N06BA04
+Rscript monitorering/scripts/publication_metrics.R "$MONITOR_RUNTIME/analysis.rds" N06BA04 MJ
 MONITOR_PUBLICATION="$MONITOR_RUNTIME/analysis.rds" Rscript -e 'shiny::runApp("monitorering-app")'
 ```
 

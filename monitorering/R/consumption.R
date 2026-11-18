@@ -41,8 +41,9 @@ validate_consumption <- function(csv,manifest) {
     must(all(d$region %in% regional_codes),'Unknown regional observation code')
     must(is.list(m$region_metrics) && length(m$region_metrics)==length(regional_codes) &&
          setequal(names(m$region_metrics),regional_codes),'Expected five regional control summaries')
-  } else d$region <- rep('DK',nrow(d))
-  must(!anyDuplicated(d[c(columns[1:4],'region')]),'Duplicate observation key')
+  }
+  key <- c(columns[1:4],if(regional) 'region')
+  must(!anyDuplicated(d[key]),'Duplicate observation key')
   must(length(unique(d$atc5))==m$atc5_count,'CSV/manifest ATC count mismatch')
   for (metric in consumption_metrics) {
     expected <- m[[paste0('total_',metric)]]
@@ -86,13 +87,14 @@ import_consumption <- function(con,cfg,csv,manifest) {
       params=list(id,m$source,m$extracted_at,m$atc_prefix,as.character(month_date(m$period)),
                   x$csv_sha,x$manifest_sha,nrow(d),json(m),ac,am))
     if(regional_schema) {
+      row_regions <- if(identical(x$regions,'DK')) rep('DK',nrow(d)) else d[['region']]
       for(region in x$regions) DBI::dbExecute(con,'INSERT INTO consumption_extract_region VALUES (?,?,?)',
-        params=list(id,region,sum(d$region==region)))
+        params=list(id,region,sum(row_regions==region)))
     }
     if (nrow(d)) {
       stage <- data.frame(extract_id=id,atc5=d$atc5,varenummer=d$varenummer,
                           month=paste0(d$aar_maaned,'-01'),metric=d$maaling,value=d$vaerdi)
-      if(regional_schema) stage$region <- d$region
+      if(regional_schema) stage$region <- row_regions
       DBI::dbWriteTable(con,'consumption_stage',stage,temporary=TRUE,overwrite=TRUE)
       DBI::dbExecute(con,paste('INSERT INTO consumption_observation SELECT extract_id,atc5,varenummer,',
         'month::DATE,metric,value::DECIMAL(28,8)',if(regional_schema) ',region' else '', 'FROM consumption_stage'))
