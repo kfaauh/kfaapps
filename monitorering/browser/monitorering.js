@@ -4,6 +4,8 @@
   const REGIONS = ["Region Hovedstaden","Region Sjælland","Region Syddanmark","Region Midtjylland","Region Nordjylland"];
   const METRICS = ["Mængdeforbrug","Regionalt tilskud"];
   const EXPECTED = ["DimLaegemiddel.ATC5_Kode_Tekst","DimLaegemiddel.Varenummer","DimDato.År_ID","DimDato.MånedÅr","Opgørelse.CalculationItemColumn 1","# Measures.SelectMeasure1"];
+  const REGION_FIELD = "DimBorgerDemografi.Bopælsregion";
+  const GROUPED_EXPECTED = [...EXPECTED.slice(0,-1),REGION_FIELD,EXPECTED.at(-1)];
   const DEFAULT = {
     api:"https://wabi-west-europe-g-primary-redirect.analysis.windows.net/explore/querydata",
     dataset:"1bebf468-3f1e-4596-8d94-c43c4cce0759",
@@ -21,6 +23,8 @@
   }
   function buildPayload(task,options={}) {
     const CFG=config(task,options);
+    if(task.region!==undefined && !REGIONS.includes(task.region)) throw Error("Unknown probe region");
+    if(task.groupByRegion && task.region!==undefined) throw Error("Conflicting region probe modes");
   function literal(v) {
     return typeof v === "number" ? `${v}L` :
       "'" + String(v).replaceAll("\\", "\\\\")
@@ -103,13 +107,16 @@
         Name: "# Measures.SelectMeasure1"
       }
     ];
+    if(task.groupByRegion) selections.splice(5,0,selectCol("geo","Bopælsregion",REGION_FIELD));
 
-    const order = [
+    const orderFields = [
       ["lm", "ATC5_Kode_Tekst"],
       ["lm", "Varenummer"],
       ["dato", "MånedÅr"],
       ["opg", "CalculationItemColumn 1"]
-    ].map(([src, prop]) => ({
+    ];
+    if(task.groupByRegion) orderFields.push(["geo","Bopælsregion"]);
+    const order = orderFields.map(([src, prop]) => ({
       Direction: 1,
       Expression: field(src, prop)
     }));
@@ -139,7 +146,7 @@
                   filterIn("dato", "MånedÅr", [CFG.month]),
                   filterIn("kron", "CalculationItemColumn 1",
                     ["Ingen valg"]),
-                  filterIn("geo", "Bopælsregion", REGIONS),
+                  filterIn("geo", "Bopælsregion", task.region===undefined ? REGIONS : [task.region]),
                   prefixFilter(),
                   filterIn("lm", "Flag_T3", ["Ja"]),
                   nonzeroFilter()
@@ -149,7 +156,7 @@
               Binding: {
                 Primary: {
                   Groupings: [{
-                    Projections: [0, 1, 2, 3, 4, 5]
+                    Projections: selections.map((_,i)=>i)
                   }]
                 },
                 DataReduction: {
@@ -254,17 +261,17 @@
     }
     walk(x); return {continuation,errors};
   }
-  function decodeResponse(response, limit=30000) {
+  function decodeResponse(response, limit=30000, expected=EXPECTED) {
     const state=inspectResponse(response);
     if(state.errors.length) throw Error("PowerBI error response: "+state.errors.join(","));
     if(state.continuation) throw new SplitRequired("Continuation requires disjoint subdivision");
     if(response.results?.length!==1) throw Error("Expected exactly one query result");
     const data=response.results[0]?.result?.data;
     const selects=data?.descriptor?.Select;
-    if(!Array.isArray(selects)||JSON.stringify(selects.filter(Boolean).map(x=>x.Name))!==JSON.stringify(EXPECTED))
+    if(!Array.isArray(selects)||JSON.stringify(selects.map(x=>x?.Name))!==JSON.stringify(expected))
       throw Error("Unexpected query descriptor");
     const keys=selects.map(s=>s.Value);
-    if(keys.some(k=>typeof k!=="string")||new Set(keys).size!==6) throw Error("Missing descriptor value keys");
+    if(keys.some(k=>typeof k!=="string")||new Set(keys).size!==expected.length) throw Error("Missing descriptor value keys");
     if(!Array.isArray(data?.dsr?.DS)||!data.dsr.DS.length) throw Error("Missing DSR dataset");
     const output=[];
     for(const ds of data.dsr.DS) {
@@ -314,21 +321,27 @@
   }
   function recordsFromResponse(response,task,options={}) {
     const cfg=config(task,options), seen=new Set();
-    return decodeResponse(response,cfg.limit).map(r=>{
+    const expected=task.groupByRegion?GROUPED_EXPECTED:EXPECTED;
+    return decodeResponse(response,cfg.limit,expected).map(r=>{
       const atc5=String(r[0]??"").slice(0,7);
       const rawProduct=String(r[1]??"");
       if(!/^\d{1,6}$/.test(rawProduct)) throw Error("Invalid product number");
       const varenummer=rawProduct.padStart(6,"0");
-      const rawValue=r[5]==null?"":String(r[5]).replace(/[DL]$/,"");
+      const region=task.groupByRegion?r[5]:task.region;
+      if((task.groupByRegion||task.region!==undefined)&&!REGIONS.includes(region)) throw Error("Unknown or blank response region");
+      const measure=r.at(-1);
+      const rawValue=measure==null?"":String(measure).replace(/[DL]$/,"");
       const value=Number(rawValue);
       if(!/^[A-Z][0-9]{2}[A-Z]{2}[0-9]{2}$/.test(atc5)||!atc5.startsWith(cfg.prefix)) throw Error("ATC outside scope");
       if(Number(r[2])!==cfg.year||r[3]!==cfg.month) throw Error("Month outside scope");
       if(!METRICS.includes(r[4])) throw Error("Unexpected metric");
       if(!rawValue.trim()||!Number.isFinite(value)||value===0||Math.abs(value)>=1e20) throw Error("Invalid nonzero measure");
       const maaling=r[4]===METRICS[0]?"ddd":"regionalt_tilskud_kr";
-      const key=[atc5,varenummer,task.period,maaling].join("|");
+      const key=[atc5,varenummer,task.period,maaling,region].join("|");
       if(seen.has(key)) throw Error("Duplicate metric key"); seen.add(key);
-      return {atc5,varenummer,aar_maaned:task.period,maaling,vaerdi:value};
+      const record={atc5,varenummer,aar_maaned:task.period,maaling,vaerdi:value};
+      if(region!==undefined) record.region=region;
+      return record;
     });
   }
   function rowsToCsv(rows) {
@@ -444,12 +457,76 @@
     for(const [period,prefixes] of byMonth) plan(prefixes,period,period);
     return {pending,completed};
   }
+  // Single ATC5/month acceptance test. It produces diagnostics, not importable extracts.
+  const REGION_PROBE_TASK={prefix:"N06BA04",period:"2025-01"};
+  async function runRegionProbe(request, fallback, pause) {
+    const variants=fallback?REGIONS.map(region=>({region})):[{groupByRegion:true}];
+    const fetchScope=async variant=>{
+      const task={...REGION_PROBE_TASK,...variant};
+      await pause();
+      try {
+        const response=await request(task);
+        return recordsFromResponse(response.body,task);
+      } catch(error) {
+        const scope=task.groupByRegion?"Grupperet":task.region??"Hele Danmark";
+        throw Error(scope+": "+error.message,{cause:error});
+      }
+    };
+    const national=await fetchScope({});
+    const regional=[];
+    const queries=[];
+    for(const variant of variants) {
+      const rows=await fetchScope(variant);
+      regional.push(...rows);
+      queries.push({scope:variant.region??"Grupperet",rows:rows.length});
+    }
+    const scopes=[["Hele Danmark",national],...REGIONS.map(region=>[
+      region,regional.filter(row=>row.region===region)
+    ])];
+    const totals=scopes.map(([scope,rows])=>{
+      const entry={scope};
+      for(const metric of ["ddd","regionalt_tilskud_kr"]) {
+        const measured=rows.filter(row=>row.maaling===metric);
+        entry[metric]=measured.length?measured.reduce((sum,row)=>sum+row.vaerdi,0):null;
+        entry[metric+"_rows"]=measured.length;
+      }
+      return entry;
+    });
+    const reconciliation=["ddd","regionalt_tilskud_kr"].map(metric=>{
+      const byProduct=new Map();
+      for(const [scope,rows] of scopes) {
+        for(const row of rows.filter(row=>row.maaling===metric)) {
+          if(!byProduct.has(row.varenummer)) byProduct.set(row.varenummer,new Map());
+          byProduct.get(row.varenummer).set(scope,row.vaerdi);
+        }
+      }
+      let matchedProducts=0,productDifferences=0,nationalOnly=0,regionalOnly=0,incompleteProducts=0;
+      for(const measurements of byProduct.values()) {
+        const dk=measurements.get("Hele Danmark");
+        const values=REGIONS.map(region=>measurements.get(region)).filter(value=>value!==undefined);
+        if(dk===undefined) regionalOnly++;
+        else if(!values.length) nationalOnly++;
+        if(dk===undefined || values.length!==REGIONS.length) incompleteProducts++;
+        else {
+          matchedProducts++;
+          if(Math.abs(values.reduce((sum,value)=>sum+value,0)-dk)>1e-6) productDifferences++;
+        }
+      }
+      const nationalTotal=totals[0][metric], values=totals.slice(1).map(row=>row[metric]);
+      const regionSum=values.every(value=>value!==null)?values.reduce((sum,value)=>sum+value,0):null;
+      return {metric,nationalTotal,regionSum,
+        difference:nationalTotal===null||regionSum===null?null:regionSum-nationalTotal,
+        matchedProducts,productDifferences,nationalOnly,regionalOnly,incompleteProducts};
+    });
+    return {scope:{...REGION_PROBE_TASK},mode:fallback?"separate":"grouped",nationalRows:national.length,queries,totals,reconciliation};
+  }
   async function start(options={}) {
     if(location.origin!=="https://app.powerbi.com") throw Error("Select app.powerbi.com console frame");
     if(root.monitoreringCollector) throw Error("Collector already active");
     const resumed=options.resume;
     const clean=resumed?resumeTasks(resumed):null;
-    const tasks=clean?clean.pending:plan(options.prefixes||["N06"],options.from||"2025-01",options.to||options.from||"2025-01");
+    const probe=options.regionProbe;
+    const tasks=probe?[REGION_PROBE_TASK]:clean?clean.pending:plan(options.prefixes||["N06"],options.from||"2025-01",options.to||options.from||"2025-01");
     if(!tasks.length) throw Error("Ingen udestående opgaver i checkpointet.");
     const cfg=config(tasks[0]||{prefix:"N06",period:"2025-01"},options);
     const endpoint=new URL(cfg.api);
@@ -463,28 +540,36 @@
     console.log("Skift et rapportfilter for tokenopsamling. Manuel fallback: monitoreringCollector.authorize(header). Stop: monitoreringCollector.stop().");
     try {
       authorization=await capture.promise;
-      return await collect(tasks,{...options,signal:controller.signal,
+      const request=async (task,signal) => {
+        if(signal.aborted) throw Error("Stopped");
+        const local=new AbortController();const abort=()=>local.abort();signal.addEventListener("abort",abort,{once:true});
+        const timer=setTimeout(abort,60000),started=performance.now();
+        try {
+          const query=JSON.stringify(buildPayload(task,options));
+          const r=await fetch(cfg.api,{method:"POST",credentials:"omit",mode:"cors",headers:{accept:"application/json","content-type":"application/json;charset=UTF-8",authorization},
+            body:query,signal:local.signal});
+          if(!r.ok) {
+            const error=Object.assign(Error(`HTTP ${r.status}`),{status:r.status});
+            const retry=r.headers.get("retry-after");
+            if(retry) error.retryAfterMs=/^\d+$/.test(retry)?Number(retry)*1000:Math.max(0,Date.parse(retry)-Date.now());
+            throw error;
+          }
+          const text=await r.text();
+          return {body:JSON.parse(text),query_sha256:await hashText(query),query_model:{model:cfg.model,dataset:cfg.dataset,report:cfg.report},duration_ms:Math.round(performance.now()-started),response_bytes:new TextEncoder().encode(text).length};
+        } catch(e) {
+          if(e instanceof TypeError||e.name==="AbortError"&&!signal.aborted) e.retryable=true;
+          throw e;
+        } finally {clearTimeout(timer);signal.removeEventListener("abort",abort);}
+      };
+      if(probe) {
+        const result=await runRegionProbe(task=>request(task,controller.signal),probe==="separate",
+          ()=>new Promise(resolve=>setTimeout(resolve,2500)));
+        console.table(result.totals);
+        console.table(result.reconciliation);
+        return result;
+      }
+      return await collect(tasks,{...options,signal:controller.signal,request,
         checkpoint(s){latest={...s,completed:[...(clean?.completed||[]),...s.completed]};options.onProgress?.(structuredClone(latest));},
-        async request(task,signal) {
-          const local=new AbortController();const abort=()=>local.abort();signal.addEventListener("abort",abort,{once:true});
-          const timer=setTimeout(abort,60000),started=performance.now();
-          try {
-            const query=JSON.stringify(buildPayload(task,options));
-            const r=await fetch(cfg.api,{method:"POST",credentials:"omit",mode:"cors",headers:{accept:"application/json","content-type":"application/json;charset=UTF-8",authorization},
-              body:query,signal:local.signal});
-            if(!r.ok) {
-              const error=Object.assign(Error(`HTTP ${r.status}`),{status:r.status});
-              const retry=r.headers.get("retry-after");
-              if(retry) error.retryAfterMs=/^\d+$/.test(retry)?Number(retry)*1000:Math.max(0,Date.parse(retry)-Date.now());
-              throw error;
-            }
-            const text=await r.text();
-            return {body:JSON.parse(text),query_sha256:await hashText(query),query_model:{model:cfg.model,dataset:cfg.dataset,report:cfg.report},duration_ms:Math.round(performance.now()-started),response_bytes:new TextEncoder().encode(text).length};
-          } catch(e) {
-            if(e instanceof TypeError||e.name==="AbortError"&&!signal.aborted) e.retryable=true;
-            throw e;
-          } finally {clearTimeout(timer);signal.removeEventListener("abort",abort);}
-        },
         async emit(result,task) {
           const key=taskKey(task);
           if(options.onExport) await options.onExport(result,task);
@@ -496,8 +581,11 @@
         }
       });
     } finally {
-      capture.cleanup();authorization="";options.onCheckpoint?.(structuredClone(latest));save();delete root.monitoreringCollector;
-      console.log("Checkpoint download offered. Verify that every CSV/manifest pair reached disk before resuming.");
+      capture.cleanup();authorization="";delete root.monitoreringCollector;
+      if(!probe) {
+        options.onCheckpoint?.(structuredClone(latest));save();
+        console.log("Checkpoint download offered. Verify that every CSV/manifest pair reached disk before resuming.");
+      }
     }
   }
   // Runs inside the user's already authorized report frame. No external scripts/storage.
@@ -557,7 +645,8 @@
     box.querySelector('[data-action="close"]').onclick=()=>{if(!running)box.remove();else setStatus('Stop udtrækket før panelet lukkes.');};
     return box;
   }
-  const api={panel,resumeTasks,buildPayload,inspectResponse,decodeResponse,recordsFromResponse,rowsToCsv,makeExport,children,plan,collect,start,SplitRequired,REGIONS,EXPECTED,config};
+  const probeRegions=({separate=false}={})=>start({regionProbe:separate?"separate":"grouped"});
+  const api={panel,resumeTasks,buildPayload,inspectResponse,decodeResponse,recordsFromResponse,rowsToCsv,makeExport,children,plan,collect,start,probeRegions,runRegionProbe,SplitRequired,REGIONS,EXPECTED,config};
   if(typeof module!=="undefined"&&module.exports) module.exports=api;
   else {root.Monitorering=api;console.log('Monitorering loaded. Start a small batch with Monitorering.start({prefixes:["N06"],from:"2025-01",to:"2025-01"}).');}
 })(typeof window!=="undefined"?window:globalThis);
