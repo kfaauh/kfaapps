@@ -171,3 +171,24 @@ test('browser probe uses existing session capture without emitting files or chec
  assert.equal(result.reconciliation[0].difference,0);
  assert.equal(frame.monitoreringCollector,undefined);
 });
+
+test('grouped export records per-region controls and keeps checkpoint geography',async()=>{
+ const task={prefix:'N06BA04',period:'2025-01',groupByRegion:true};
+ let checkpoint,output;
+ await p.collect([task],{
+  request:async()=>({body:probeResponse([0,1,2,3,4],[1,2,3,4,5])}),
+  checkpoint:value=>{checkpoint=value;},wait:async()=>{},
+  emit:async value=>{output=value;}
+ });
+ assert.equal(checkpoint.query_contract,'compact-regional-v1');
+ assert.deepEqual(p.resumeTasks(checkpoint),{pending:[],completed:[task]});
+ assert.equal(output.manifest.schema_version,3);
+ assert.equal(output.manifest.query_contract,'compact-regional-v1');
+ assert.deepEqual(output.manifest.region_metrics.NJ.ddd,{rows:1,total:5});
+ assert.deepEqual(output.manifest.region_metrics.SJ.regionalt_tilskud_kr,{rows:0,total:0});
+ assert.match(output.csv,/vaerdi;region\r\n/);
+ assert.match(output.csv,/;ddd;1;H\r\n/);
+ const empty=await p.makeExport([],task);
+ assert.equal(empty.manifest.allow_empty,true);
+ assert.deepEqual(empty.manifest.region_metrics.H.ddd,{rows:0,total:0});
+});

@@ -106,3 +106,86 @@ shiny::testServer(shiny::shinyAppDir(app_path),{
 })
 rm(Sys.Date)
 cat('PASS: synthetic July observation boundary, separate estimate text, strict forecast guard and comparison/scenario plots in Shiny.\n')
+
+# A populated v2 database keeps its national capture, raw hashes and attestation.
+# The regional and national captures deliberately have the same source time.
+regional_cfg<-cfg;regional_cfg$db<-file.path(work,'migration.duckdb')
+with_monitor_db(regional_cfg,TRUE,function(con) {
+ csv<-file.path(fix,'monitorering_forbrug_N06_2025-01.csv')
+ manifest<-file.path(fix,'monitorering_manifest_N06_2025-01.json')
+ execute_monitor_sql(con,'001_schema.sql')
+ national_id<-import_consumption(con,regional_cfg,csv,manifest)
+ evidence<-file.path(work,'evidence.txt')
+ writeLines('Synthetic evidence used only to test preservation of the national attestation.',evidence)
+ attest_coverage(con,national_id,evidence)
+ before<-DBI::dbReadTable(con,'consumption_extract')
+ attestation<-DBI::dbReadTable(con,'coverage_attestation')
+ init_db(con);init_db(con)
+ stopifnot(database_version(con)==3L,identical(before,DBI::dbReadTable(con,'consumption_extract')),
+   identical(attestation,DBI::dbReadTable(con,'coverage_attestation')),
+   coverage_report(con,'N06','2025-01','2025-01')$status=='population_verified',
+   coverage_report(con,'N06','2025-01','2025-01','MJ')$status=='missing')
+ # V3 observations are synthetic. One region lacks both measures in February.
+ mf<-file.path(work,'regional.json');cf<-file.path(work,'regional.csv')
+ m<-read_meta(manifest);m$schema_version<-3;m$query_contract<-'compact-regional-v1'
+ m$query_sha256<-paste(rep('a',64),collapse='');m$has_restart_token<-FALSE
+ regional_id<-function(month,nregions=5L,multiplier=1) {
+   m$period<-month
+   d<-expand.grid(region=head(regional_codes,nregions),maaling=consumption_metrics,stringsAsFactors=FALSE)
+   d$atc5<-'N06BA04';d$varenummer<-'019307';d$aar_maaned<-month
+   d$vaerdi<-match(d$region,regional_codes)*multiplier
+   d<-d[c('atc5','varenummer','aar_maaned','maaling','vaerdi','region')]
+   write.table(d,cf,sep=';',quote=FALSE,row.names=FALSE)
+   m$csv_sha256<-sha(cf);m$row_count<-nrow(d);m$atc5_count<-as.integer(nrow(d)>0);m$allow_empty<-nrow(d)==0
+   m$metric_row_counts<-setNames(lapply(consumption_metrics,function(metric) sum(d$maaling==metric)),consumption_metrics)
+   for(metric in consumption_metrics) m[[paste0('total_',metric)]]<-sum(d$vaerdi[d$maaling==metric])
+   m$region_metrics<-setNames(lapply(regional_codes,function(region) {
+     setNames(lapply(consumption_metrics,function(metric) {
+       values<-d$vaerdi[d$maaling==metric & d$region==region]
+       list(rows=length(values),total=sum(values))
+     }),consumption_metrics)
+   }),regional_codes)
+   writeLines(json(m),mf)
+   id<-import_consumption(con,regional_cfg,cf,mf)
+   stopifnot(identical(id,import_consumption(con,regional_cfg,cf,mf)))
+   bad<-m;bad$region_metrics$MJ$ddd$total<-999
+   writeLines(json(bad),mf)
+   stopifnot(grepl('Regional metric total mismatch',as.character(try(import_consumption(con,regional_cfg,cf,mf),silent=TRUE))))
+   id
+ }
+ regional_id('2025-01')
+ regional_id('2025-02',4L)
+ regional_id('2025-03',5L,3L)
+ stopifnot(DBI::dbGetQuery(con,"SELECT sum(ddd) total FROM v_consumption")$total==25198980,
+   DBI::dbGetQuery(con,"SELECT sum(ddd) total FROM v_consumption_by_region WHERE month='2025-01-01' AND region<>'DK'")$total==15,
+   coverage_report(con,'N06','2025-02','2025-02','NJ')$status=='query_complete_population_unverified')
+ validate_db(con,regional_cfg)
+ publish_analysis(con,path)
+ z<-readRDS(path);validate_analysis_bundle(z)
+ stopifnot(z$version==2L,analysis_months(z,'N06','2025-01','2025-01')$ddd==25198980)
+ mj<-analysis_months(z,'N06','2025-01','2025-04',region='MJ')
+ nj<-analysis_months(z,'N06','2025-01','2025-03',region='NJ')
+ stopifnot(identical(mj$ddd,c(4,4,12,NA_real_)),mj$status[4]=='missing',
+   is.na(nj$actual_subsidy_kr[2]),nj$status[2]=='query_complete_population_unverified',
+   subsidy_forecast(mj,2025,as.Date('2025-04-03'))$estimate==80,
+   !subsidy_forecast(nj,2025,as.Date('2025-04-03'))$available)
+ legacy<-z;legacy$version<-1L
+ for(name in c('consumption','historical_prices','current_prices','extracts')) {
+   legacy$tables[[name]]<-analysis_region_rows(legacy$tables[[name]],'DK')
+   legacy$tables[[name]]$region<-NULL
+ }
+ validate_analysis_bundle(legacy)
+ stopifnot(analysis_months(legacy,'N06','2025-01','2025-01')$ddd==25198980,
+   is.na(analysis_months(legacy,'N06','2025-01','2025-01',region='MJ')$ddd))
+})
+shiny::testServer(shiny::shinyAppDir(app_path),{
+ session$setInputs(prefix='N06',from='2025-01',to='2025-03',product='',level='7')
+ stopifnot(monthly()$ddd[1]==25198980)
+ session$setInputs(region='MJ')
+ stopifnot(monthly()$ddd[1]==4,grepl('Region Midtjylland',output$scope),
+   all(subset_rows(bundle()$tables$current_prices)$region=='MJ'),
+   all(subset_rows(bundle()$tables$historical_prices)$region=='MJ'))
+ session$setInputs(region='NJ')
+ stopifnot(is.na(monthly()$ddd[2]),all(is.na(comparison()$previous_ddd)))
+})
+cat('PASS: v2 migration, national continuity, v3 regional import/reconciliation, publication, Shiny filtering and regional forecast gaps.\n')

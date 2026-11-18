@@ -2,6 +2,9 @@
 (function(root) {
   "use strict";
   const REGIONS = ["Region Hovedstaden","Region Sjælland","Region Syddanmark","Region Midtjylland","Region Nordjylland"];
+  const REGION_CODES = ["H","SJ","SD","MJ","NJ"];
+  const NATIONAL_CONTRACT = "compact-national-v1";
+  const REGIONAL_CONTRACT = "compact-regional-v1";
   const METRICS = ["Mængdeforbrug","Regionalt tilskud"];
   const EXPECTED = ["DimLaegemiddel.ATC5_Kode_Tekst","DimLaegemiddel.Varenummer","DimDato.År_ID","DimDato.MånedÅr","Opgørelse.CalculationItemColumn 1","# Measures.SelectMeasure1"];
   const REGION_FIELD = "DimBorgerDemografi.Bopælsregion";
@@ -344,25 +347,34 @@
       return record;
     });
   }
-  function rowsToCsv(rows) {
+  function rowsToCsv(rows, regional=false) {
     const keys=["atc5","varenummer","aar_maaned","maaling","vaerdi"];
+    if(regional) keys.push("region");
     const number = v => {
       const text=Number(v).toLocaleString("en-US",{useGrouping:false,maximumFractionDigits:8});
       if(Number(text)!==v || (Number.isInteger(v)&&!Number.isSafeInteger(v))) throw Error("Measure exceeds lossless CSV precision");
       return text;
     };
-    return "\uFEFF"+[keys.join(";"),...rows.map(r=>keys.map(k=>k==="vaerdi"?number(r[k]):r[k]).join(";"))].join("\r\n");
+    return "\uFEFF"+[keys.join(";"),...rows.map(r=>keys.map(k=>k==="vaerdi"?number(r[k]):r[k]).join(";"))].join("\r\n")+(regional?"\r\n":"");
   }
   async function hashText(s) {
     const bytes=new TextEncoder().encode(s);
     return [...new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))].map(x=>x.toString(16).padStart(2,"0")).join("");
   }
   async function makeExport(rows,task,performanceMeta={}) {
-    const csv=rowsToCsv(rows),counts={ddd:0,regionalt_tilskud_kr:0},totals={ddd:0,regionalt_tilskud_kr:0};
+    const regional=task.groupByRegion===true;
+    if(task.region!==undefined || (!regional && rows.some(row=>row.region!==undefined)))
+      throw Error("Only national or grouped regional rows can be exported");
+    const exportRows=regional?rows.map(row=>{
+      const code=REGION_CODES[REGIONS.indexOf(row.region)];
+      if(!code) throw Error("Unknown regional observation");
+      return {...row,region:code};
+    }):rows;
+    const csv=rowsToCsv(exportRows,regional),counts={ddd:0,regionalt_tilskud_kr:0},totals={ddd:0,regionalt_tilskud_kr:0};
     for(const r of rows) {counts[r.maaling]++; totals[r.maaling]+=r.vaerdi;}
-    const manifest={schema_version:2,source:"Sundhedsdatabanken PowerBI Medicinsalg",extracted_at:new Date().toISOString(),
+    const manifest={schema_version:regional?3:2,source:"Sundhedsdatabanken PowerBI Medicinsalg",extracted_at:new Date().toISOString(),
       atc_prefix:task.prefix,period:task.period,region_filter:REGIONS,metrics:Object.keys(counts),zero_filter:true,
-      query_contract:"compact-national-v1",complete_query_response:true,population_coverage:"unverified",
+      query_contract:regional?REGIONAL_CONTRACT:NATIONAL_CONTRACT,complete_query_response:true,population_coverage:"unverified",
       omitted_zero_or_blank_values:"Fravær er ikke automatisk dokumenteret nul",has_restart_token:false,
       row_count:rows.length,atc5_count:new Set(rows.map(r=>r.atc5)).size,metric_row_counts:counts,
       total_ddd:totals.ddd,total_regionalt_tilskud_kr:totals.regionalt_tilskud_kr,
@@ -370,6 +382,15 @@
       csv_sha256:await hashText(csv),allow_empty:rows.length===0,
       query_sha256:performanceMeta.query_sha256??await hashText(JSON.stringify(buildPayload(task))),
       query_model:performanceMeta.query_model??{model:DEFAULT.model,dataset:DEFAULT.dataset,report:DEFAULT.report}};
+    if(regional) {
+      manifest.region_metrics=Object.fromEntries(REGION_CODES.map(code=>[code,
+        Object.fromEntries(Object.keys(counts).map(metric=>[metric,{rows:0,total:0}]))]));
+      for(const row of exportRows) {
+        const metric=manifest.region_metrics[row.region][row.maaling];
+        metric.rows++;
+        metric.total+=row.vaerdi;
+      }
+    }
     return {csv,manifest};
   }
   function children(prefix) {
@@ -396,7 +417,8 @@
     const blob=new Blob([content],{type}), url=URL.createObjectURL(blob),a=document.createElement("a");
     a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
   }
-  const taskKey=t=>`${t.prefix}_${t.period}`;
+  const queryContract=regional=>regional?REGIONAL_CONTRACT:NATIONAL_CONTRACT;
+  const taskKey=t=>`${t.prefix}_${t.period}${t.groupByRegion?"_regioner":""}`;
   // Scheduler is transport-independent and testable. Checkpoint contains no tokens or response bodies.
   async function collect(tasks,options) {
     const {request,emit,checkpoint=()=>{},signal}=options;
@@ -406,7 +428,10 @@
       const abort=()=>{clearTimeout(timer);reject(Error("Stopped"));};
       signal?.addEventListener("abort",abort,{once:true}); if(signal?.aborted) abort();
     }));
-    const state={version:1,query_contract:"compact-national-v1",pending:structuredClone(tasks),completed:[],failures:[],requests:0};
+    const regional=tasks[0]?.groupByRegion===true;
+    if(tasks.some(task=>(task.groupByRegion===true)!==regional || task.region!==undefined))
+      throw Error("A collection must use one geographic contract");
+    const state={version:1,query_contract:queryContract(regional),pending:structuredClone(tasks),completed:[],failures:[],requests:0};
     const interval=Math.max(2000,options.pauseMs??2500), retries=Math.min(3,options.retries??2), budget=options.maxRequests??60;
     if(tasks.length>5000) throw Error("Plan too large");
     while(state.pending.length) {
@@ -445,11 +470,13 @@
     return state;
   }
   function resumeTasks(checkpoint) {
-    if(checkpoint?.version!==1 || checkpoint.query_contract!=="compact-national-v1" ||
+    if(checkpoint?.version!==1 || ![NATIONAL_CONTRACT,REGIONAL_CONTRACT].includes(checkpoint.query_contract) ||
        !Array.isArray(checkpoint.pending) || !Array.isArray(checkpoint.completed)) throw Error("Invalid checkpoint");
     const clean = list => list.map(t=>{
       if(!prefixOK(t?.prefix)||!periodOK(t?.period)) throw Error("Invalid checkpoint task");
-      return {prefix:t.prefix,period:t.period};
+      const task={prefix:t.prefix,period:t.period};
+      if(checkpoint.query_contract===REGIONAL_CONTRACT) task.groupByRegion=true;
+      return task;
     });
     const pending=clean(checkpoint.pending),completed=clean(checkpoint.completed),byMonth=new Map();
     if(pending.length+completed.length>5000) throw Error("Checkpoint too large");
@@ -526,14 +553,17 @@
     const resumed=options.resume;
     const clean=resumed?resumeTasks(resumed):null;
     const probe=options.regionProbe;
-    const tasks=probe?[REGION_PROBE_TASK]:clean?clean.pending:plan(options.prefixes||["N06"],options.from||"2025-01",options.to||options.from||"2025-01");
+    const regional=clean?resumed.query_contract===REGIONAL_CONTRACT:options.regional===true;
+    const tasks=probe?[REGION_PROBE_TASK]:clean?clean.pending:
+      plan(options.prefixes||["N06"],options.from||"2025-01",options.to||options.from||"2025-01").map(task=>
+        regional?{...task,groupByRegion:true}:task);
     if(!tasks.length) throw Error("Ingen udestående opgaver i checkpointet.");
     const cfg=config(tasks[0]||{prefix:"N06",period:"2025-01"},options);
     const endpoint=new URL(cfg.api);
     if(endpoint.protocol!=="https:"||!endpoint.hostname.endsWith(".analysis.windows.net")||endpoint.pathname!=="/explore/querydata")
       throw Error("Unexpected PowerBI endpoint");
     const controller=new AbortController(),capture=captureAuthorization(controller.signal,cfg.api);
-    let authorization="", latest={version:1,query_contract:"compact-national-v1",pending:tasks,completed:[],failures:[],requests:0};
+    let authorization="", latest={version:1,query_contract:queryContract(regional),pending:tasks,completed:[],failures:[],requests:0};
     const id=new Date().toISOString().replace(/[^0-9]/g,"");
     const save=()=>download(`monitorering_checkpoint_${id}.json`,JSON.stringify(latest,null,2),"application/json");
     root.monitoreringCollector={stop(){controller.abort();},authorize:capture.provide,checkpoint:save};
@@ -596,6 +626,7 @@
     box.innerHTML=`<h2 style="margin-top:0">Monitorering · udtræk</h2>
       <p>Alle fem regioner · DDD og regionalt tilskud · Flag T3: Ja</p>
       <label>ATC-præfikser (adskil med komma) <input data-field="prefixes" value="N06"></label><br>
+      <label>Geografi <select data-field="geography"><option value="national">Hele Danmark</option><option value="regional">Fem bopælsregioner</option></select></label><br>
       <label>Fra <input data-field="from" type="month" value="2025-01"></label>
       <label>Til <input data-field="to" type="month" value="2025-01"></label>
       <p><button data-action="start">Start udtræk</button> <button data-action="stop">Stop</button></p>
@@ -613,7 +644,9 @@
         const f=field('resume').files[0];if(!f)return;
         if(f.size>2000000) throw Error('Checkpoint er for stort');
         const raw=JSON.parse(await f.text()),clean=resumeTasks(raw);
-        resume={version:1,query_contract:'compact-national-v1',...clean};latest=resume;
+        if(!clean.pending.length) throw Error('Checkpointet har ingen udestående opgaver');
+        resume={version:1,query_contract:raw.query_contract,...clean};latest=resume;
+        field('geography').value=raw.query_contract===REGIONAL_CONTRACT?'regional':'national';
         setStatus(`Checkpoint: ${clean.pending.length} opgaver mangler. Start genoptager disse.`);
       } catch(e){resume=null;setStatus(e.message);}
     };
@@ -622,9 +655,9 @@
       box.querySelector('[data-action="start"]').disabled=true;
       setStatus('Skift et filter i rapporten inden to minutter for at opsamle adgang.');
       try {
-        await start({prefixes:field('prefixes').value.toUpperCase().split(',').map(s=>s.trim()),from:field('from').value,to:field('to').value,resume,
+        await start({prefixes:field('prefixes').value.toUpperCase().split(',').map(s=>s.trim()),from:field('from').value,to:field('to').value,regional:field('geography').value==='regional',resume,
           onProgress(s){latest=s;setStatus(`${s.completed.length} færdige · ${s.pending.length} mangler · ${s.requests}/60 requests i denne kørsel`);},
-          onCheckpoint(s){latest=s;resume=s;},
+          onCheckpoint(s){latest=s;resume=s.pending.length?s:null;},
           async onExport(result,task){
             const row=document.createElement('p');row.textContent=`${taskKey(task)} · ${result.manifest.row_count} rækker `;
             for(const [label,name,content,type] of [

@@ -1,29 +1,30 @@
 -- A complete scope snapshot replaces that scope, including observations now absent.
 -- Resolve overlap BEFORE joining observations, by source time (never import order).
-CREATE OR REPLACE VIEW v_consumption_scope AS
-WITH universe AS (SELECT DISTINCT atc5,month FROM consumption_observation)
+CREATE OR REPLACE VIEW v_consumption_scope_by_region AS
+WITH universe AS (SELECT DISTINCT atc5,month,region FROM consumption_observation)
 SELECT u.atc5,u.month,e.extract_id,e.source,e.extracted_at,e.imported_at,e.import_seq,
-       e.atc_prefix, a.extract_id IS NOT NULL AS population_verified
+       e.atc_prefix,u.region, a.extract_id IS NOT NULL AS population_verified
 FROM universe u JOIN consumption_extract e
  ON u.month=e.month AND starts_with(u.atc5,e.atc_prefix)
+JOIN consumption_extract_region r ON r.extract_id=e.extract_id AND r.region=u.region
 LEFT JOIN coverage_attestation a ON a.extract_id=e.extract_id
-QUALIFY row_number() OVER (PARTITION BY u.atc5,u.month ORDER BY e.extracted_at DESC,e.import_seq DESC)=1;
-CREATE OR REPLACE VIEW v_consumption_long AS
+QUALIFY row_number() OVER (PARTITION BY u.atc5,u.month,u.region ORDER BY e.extracted_at DESC,e.import_seq DESC)=1;
+CREATE OR REPLACE VIEW v_consumption_long_by_region AS
 SELECT o.*,s.source,s.extracted_at,s.imported_at,s.import_seq,s.population_verified
-FROM consumption_observation o JOIN v_consumption_scope s
- ON o.extract_id=s.extract_id AND o.atc5=s.atc5 AND o.month=s.month;
-CREATE OR REPLACE VIEW v_consumption AS
+FROM consumption_observation o JOIN v_consumption_scope_by_region s
+ ON o.extract_id=s.extract_id AND o.atc5=s.atc5 AND o.month=s.month AND o.region=s.region;
+CREATE OR REPLACE VIEW v_consumption_by_region AS
 SELECT atc5,varenummer,month,extract_id,source,extracted_at,imported_at,
  max(value) FILTER(WHERE metric='ddd') AS ddd,
  max(value) FILTER(WHERE metric='regionalt_tilskud_kr') AS regionalt_tilskud_kr,
  count(*) FILTER(WHERE metric='ddd')=1 AS ddd_observed,
- count(*) FILTER(WHERE metric='regionalt_tilskud_kr')=1 AS subsidy_observed
-FROM v_consumption_long GROUP BY ALL;
-CREATE OR REPLACE VIEW v_consumption_atc AS
+ count(*) FILTER(WHERE metric='regionalt_tilskud_kr')=1 AS subsidy_observed,region
+FROM v_consumption_long_by_region GROUP BY ALL;
+CREATE OR REPLACE VIEW v_consumption_atc_by_region AS
 SELECT level, left(atc5,code_length::INTEGER) AS atc,month,metric,
  sum(value) AS observed_sum,count(*) AS observed_rows,
- count(DISTINCT extract_id) AS extract_count
-FROM v_consumption_long CROSS JOIN (VALUES (1,1),(2,3),(3,4),(4,5),(5,7)) l(level,code_length)
+ count(DISTINCT extract_id) AS extract_count,region
+FROM v_consumption_long_by_region CROSS JOIN (VALUES (1,1),(2,3),(3,4),(4,5),(5,7)) l(level,code_length)
 GROUP BY ALL;
 -- Last full snapshot at a given source timestamp, including removed products.
 CREATE OR REPLACE VIEW v_tariff_latest AS
@@ -55,12 +56,12 @@ SELECT k.*,a.esp AS esp,a.tsp AS tsp,b.esp AS previous_esp,b.tsp AS previous_tsp
 FROM keys k LEFT JOIN tariff_product a ON a.snapshot_id=k.snapshot_id AND a.varenummer=k.varenummer
 LEFT JOIN tariff_product b ON b.snapshot_id=k.previous_id AND b.varenummer=k.varenummer;
 -- Equal daily consumption is an assumption, not an observed dispensing pattern.
-CREATE OR REPLACE VIEW v_consumption_price_month AS
+CREATE OR REPLACE VIEW v_consumption_price_month_by_region AS
 WITH linked AS (
  SELECT c.*,day::DATE AS price_date,t.snapshot_id,t.atc AS tariff_atc,
  t.tsp_per_ddd,t.esp_per_ddd,t.ddd_provenance,
  date_diff('day',c.month,c.month+INTERVAL 1 MONTH)::INTEGER AS month_days
- FROM v_consumption c,
+ FROM v_consumption_by_region c,
  LATERAL generate_series(c.month,c.month+INTERVAL 1 MONTH-INTERVAL 1 DAY,INTERVAL 1 DAY) g(day)
  LEFT JOIN v_tariff_daily t ON t.varenummer=c.varenummer AND t.price_date=day::DATE
 )
@@ -74,11 +75,11 @@ SELECT atc5,varenummer,month,extract_id,max(ddd) AS ddd,
  CASE WHEN count(esp_per_ddd) FILTER(WHERE tariff_atc=atc5)=max(month_days)
  THEN sum(esp_per_ddd)/max(month_days) END AS calendar_weighted_esp_per_ddd,
  max(ddd)*calendar_weighted_tsp_per_ddd AS modelled_subsidy_basis_kr,
- 'uniform_daily_volume, DDD_definition_not_independently_verified' AS assumptions
-FROM linked GROUP BY atc5,varenummer,month,extract_id;
+ 'uniform_daily_volume, DDD_definition_not_independently_verified' AS assumptions,region
+FROM linked GROUP BY atc5,varenummer,month,extract_id,region;
 -- Scenario-only fallback also works on archived snapshots imported before this fix.
 -- Strict historical prices above never use the ratio-derived denominator.
-CREATE OR REPLACE VIEW v_consumption_current_price AS
+CREATE OR REPLACE VIEW v_consumption_current_price_by_region AS
 WITH prices AS (
  SELECT *, CASE WHEN tsp_per_ddd IS NOT NULL THEN tsp_per_ddd
  WHEN ddd_provenance IN ('missing','unverified_ratio')
@@ -98,4 +99,12 @@ SELECT c.*,t.snapshot_id AS price_snapshot_id,t.observed_at AS price_observed_at
  WHEN t.scenario_price IS NULL THEN 'no_valid_ddd_price'
  WHEN t.scenario_provenance='unverified_ratio' THEN 'estimated_from_price_ratio'
  ELSE 'review_ddd_definition_and_price_date' END AS linkage_status
-FROM v_consumption c LEFT JOIN prices t USING(varenummer);
+FROM v_consumption_by_region c LEFT JOIN prices t USING(varenummer);
+
+-- Existing views retain their national grain and columns. Use the explicit regional views for region-level data.
+CREATE OR REPLACE VIEW v_consumption_scope AS SELECT * EXCLUDE (region) FROM v_consumption_scope_by_region WHERE region='DK';
+CREATE OR REPLACE VIEW v_consumption_long AS SELECT * EXCLUDE (region) FROM v_consumption_long_by_region WHERE region='DK';
+CREATE OR REPLACE VIEW v_consumption AS SELECT * EXCLUDE (region) FROM v_consumption_by_region WHERE region='DK';
+CREATE OR REPLACE VIEW v_consumption_atc AS SELECT * EXCLUDE (region) FROM v_consumption_atc_by_region WHERE region='DK';
+CREATE OR REPLACE VIEW v_consumption_price_month AS SELECT * EXCLUDE (region) FROM v_consumption_price_month_by_region WHERE region='DK';
+CREATE OR REPLACE VIEW v_consumption_current_price AS SELECT * EXCLUDE (region) FROM v_consumption_current_price_by_region WHERE region='DK';
