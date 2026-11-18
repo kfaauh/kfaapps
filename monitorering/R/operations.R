@@ -1,11 +1,23 @@
 validate_db <- function(con,cfg,archives=TRUE) {
-  must(all(as.integer(DBI::dbGetQuery(con,'SELECT version FROM schema_version')$version) %in% c(1L,2L)),'Schema version mismatch')
+  version <- database_version(con)
+  must(length(version)==1 && version %in% 1:3,'Schema version mismatch')
   bad <- DBI::dbGetQuery(con,paste('SELECT count(*) n FROM consumption_extract e LEFT JOIN',
     '(SELECT extract_id,count(*) n FROM consumption_observation GROUP BY extract_id) o USING(extract_id)',
     'WHERE e.row_count<>coalesce(o.n,0)'))$n
   must(bad==0,'Consumption extraction row counts are inconsistent')
   must(DBI::dbGetQuery(con,paste('SELECT count(*) n FROM consumption_observation o JOIN consumption_extract e USING(extract_id)',
     'WHERE o.month<>e.month OR NOT starts_with(o.atc5,e.atc_prefix)'))$n==0,'Scope integrity failure')
+  if(version==3L) {
+    missing_or_bad <- DBI::dbGetQuery(con,paste('SELECT count(*) n FROM consumption_extract e LEFT JOIN',
+      '(SELECT extract_id,sum(row_count) n,count(*) regions,count(*) FILTER(WHERE region=\'DK\') national',
+      'FROM consumption_extract_region GROUP BY extract_id) r USING(extract_id)',
+      'WHERE r.regions IS NULL OR e.row_count<>r.n OR NOT',
+      '((r.regions=1 AND r.national=1) OR (r.regions=5 AND r.national=0))'))$n
+    bad_counts <- DBI::dbGetQuery(con,paste('SELECT count(*) n FROM consumption_extract_region r LEFT JOIN',
+      '(SELECT extract_id,region,count(*) n FROM consumption_observation GROUP BY extract_id,region) o USING(extract_id,region)',
+      'WHERE r.row_count<>coalesce(o.n,0)'))$n
+    must(missing_or_bad==0 && bad_counts==0,'Regional scope row counts are inconsistent')
+  }
   if(archives) {
     c <- DBI::dbGetQuery(con,'SELECT archive_csv,archive_manifest,csv_sha256,manifest_sha256 FROM consumption_extract')
     for(i in seq_len(nrow(c))) {

@@ -16,11 +16,12 @@ ui <- fluidPage(
  h1('Monitorering'),p('Lægemiddelforbrug, faktiske regionale tilskud og taksthistorik'),
  sidebarLayout(
   sidebarPanel(width=3,
+   selectInput('region','Bopælsregion',choices=setNames(names(analysis_regions),analysis_regions),selected='DK',selectize=FALSE),
    uiOutput('atc_ui'),
    uiOutput('dates_ui'),selectInput('level','Tabellens ATC-niveau',choices=setNames(c(1,3,4,5,7),paste('ATC',1:5)),selected=7),
    textInput('product','Varenummer · valgfrit (6 cifre)',''),
    downloadButton('export','Hent filtrerede analysedata'),hr(),
-   p(class='note','Alle fem bopælsregioner · DDD · Flag T3: Ja · kroniske sygdomme: Ingen valg.'),
+   p(class='note','DDD · Flag T3: Ja · kroniske sygdomme: Ingen valg.'),
    p(class='note','Import udføres af administrator uden for appen.')),
   mainPanel(width=9,uiOutput('health'),div(class='scope',textOutput('scope')),
    tabsetPanel(
@@ -47,9 +48,14 @@ server <- function(input,output,session) {
    },error=function(e) problem(paste('Dataopdatering kunne ikke læses. Seneste gyldige visning bevares.',conditionMessage(e))))
  })
  bundle <- reactive({x<-cache();validate(need(!is.null(x),'Afventer administratorens første datapublicering.'));x})
+ region <- reactive({
+   code<-if(is.null(input$region)) 'DK' else input$region
+   validate(need(length(code)==1L && code %in% names(analysis_regions),'Vælg gyldig bopælsregion.'))
+   code
+ })
  output$health <- renderUI({
    x<-cache();tagList(if(nzchar(problem())) p(role='alert',problem()),if(!is.null(x)) {
-     e<-x$tables$extracts;t<-x$tables$tariffs
+     e<-analysis_region_rows(x$tables$extracts,region());t<-x$tables$tariffs
      div(p(paste('Publiceret:',x$published_at)),p(paste('Seneste import:',if(nrow(e)) max(as.character(e$imported_at)) else 'ingen')),
        p(paste('Seneste indlæste takstobservation:',if(nrow(t)) max(as.character(t$observed_at)) else 'ingen')))
    })
@@ -83,20 +89,22 @@ server <- function(input,output,session) {
      need(length(b)==1 && grepl('^[0-9]{4}-(0[1-9]|1[0-2])$',b),'Til: brug ÅÅÅÅ-MM.'))
    validate(need(a<=b,'Fra skal være før til.'),need(v==''||grepl('^[0-9]{6}$',v),'Varenummer skal være seks cifre.'))
    validate(need(as.numeric(as.Date(paste0(b,'-01'))-as.Date(paste0(a,'-01')))<36600,'Vælg højst 100 år.'))
-   list(prefix=p,from=a,to=b,product=v)
+   list(prefix=p,from=a,to=b,product=v,region=region())
  })
- subset_rows <- function(d,atc='atc5',period=TRUE) {
-   f<-filters();keep<-startsWith(d[[atc]],f$prefix);keep[is.na(keep)]<-FALSE
+ subset_rows <- function(d,atc='atc5',period=TRUE,geographic=TRUE) {
+   f<-filters()
+   if(geographic) d<-analysis_region_rows(d,f$region)
+   keep<-startsWith(d[[atc]],f$prefix);keep[is.na(keep)]<-FALSE
    if(period) keep<-keep & format(as.Date(d$month),'%Y-%m')>=f$from & format(as.Date(d$month),'%Y-%m')<=f$to
    if(nzchar(f$product))keep<-keep & d$varenummer==f$product
    d[keep,,drop=FALSE]
  }
- monthly <- reactive({f<-filters();analysis_months(bundle(),f$prefix,f$from,f$to,f$product)})
- output$scope <- renderText({f<-filters();paste('Afgrænsning:',f$prefix,'·',f$from,'til',f$to,if(nzchar(f$product))paste('· varenummer',f$product),'· alle fem regioner. Summer er observerede værdier; manglende målinger er ikke nul.')})
+ monthly <- reactive({f<-filters();analysis_months(bundle(),f$prefix,f$from,f$to,f$product,f$region)})
+ output$scope <- renderText({f<-filters();paste('Afgrænsning:',f$prefix,'·',f$from,'til',f$to,if(nzchar(f$product))paste('· varenummer',f$product),'·',analysis_regions[[f$region]],'· Summer er observerede værdier. Manglende målinger vises som ukendte.')})
  table_out <- function(id,fun) output[[id]] <- renderDT({
    d<-fun()
    private<-c('extract_id','price_snapshot_id','snapshot_id','previous_id','source','extracted_at','imported_at','assumptions')
-   d<-d[setdiff(names(d),private)]
+   d<-d[setdiff(names(d),c(private,'region'))]
    labels<-c(previous_status='Forespørgselsstatus året før',observation_status='Observationer',previous_ddd='DDD året før',previous_subsidy_kr='Tilskud året før (kr.)',ddd_change_pct='DDD-ændring (%)',subsidy_change_pct='Tilskudsændring (%)',previous_missing_ddd='Manglende DDD året før',previous_missing_subsidy='Manglende tilskud året før',month='Måned',scope='ATC-afgrænsning',status='Dækning',captures='Antal udtræk',
      ddd='Observeret DDD',actual_subsidy_kr='Observeret regionalt tilskud (kr.)',regionalt_tilskud_kr='Observeret regionalt tilskud (kr.)',
      products='Varenumre',missing_ddd='Manglende DDD-måling',missing_subsidy='Manglende tilskudsmåling',
@@ -124,7 +132,7 @@ server <- function(input,output,session) {
  table_out('coverage',function(){d<-monthly()[c('month','scope','status','observation_status','products','captures')];d$status<-unname(status_da[d$status]);d})
  table_out('monthly',function(){d<-monthly();d$status<-unname(status_da[d$status]);d})
  table_out('extracts',function(){
-   f<-filters();e<-bundle()$tables$extracts
+   f<-filters();e<-analysis_region_rows(bundle()$tables$extracts,f$region)
    e<-e[(startsWith(e$atc_prefix,f$prefix)|startsWith(f$prefix,e$atc_prefix)) & format(as.Date(e$month),'%Y-%m')>=f$from & format(as.Date(e$month),'%Y-%m')<=f$to,,drop=FALSE]
    e[['Udtrækstid (UTC)']]<-as.character(e$extracted_at);e[['Indlæst (UTC)']]<-as.character(e$imported_at)
    e[c('atc_prefix','month','Udtrækstid (UTC)','Indlæst (UTC)','row_count','population_verified')]
@@ -143,7 +151,7 @@ server <- function(input,output,session) {
  table_out('current',function()subset_rows(bundle()$tables$current_prices))
  table_out('changes',function(){
    # Change rows lack ATC: restrict keys using products in either snapshot.
-   f<-filters();products<-subset_rows(bundle()$tables$tariff_products,'atc',FALSE)$varenummer
+   f<-filters();products<-subset_rows(bundle()$tables$tariff_products,'atc',FALSE,geographic=FALSE)$varenummer
    d<-bundle()$tables$tariff_changes;d[d$varenummer %in% products & d$change!='unchanged',,drop=FALSE]
  })
  output$series <- renderPlot({
@@ -198,7 +206,7 @@ server <- function(input,output,session) {
  comparison <- reactive({
    f<-filters();d<-monthly();previous<-analysis_months(bundle(),f$prefix,
      sprintf('%d%s',as.integer(substr(f$from,1,4))-1,substr(f$from,5,7)),
-     sprintf('%d%s',as.integer(substr(f$to,1,4))-1,substr(f$to,5,7)),f$product)
+     sprintf('%d%s',as.integer(substr(f$to,1,4))-1,substr(f$to,5,7)),f$product,f$region)
    compare_months(d,previous)
  })
  table_out('year_comparison',function(){d<-comparison();d$status<-unname(status_da[d$status]);d$previous_status<-unname(status_da[d$previous_status]);d})
@@ -243,9 +251,10 @@ server <- function(input,output,session) {
      '\nDette er ikke en prognose for faktisk regionalt tilskud. Udeladte produkter tæller ikke som nul.')
  })
  table_out('future_products',function(){x<-future();if(x$available)x$products else data.frame(Besked=x$reason)})
- output$export <- downloadHandler(filename=function()paste0('monitorering_',filters()$prefix,'.csv'),
-   content=function(file){d<-subset_rows(bundle()$tables$consumption);d$population_scope<-filters()$prefix
-     d$publication_time<-bundle()$published_at
+ output$export <- downloadHandler(filename=function()paste0('monitorering_',filters()$prefix,'_',filters()$region,'.csv'),
+   content=function(file){d<-subset_rows(bundle()$tables$consumption);d$population_scope<-rep(filters()$prefix,nrow(d))
+     d$region<-rep(filters()$region,nrow(d))
+     d$publication_time<-rep(bundle()$published_at,nrow(d))
      write.table(d,file,sep=';',row.names=FALSE,na='',fileEncoding='UTF-8')})
 }
 shinyApp(ui,server)

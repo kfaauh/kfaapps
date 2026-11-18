@@ -60,32 +60,38 @@ with_monitor_db <- function(cfg=monitor_config(),write=FALSE,code) {
   on.exit(DBI::dbDisconnect(con,shutdown=TRUE),add=TRUE)
   code(con)
 }
+execute_monitor_sql <- function(con,filename) {
+  sql <- paste(readLines(file.path(monitor_root,'sql',filename),warn=FALSE),collapse='\n')
+  sql <- gsub('--[^\n]*','',sql)
+  for(statement in strsplit(sql,';',fixed=TRUE)[[1]])
+    if(nzchar(trimws(statement))) DBI::dbExecute(con,statement)
+}
+database_version <- function(con) as.integer(DBI::dbGetQuery(con,'SELECT version FROM schema_version')$version)
 init_db <- function(con) {
-  version <- if(DBI::dbExistsTable(con,'schema_version')) as.integer(DBI::dbGetQuery(con,'SELECT version FROM schema_version')$version) else 2L
-  must(length(version)==1 && version %in% c(1L,2L),'Unsupported database schema; explicit migration required')
+  version <- if(DBI::dbExistsTable(con,'schema_version')) database_version(con) else 0L
+  must(length(version)==1 && version %in% 0:3,'Unsupported database schema; explicit migration required')
   DBI::dbWithTransaction(con,{
+    if(version %in% c(1L,2L)) {
+      views <- c('v_consumption_current_price','v_consumption_price_month','v_tariff_changes','v_tariff_daily','v_tariff_latest',
+                 'v_consumption_atc','v_consumption','v_consumption_long','v_consumption_scope')
+      for(view in views) DBI::dbExecute(con,paste('DROP VIEW IF EXISTS',view))
+    }
     if(version==1L) {
       # Rebuild parent and child together: DuckDB cannot alter a referenced table.
       DBI::dbExecute(con,'CREATE TEMP TABLE migrate_tariff_snapshot AS SELECT * FROM tariff_snapshot')
       DBI::dbExecute(con,'CREATE TEMP TABLE migrate_tariff_product AS SELECT * FROM tariff_product')
-      views <- c('v_consumption_current_price','v_consumption_price_month','v_tariff_changes','v_tariff_daily','v_tariff_latest',
-                 'v_consumption_atc','v_consumption','v_consumption_long','v_consumption_scope')
-      for(v in views) DBI::dbExecute(con,paste('DROP VIEW IF EXISTS',v))
       DBI::dbExecute(con,'DROP TABLE tariff_product')
       DBI::dbExecute(con,'DROP TABLE tariff_snapshot')
-      DBI::dbExecute(con,'DELETE FROM schema_version')
     }
-    for (f in c('001_schema.sql','002_views.sql')) {
-      sql <- paste(readLines(file.path(monitor_root,'sql',f),warn=FALSE),collapse='\n')
-      sql <- gsub('--[^\n]*','',sql)
-      for (s in strsplit(sql,';',fixed=TRUE)[[1]]) if (nzchar(trimws(s))) DBI::dbExecute(con,s)
-      if(f=='001_schema.sql' && version==1L) {
-        DBI::dbExecute(con,'INSERT INTO tariff_snapshot SELECT * FROM migrate_tariff_snapshot')
-        DBI::dbExecute(con,'INSERT INTO tariff_product SELECT * FROM migrate_tariff_product')
-        DBI::dbExecute(con,'DROP TABLE migrate_tariff_product')
-        DBI::dbExecute(con,'DROP TABLE migrate_tariff_snapshot')
-      }
+    if(version<2L) execute_monitor_sql(con,'001_schema.sql')
+    if(version==1L) {
+      DBI::dbExecute(con,'INSERT INTO tariff_snapshot SELECT * FROM migrate_tariff_snapshot')
+      DBI::dbExecute(con,'INSERT INTO tariff_product SELECT * FROM migrate_tariff_product')
+      DBI::dbExecute(con,'DROP TABLE migrate_tariff_product')
+      DBI::dbExecute(con,'DROP TABLE migrate_tariff_snapshot')
     }
+    if(version<3L) execute_monitor_sql(con,'003_regions.sql')
+    execute_monitor_sql(con,'002_views.sql')
   })
 }
 archive_file <- function(cfg,path,hash=sha(path)) {

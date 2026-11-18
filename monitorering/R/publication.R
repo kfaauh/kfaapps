@@ -1,19 +1,21 @@
 # The live DuckDB is never opened by Shiny. Publish one self-contained RDS,
 # atomically replaced on the same filesystem; readers retain the previous object.
 publication_tables <- c(
- consumption='v_consumption', historical_prices='v_consumption_price_month',
- current_prices='v_consumption_current_price', tariff_changes='v_tariff_changes')
+ consumption='v_consumption_by_region', historical_prices='v_consumption_price_month_by_region',
+ current_prices='v_consumption_current_price_by_region', tariff_changes='v_tariff_changes')
 publish_analysis <- function(con,destination,before_replace=function(path) NULL) {
   must(dir.exists(dirname(destination)),'Create publication directory with operator/Shiny group permissions first')
+  must(database_version(con)==3L,'Run monitor.R init to migrate before publishing analysis')
   bundle <- DBI::dbWithTransaction(con,{
     tables <- lapply(publication_tables,function(view) DBI::dbGetQuery(con,paste('SELECT * FROM',view)))
-    tables$extracts <- DBI::dbGetQuery(con,paste('SELECT e.extract_id,e.atc_prefix,e.month,e.extracted_at,e.imported_at,e.row_count,',
-      'a.extract_id IS NOT NULL AS population_verified FROM consumption_extract e LEFT JOIN coverage_attestation a USING(extract_id)'))
+    tables$extracts <- DBI::dbGetQuery(con,paste('SELECT e.extract_id,e.atc_prefix,e.month,e.extracted_at,e.imported_at,r.row_count,',
+      'a.extract_id IS NOT NULL AS population_verified, r.region FROM consumption_extract e',
+      'JOIN consumption_extract_region r USING(extract_id) LEFT JOIN coverage_attestation a USING(extract_id)'))
     tables$tariffs <- DBI::dbGetQuery(con,paste('SELECT snapshot_id,observed_at,imported_at,nominal_from,nominal_to,',
       'validity_kind,complete,effective_from,effective_to FROM tariff_snapshot'))
     tables$tariff_products <- DBI::dbGetQuery(con,paste('SELECT snapshot_id,varenummer,atc,name,strength,form,pack,esp,tsp,',
       'ddd_provenance,tsp_per_ddd,quality_flags FROM tariff_product'))
-    list(version=1L,published_at=format(Sys.time(),'%Y-%m-%dT%H:%M:%OS6Z',tz='UTC'),tables=tables)
+    list(version=2L,published_at=format(Sys.time(),'%Y-%m-%dT%H:%M:%OS6Z',tz='UTC'),tables=tables)
   })
   validate_analysis_bundle(bundle)
   tmp <- tempfile('.analysis-',tmpdir=dirname(destination));on.exit(unlink(tmp),add=TRUE)

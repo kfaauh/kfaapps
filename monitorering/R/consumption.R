@@ -1,8 +1,9 @@
 national_regions <- c('Region Hovedstaden','Region Sjælland','Region Syddanmark','Region Midtjylland','Region Nordjylland')
+regional_codes <- c('H','SJ','SD','MJ','NJ')
 consumption_metrics <- c('ddd','regionalt_tilskud_kr')
 validate_consumption <- function(csv,manifest) {
   m <- read_meta(manifest)
-  must(length(m$schema_version)==1L && is.numeric(m$schema_version) && m$schema_version %in% c(1,2),'Unsupported consumption manifest version')
+  must(length(m$schema_version)==1L && is.numeric(m$schema_version) && m$schema_version %in% c(1,2,3),'Unsupported consumption manifest version')
   must(isTRUE(m$complete_query_response) && identical(as.integer(m$http),200L),'Incomplete/failed source response')
   must(valid_prefix(m$atc_prefix),'Invalid ATC prefix')
   month_date(m$period); iso_time(m$extracted_at); scalar(m$source,'source')
@@ -13,17 +14,21 @@ validate_consumption <- function(csv,manifest) {
   must(!isTRUE(m$has_restart_token) && !isTRUE(m$response_truncated),'Manifest reports incomplete response')
   must(isTRUE(m$zero_filter),'Expected validated nonzero-filter contract')
   must(is.numeric(m$duration_ms) && length(m$duration_ms)==1L && is.finite(m$duration_ms) && m$duration_ms>=0,'Invalid HTTP duration')
-  if (m$schema_version==2) {
+  regional <- m$schema_version==3
+  if (m$schema_version>=2) {
     must(identical(m$csv_sha256,sha(csv)),'CSV checksum mismatch')
-    must(identical(m$query_contract,'compact-national-v1'),'Unexpected query/filter contract')
+    contract <- if(regional) 'compact-regional-v1' else 'compact-national-v1'
+    must(identical(m$query_contract,contract),'Unexpected query/filter contract')
     must(is.character(m$query_sha256) && length(m$query_sha256)==1 && grepl('^[0-9a-f]{64}$',m$query_sha256),'Missing query fingerprint')
     must(isFALSE(m$has_restart_token),'RestartToken/continuation response not complete')
   }
   d <- read.table(csv,header=TRUE,sep=';',quote='"',comment.char='',colClasses='character',
                   check.names=FALSE,fileEncoding='UTF-8-BOM',na.strings=NULL,fill=FALSE)
-  must(identical(names(d),c('atc5','varenummer','aar_maaned','maaling','vaerdi')),'Unexpected CSV columns')
+  columns <- c('atc5','varenummer','aar_maaned','maaling','vaerdi')
+  if(regional) columns <- c(columns,'region')
+  must(identical(names(d),columns),'Unexpected CSV columns')
   must(nrow(d)==m$row_count,'CSV/manifest row count mismatch')
-  must(nrow(d)>0 || (m$schema_version==2 && isTRUE(m$allow_empty)),'Empty unverified extraction')
+  must(nrow(d)>0 || (m$schema_version>=2 && isTRUE(m$allow_empty)),'Empty unverified extraction')
   must(!anyNA(d) && all(nzchar(as.matrix(d))),'Missing CSV cell')
   must(all(grepl('^[A-Z][0-9]{2}[A-Z]{2}[0-9]{2}$',d$atc5)) && all(startsWith(d$atc5,m$atc_prefix)),'ATC outside extraction scope')
   must(all(grepl('^[0-9]{6}$',d$varenummer)),'Varenummer must be six-digit text')
@@ -32,25 +37,47 @@ validate_consumption <- function(csv,manifest) {
   must(all(grepl('^-?[0-9]+(\\.[0-9]{1,8})?$',d$vaerdi)),'Noncanonical/overprecision numeric value')
   v <- suppressWarnings(as.numeric(d$vaerdi))
   must(all(is.finite(v) & abs(v)<1e20 & v!=0),'Invalid/zero/overflow metric value')
-  must(!anyDuplicated(d[1:4]),'Duplicate observation key')
+  if(regional) {
+    must(all(d$region %in% regional_codes),'Unknown regional observation code')
+    must(is.list(m$region_metrics) && length(m$region_metrics)==length(regional_codes) &&
+         setequal(names(m$region_metrics),regional_codes),'Expected five regional control summaries')
+  }
+  key <- c(columns[1:4],if(regional) 'region')
+  must(!anyDuplicated(d[key]),'Duplicate observation key')
   must(length(unique(d$atc5))==m$atc5_count,'CSV/manifest ATC count mismatch')
   for (metric in consumption_metrics) {
     expected <- m[[paste0('total_',metric)]]
     must(is.numeric(expected) && length(expected)==1L && is.finite(expected),'Missing metric total')
     must(abs(sum(v[d$maaling==metric])-expected)<=1e-6,'CSV/manifest metric total mismatch')
-    if (m$schema_version==2) must(sum(d$maaling==metric)==m$metric_row_counts[[metric]],'Metric row count mismatch')
+    if (m$schema_version>=2) must(sum(d$maaling==metric)==m$metric_row_counts[[metric]],'Metric row count mismatch')
+    if(regional) for(region in regional_codes) {
+      selected <- d$region==region & d$maaling==metric
+      control <- m$region_metrics[[region]][[metric]]
+      must(is.list(control) && is.numeric(control$rows) && sum(selected)==control$rows,
+           'Regional metric row count mismatch')
+      must(is.numeric(control$total) && is.finite(control$total) && abs(sum(v[selected])-control$total)<=1e-6,
+           'Regional metric total mismatch')
+    }
   }
-  list(data=d,manifest=m,csv_sha=sha(csv),manifest_sha=sha(manifest))
+  regions <- if(regional) regional_codes else 'DK'
+  list(data=d,regions=regions,manifest=m,csv_sha=sha(csv),manifest_sha=sha(manifest))
 }
 import_consumption <- function(con,cfg,csv,manifest) {
   x <- validate_consumption(csv,manifest); m <- x$manifest; d <- x$data
+  regional_schema <- database_version(con)==3L
+  must(regional_schema || identical(x$regions,'DK'),'Run monitor.R init to migrate before importing regions')
   id <- digest::digest(paste(x$csv_sha,x$manifest_sha,sep=':'),algo='sha256',serialize=FALSE)
   if (DBI::dbGetQuery(con,'SELECT count(*) n FROM consumption_extract WHERE extract_id=?',params=list(id))$n>0) return(id)
   # Equal source times and overlapping scopes are ambiguous; never select by arrival order.
-  conflict <- DBI::dbGetQuery(con,paste(
-    'SELECT count(*) n FROM consumption_extract WHERE month=? AND extracted_at=?::TIMESTAMPTZ',
-    'AND (starts_with(atc_prefix,?) OR starts_with(?,atc_prefix))'),
-    params=list(as.character(month_date(m$period)),m$extracted_at,m$atc_prefix,m$atc_prefix))$n
+  conflict_sql <- paste('SELECT count(*) n FROM consumption_extract e WHERE month=? AND extracted_at=?::TIMESTAMPTZ',
+    'AND (starts_with(atc_prefix,?) OR starts_with(?,atc_prefix))')
+  params <- list(as.character(month_date(m$period)),m$extracted_at,m$atc_prefix,m$atc_prefix)
+  if(regional_schema) {
+    conflict_sql <- paste(conflict_sql,'AND EXISTS (SELECT 1 FROM consumption_extract_region r',
+      'WHERE r.extract_id=e.extract_id AND r.region IN (',paste(rep('?',length(x$regions)),collapse=','),'))')
+    params <- c(params,as.list(x$regions))
+  }
+  conflict <- DBI::dbGetQuery(con,conflict_sql,params=params)$n
   must(conflict==0,'Conflicting extraction at same source time and overlapping scope')
   ac <- archive_file(cfg,csv,x$csv_sha); am <- archive_file(cfg,manifest,x$manifest_sha)
   DBI::dbWithTransaction(con,{
@@ -59,12 +86,18 @@ import_consumption <- function(con,cfg,csv,manifest) {
       'VALUES (?,?,?::TIMESTAMPTZ,?,?::DATE,?,?,?,true,\'unverified\',?,?,?)'),
       params=list(id,m$source,m$extracted_at,m$atc_prefix,as.character(month_date(m$period)),
                   x$csv_sha,x$manifest_sha,nrow(d),json(m),ac,am))
+    if(regional_schema) {
+      row_regions <- if(identical(x$regions,'DK')) rep('DK',nrow(d)) else d[['region']]
+      for(region in x$regions) DBI::dbExecute(con,'INSERT INTO consumption_extract_region VALUES (?,?,?)',
+        params=list(id,region,sum(row_regions==region)))
+    }
     if (nrow(d)) {
       stage <- data.frame(extract_id=id,atc5=d$atc5,varenummer=d$varenummer,
                           month=paste0(d$aar_maaned,'-01'),metric=d$maaling,value=d$vaerdi)
+      if(regional_schema) stage$region <- row_regions
       DBI::dbWriteTable(con,'consumption_stage',stage,temporary=TRUE,overwrite=TRUE)
       DBI::dbExecute(con,paste('INSERT INTO consumption_observation SELECT extract_id,atc5,varenummer,',
-                              'month::DATE,metric,value::DECIMAL(28,8) FROM consumption_stage'))
+        'month::DATE,metric,value::DECIMAL(28,8)',if(regional_schema) ',region' else '', 'FROM consumption_stage'))
       DBI::dbRemoveTable(con,'consumption_stage')
     }
   })
@@ -77,14 +110,22 @@ atc_children <- function(prefix) {
   suffix <- if(n %in% c(1,5)) sprintf('%02d',0:99) else LETTERS
   paste0(prefix,suffix)
 }
-coverage_report <- function(con,prefix,from,to) {
+coverage_report <- function(con,prefix,from,to,region='DK') {
   must(valid_prefix(prefix),'Invalid ATC prefix')
+  must(length(region)==1L && region %in% c('DK',regional_codes),'Unknown region code')
+  regional_schema <- database_version(con)==3L
+  must(regional_schema || region=='DK','Run monitor.R init to migrate before checking regional coverage')
   dates <- seq(month_date(from),month_date(to),by='month')
   do.call(rbind,lapply(dates,function(day) {
     day <- as.Date(day,origin='1970-01-01')
-    all <- DBI::dbGetQuery(con,paste('SELECT e.extract_id,e.atc_prefix,e.extracted_at,a.evidence',
-      'FROM consumption_extract e LEFT JOIN coverage_attestation a USING(extract_id)',
-      'WHERE e.month=?::DATE ORDER BY e.extracted_at DESC'),params=list(as.character(day)))
+    sql <- 'SELECT e.extract_id,e.atc_prefix,e.extracted_at,a.evidence FROM consumption_extract e'
+    params <- list(as.character(day))
+    if(regional_schema) {
+      sql <- paste(sql,'JOIN consumption_extract_region r ON r.extract_id=e.extract_id AND r.region=?')
+      params <- c(list(region),params)
+    }
+    all <- DBI::dbGetQuery(con,paste(sql,'LEFT JOIN coverage_attestation a ON a.extract_id=e.extract_id',
+      'WHERE e.month=?::DATE ORDER BY e.extracted_at DESC'),params=params)
     related <- startsWith(all$atc_prefix,prefix)|startsWith(prefix,all$atc_prefix)
     all <- all[related,,drop=FALSE]
     # Completeness can be assembled only from exhaustive next-level partitions,
@@ -98,7 +139,7 @@ coverage_report <- function(con,prefix,from,to) {
     scope_complete <- covered(prefix)
     # Check all current/overriding captures conservatively before declaring verified.
     verified <- scope_complete && nrow(all)>0 && all(!is.na(all$evidence))
-    data.frame(prefix=prefix,month=format(day,'%Y-%m'),status=if(scope_complete) {
+    data.frame(prefix=prefix,region=region,month=format(day,'%Y-%m'),status=if(scope_complete) {
       if(verified) 'population_verified' else 'query_complete_population_unverified'
     } else if(nrow(all)) 'partial_subscopes' else 'missing',
     capture_count=nrow(all),extract_id=if(nrow(all)) all$extract_id[1] else NA_character_)

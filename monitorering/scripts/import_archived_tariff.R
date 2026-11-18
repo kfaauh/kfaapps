@@ -21,7 +21,7 @@ jsonlite::write_json(m,tmp,auto_unbox=TRUE,null='null',pretty=TRUE)
 cfg <- monitor_config()
 with_monitor_db(cfg,TRUE,function(con) {
  version <- as.integer(DBI::dbGetQuery(con,'SELECT version FROM schema_version')$version)
- must(identical(version,2L),'Run monitor.R init to upgrade the database first (take a backup before upgrading)')
+ must(version %in% c(2L,3L),'Run monitor.R init to upgrade the database first (take a backup before upgrading)')
  id <- import_tariff(con,cfg,path,tmp)
  cat('Archived tariff snapshot:',id,'\n')
  cat('Original rows:',nrow(d),'\n')

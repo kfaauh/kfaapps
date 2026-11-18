@@ -1,7 +1,15 @@
 # Pure helpers: app readers require neither DuckDB nor access to the live database.
+analysis_regions <- c(DK='Hele Danmark',H='Region Hovedstaden',SJ='Region Sjælland',
+  SD='Region Syddanmark',MJ='Region Midtjylland',NJ='Region Nordjylland')
+analysis_region_rows <- function(d,region='DK') {
+  stopifnot(length(region)==1L,region %in% names(analysis_regions))
+  codes <- d[['region']]
+  if(is.null(codes)) return(if(region=='DK') d else d[FALSE,,drop=FALSE])
+  d[codes==region,,drop=FALSE]
+}
 validate_analysis_bundle <- function(x) {
   required <- c('consumption','historical_prices','current_prices','tariff_changes','extracts','tariffs','tariff_products')
-  stopifnot(is.list(x),identical(x$version,1L),is.character(x$published_at),length(x$published_at)==1L,
+  stopifnot(is.list(x),identical(x$version,1L)||identical(x$version,2L),is.character(x$published_at),length(x$published_at)==1L,
             all(required %in% names(x$tables)),all(vapply(x$tables[required],is.data.frame,logical(1))))
   columns<-list(
     consumption=c('atc5','varenummer','month','ddd','regionalt_tilskud_kr'),
@@ -12,13 +20,20 @@ validate_analysis_bundle <- function(x) {
     tariff_products=c('snapshot_id','varenummer','atc'),
     tariff_changes=c('snapshot_id','previous_id','varenummer','change'))
   for(name in names(columns))stopifnot(all(columns[[name]] %in% names(x$tables[[name]])))
+  series_tables <- c('consumption','historical_prices','current_prices')
+  key_columns <- c('atc5','varenummer','month')
+  for(name in c(series_tables,'extracts')) {
+    table <- x$tables[[name]]
+    if(x$version==2L) stopifnot('region' %in% names(table),all(table$region %in% names(analysis_regions)))
+    else stopifnot(!'region' %in% names(table))
+  }
+  if(x$version==2L) key_columns <- c(key_columns,'region')
   d <- x$tables$consumption
-  stopifnot(all(c('atc5','varenummer','month','ddd','regionalt_tilskud_kr') %in% names(d)),
-            !anyDuplicated(d[c('atc5','varenummer','month')]))
-  for(name in c('historical_prices','current_prices')) {
+  key <- function(v) do.call(paste,c(as.list(v[key_columns]),sep='|'))
+  stopifnot(!anyDuplicated(d[key_columns]))
+  for(name in series_tables[-1]) {
     z <- x$tables[[name]]
-    key<-function(v)paste(v$atc5,v$varenummer,v$month,sep='|')
-    stopifnot(nrow(z)==nrow(d),!anyDuplicated(z[c('atc5','varenummer','month')]),setequal(key(z),key(d)))
+    stopifnot(nrow(z)==nrow(d),!anyDuplicated(z[key_columns]),setequal(key(z),key(d)))
   }
   invisible(TRUE)
 }
@@ -26,7 +41,8 @@ analysis_children <- function(prefix) {
   if(nchar(prefix)==7L) return(character())
   paste0(prefix,if(nchar(prefix) %in% c(1,5)) sprintf('%02d',0:99) else LETTERS)
 }
-analysis_coverage <- function(extracts,prefix,months) {
+analysis_coverage <- function(extracts,prefix,months,region='DK') {
+  extracts <- analysis_region_rows(extracts,region)
   do.call(rbind,lapply(as.character(months),function(month) {
     e <- extracts[format(as.Date(extracts$month),'%Y-%m')==month,,drop=FALSE]
     e <- e[startsWith(e$atc_prefix,prefix)|startsWith(prefix,e$atc_prefix),,drop=FALSE]
@@ -44,11 +60,11 @@ analysis_coverage <- function(extracts,prefix,months) {
 }
 # An all-missing series remains NA. Partial observed sums are labelled elsewhere.
 observed_sum <- function(x) if(!length(x)||all(is.na(x))) NA_real_ else sum(x,na.rm=TRUE)
-analysis_months <- function(bundle,prefix,from,to,product='') {
+analysis_months <- function(bundle,prefix,from,to,product='',region='DK') {
   dates <- seq(as.Date(paste0(from,'-01')),as.Date(paste0(to,'-01')),by='month')
   months <- format(dates,'%Y-%m')
-  coverage <- analysis_coverage(bundle$tables$extracts,prefix,months)
-  d <- bundle$tables$consumption
+  coverage <- analysis_coverage(bundle$tables$extracts,prefix,months,region)
+  d <- analysis_region_rows(bundle$tables$consumption,region)
   d <- d[startsWith(d$atc5,prefix) & (product=='' | d$varenummer==product),,drop=FALSE]
   do.call(rbind,lapply(seq_along(months),function(i) {
     z <- d[format(as.Date(d$month),'%Y-%m')==months[i],,drop=FALSE]

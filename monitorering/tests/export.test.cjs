@@ -2,6 +2,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
+const vm=require('node:vm');
 const p=require('../browser/monitorering.js');
 const task={prefix:'N06',period:'2025-01'};
 const fixture=fs.readFileSync(__dirname+'/fixtures/monitorering_forbrug_N06_2025-01.csv','utf8').replace(/^\uFEFF/,'').trim().split(/\r?\n/).slice(1).map(s=>s.split(';'));
@@ -84,4 +85,110 @@ test('resume strips untrusted fields, rejects overlapping history and preserves 
  assert.deepEqual(p.resumeTasks(cp),{pending:[task],completed:[]});
  cp.completed=[{prefix:'N06BA04',period:'2025-01'}];assert.throws(()=>p.resumeTasks(cp),/Overlapping/);
  assert.throws(()=>p.resumeTasks({...cp,pending:[{prefix:'bad',period:'2025-01'}]}),/Invalid/);
+});
+
+function probeResponse(regions, values) {
+ const body=response(values.map(value=>['N06BA04','123456','2025-01','ddd',value]));
+ if(regions) {
+  const data=body.results[0].result.data;
+  data.descriptor.Select.splice(5,0,{Name:'DimBorgerDemografi.Bopælsregion',Value:'Geo'});
+  const dataset=data.dsr.DS[0];
+  dataset.ValueDicts.Geographies=p.REGIONS;
+  dataset.PH[0].DM0.forEach((row,i)=>{
+   if(row.S) row.S.splice(5,0,{N:'Geo',DN:'Geographies'});
+   row.C.splice(5,0,regions[i]);
+  });
+ }
+ return body;
+}
+
+test('regional probe changes grouping or filter only and retains the national defaults',()=>{
+ const command=variant=>p.buildPayload({...task,...variant}).queries[0].Query.Commands[0].SemanticQueryDataShapeCommand;
+ const national=command({}),grouped=command({groupByRegion:true}),single=command({region:p.REGIONS[0]});
+ assert.equal(grouped.Query.Select[5].Name,'DimBorgerDemografi.Bopælsregion');
+ assert.deepEqual(grouped.Binding.Primary.Groupings[0].Projections,[0,1,2,3,4,5,6]);
+ assert.deepEqual(grouped.Query.Where,national.Query.Where);
+ assert.deepEqual(single.Query.Select,national.Query.Select);
+ const regionFilter=single.Query.Where.find(x=>x.Condition.In?.Expressions[0].Column.Property==='Bopælsregion');
+ assert.deepEqual(regionFilter.Condition.In.Values,[[{Literal:{Value:"'Region Hovedstaden'"}}]]);
+ assert.throws(()=>command({region:'Other'}),/Unknown probe region/);
+});
+
+test('both regional probe modes reconcile observations without filling missing metrics',async()=>{
+ for(const fallback of [false,true]) {
+  const seen=[];
+  const result=await p.runRegionProbe(async variant=>{
+   seen.push(variant);
+   const regional=fallback?probeResponse(null,[p.REGIONS.indexOf(variant.region)+1]):
+    probeResponse([0,1,2,3,4],[1,2,3,4,5]);
+   return {body:variant.region||variant.groupByRegion?regional:probeResponse(null,[16])};
+  },fallback,async()=>{});
+  assert.equal(seen.length,fallback?6:2);
+  assert(seen.every(x=>x.prefix==='N06BA04'&&x.period==='2025-01'));
+  assert.equal(result.reconciliation[0].regionSum,15);
+  assert.equal(result.reconciliation[0].difference,-1);
+  assert.equal(result.reconciliation[0].productDifferences,1);
+  assert.equal(result.reconciliation[1].regionSum,null);
+ }
+});
+
+test('grouped probe preserves absent regions and rejects unknown, duplicate or truncated rows',async()=>{
+ const request=body=>async variant=>({body:variant.groupByRegion?body:probeResponse(null,[1])});
+ const run=body=>p.runRegionProbe(request(body),false,async()=>{});
+ const incomplete=await run(probeResponse([0],[1]));
+ assert.equal(incomplete.totals[2].ddd,null);
+ assert.equal(incomplete.reconciliation[0].regionSum,null);
+ assert.equal(incomplete.reconciliation[0].incompleteProducts,1);
+ await assert.rejects(run(probeResponse(['Ukendt'],[1])),/Grupperet: Unknown or blank/);
+ await assert.rejects(run(probeResponse([0,0],[1,2])),/Grupperet: Duplicate/);
+ const truncated=probeResponse([0],[1]);
+ truncated.results[0].result.data.dsr.DS[0].RT=['opaque'];
+ await assert.rejects(run(truncated),/Grupperet: Continuation/);
+});
+
+test('browser probe uses existing session capture without emitting files or checkpoints',async()=>{
+ const requests=[],tables=[];
+ const frame={
+  location:{origin:'https://app.powerbi.com',href:'https://app.powerbi.com/report'},
+  console:{log(){},table(value){tables.push(value);}},
+  AbortController,Headers,URL,TextEncoder,performance,crypto,clearTimeout,
+  setTimeout:(fn,ms)=>setTimeout(fn,ms===2500?0:ms),
+  async fetch(url,init) {
+   requests.push(JSON.parse(init.body));
+   const count=requests.length;
+   return {ok:true,text:async()=>JSON.stringify(count===3?probeResponse([0,1,2,3,4],[1,2,3,4,5]):probeResponse(null,[15]))};
+  }
+ };
+ frame.window=frame;
+ vm.runInNewContext(fs.readFileSync(require.resolve('../browser/monitorering.js'),'utf8'),frame);
+ const pending=frame.Monitorering.probeRegions();
+ await frame.fetch(frame.Monitorering.config(task).api,{
+  headers:{authorization:'EmbedToken synthetic'},body:'{}'
+ });
+ const result=await pending;
+ assert.equal(requests.length,3);
+ assert.equal(tables.length,2);
+ assert.equal(result.reconciliation[0].difference,0);
+ assert.equal(frame.monitoreringCollector,undefined);
+});
+
+test('grouped export records per-region controls and keeps checkpoint geography',async()=>{
+ const task={prefix:'N06BA04',period:'2025-01',groupByRegion:true};
+ let checkpoint,output;
+ await p.collect([task],{
+  request:async()=>({body:probeResponse([0,1,2,3,4],[1,2,3,4,5])}),
+  checkpoint:value=>{checkpoint=value;},wait:async()=>{},
+  emit:async value=>{output=value;}
+ });
+ assert.equal(checkpoint.query_contract,'compact-regional-v1');
+ assert.deepEqual(p.resumeTasks(checkpoint),{pending:[],completed:[task]});
+ assert.equal(output.manifest.schema_version,3);
+ assert.equal(output.manifest.query_contract,'compact-regional-v1');
+ assert.deepEqual(output.manifest.region_metrics.NJ.ddd,{rows:1,total:5});
+ assert.deepEqual(output.manifest.region_metrics.SJ.regionalt_tilskud_kr,{rows:0,total:0});
+ assert.match(output.csv,/vaerdi;region\r\n/);
+ assert.match(output.csv,/;ddd;1;H\r\n/);
+ const empty=await p.makeExport([],task);
+ assert.equal(empty.manifest.allow_empty,true);
+ assert.deepEqual(empty.manifest.region_metrics.H.ddd,{rows:0,total:0});
 });
