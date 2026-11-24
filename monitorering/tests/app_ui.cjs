@@ -3,15 +3,18 @@ const {chromium}=require('playwright');const assert=require('node:assert/strict'
 (async()=>{const b=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||undefined,args:['--no-sandbox','--disable-gpu','--disable-dev-shm-usage']});
  try{const p=await b.newPage({viewport:{width:1440,height:1100},acceptDownloads:true});const errors=[];p.on('pageerror',e=>errors.push(e.message));
   await p.goto(process.env.MONITOR_TEST_URL||'http://127.0.0.1:3838/');
-  await p.getByText('Forespørgsel indlæst · population ikke verificeret',{exact:true}).waitFor();
-  await p.getByText('Forbrug og tilskud',{exact:true}).click();
+  await p.locator('#overview').getByText('25.198.980',{exact:true}).waitFor();
+  await p.getByText('Månedstal',{exact:true}).click();
   await p.locator('#monthly').getByText('25.198.980,00',{exact:true}).waitFor();
   await p.locator('#monthly').getByText('80.632.838,00',{exact:true}).waitFor();
   await p.locator('#to').selectOption('2025-02');
   await p.locator('#monthly').getByText('Ingen indlæst afgrænsning',{exact:true}).waitFor();
-  for(const tab of ['Takster og kobling','Fremskrivning og scenarie','Datastatus']){
+  for(const tab of ['Sammenlign år','Takster og kobling','Fremskrivning og scenarie','Datastatus']){
    await p.getByText(tab,{exact:true}).click();await p.waitForTimeout(250);
   }
+  await p.locator('#coverage').getByText('Forespørgsel indlæst · population ikke verificeret',{exact:true}).waitFor();
+  await p.getByText('Import- og revisionshistorik',{exact:true}).click();
+  await p.locator('#extracts table tbody').waitFor();
   await p.getByText('Fremskrivning og scenarie',{exact:true}).click();
   assert.match(await p.locator('#forecast').innerText(),/Fremskrivning|Utilstrækkeligt/);
   assert.equal(await p.locator('.shiny-output-error').count(),0);assert.deepEqual(errors,[]);
