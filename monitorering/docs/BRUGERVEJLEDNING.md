@@ -1,55 +1,41 @@
 # Monitorering · kort brugervejledning
 
-Monitorering viser månedligt lægemiddelforbrug i DDD (definerede døgndoser) og
-observeret tilskud i kroner. Du arbejder direkte i browseren med de publicerede
-data.
+## Eksempel: Diabetesmidler i første kvartal 2026
 
-## Eksempel · diabetesmidler i første kvartal 2026
+1. Åbn **Overblik**, vælg **2026** og **Hele Danmark** i dækningsmatricen,
+   og klik på **A10 · Midler mod diabetes**. Sæt perioden i **Vælg data** til
+   januar–marts 2026. Her kan du også søge efter en mere specifik ATC-kode
+   eller indtaste et varenummer under **Flere filtre**.
+2. Under **Forbrug og tilskud** ser du observerede tilskudsudgifter i kroner
+   og forbrug i definerede døgndoser (DDD). En orange ring markerer en
+   ufuldstændig månedssum. Et hul viser en måned uden måling. Find
+   månedsværdierne eller fordelingen på ATC5 og varenumre i detaljerne.
+3. Rul ned til **Sammenligning med samme måneder året før**. Skift derefter
+   **Bopælsregion** til **Region Midtjylland** og se sammenligningen igen.
+   Tallene er absolutte. Landstallene kommer fra et særskilt udtræk.
+   Klik **Hent CSV** for at hente produktrækkerne for dit valg.
+4. Åbn **Fremskrivning** for at se det observerede tilskud, det beregnede
+   tilskud for øvrige måneder og det samlede helårsestimat. Appen bruger
+   gennemsnittet af op til tre brugbare afsluttede måneder fra den valgte
+   periode. Ved huller tidligere på året står der **Annualisering**.
+   Se, hvilke måneder appen har beregnet, og om der mangler målinger.
+   Et historisk år vises som en retrospektiv beregning.
 
-1. Vælg **A10 · Midler mod diabetes** under **ATC-gruppe**.
-   Sæt **Fra måned** til **2026-01**, **Til måned** til **2026-03** og
-   **Bopælsregion** til **Hele Danmark**.
-2. Læs periodens observerede summer under **Forbrug og tilskud**. Kurverne
-   viser DDD og tilskud pr. måned. Åbn **Månedstal** for at se værdierne bag
-   kurverne. En orange ring markerer delvis dækning eller manglende
-   produktmålinger. Et hul i kurven betyder, at der mangler en observeret værdi.
-3. Åbn **Sammenlign år**. Appen slår automatisk januar–marts 2025 op for samme
-   ATC-gruppe og geografi. Tabellen viser procentvise forskelle pr. måned.
-   En blank procent kan skyldes en manglende måling eller et nul året før.
-   Kontrollér dækning og manglende målinger i begge år før fortolkning.
-4. Skift **Bopælsregion** til **Region Midtjylland**. Aflæs de samme måneder
-   og sammenlign med landstallene, du lige så. Vælg en anden region for at
-   gentage sammenligningen. Appen viser absolutte summer, så forskellene
-   afspejler også forskellig befolkningsstørrelse. **Hele Danmark** hentes fra
-   sit eget nationale udtræk. Summen af regionerne kan afvige fra landstallet.
-5. Åbn **Datastatus** og kontrollér både **Dækning** og **Observationer**.
-   En indlæst forespørgsel kan dække det valgte ATC-område, selv om
-   populationsdækningen er uverificeret, eller målinger mangler. Summerne
-   omfatter kendte målinger. Tallet for manglende produktmålinger omfatter
-   kun varenumre med en række i de indlæste data.
-6. Klik **Hent CSV**. Filen indeholder produktrækker for de valgte filtre,
-   med geografi og publiceringstidspunkt. Målinger, der mangler på en række,
-   står tomme. Måneder uden produktrækker får ingen rækker i filen. Brug
-   semikolon som separator, hvis du importerer filen i Excel. Årssammenligningens
-   procenter beregnes i visningen.
+## Se, hvilke data du har
 
-Hvis du vil se ét bestemt præparat, kan du indtaste det sekscifrede varenummer
-under **Flere filtre**. Åbn **ATC og varenumre** på forsiden for at se
-produktrækker og vælge ATC-niveau for tabellen.
+Matricen i **Overblik** viser én geografi og ét år ad gangen. Den skelner
+mellem måneder med målinger, gennemførte udtræk uden målinger og måneder
+uden indlæst udtræk. **Data for dit valg** følger dine filtre og viser
+måneder med mangler. Under **Datastatus** kan du se, hvilke udtræk der ligger
+bag tallene. Kontrol af produktdækning betyder, at der er lavet en særskilt
+gennemgang af, om relevante produkter indgår. Et målt nul vises som 0. I
+CSV-filen står manglende målinger tomme. Brug semikolon som separator.
 
-## Takster og fremskrivning
+## Slå en historisk pris op
 
-- **Takster og kobling** viser matchdage pr. produktmåned. Et historisk
-  prisgrundlag kræver egnet pris pr. DDD og dokumenteret daglig gyldighed
-  for hele måneden. En observeret takst kan ses under **Takstobservationer**.
-- **Fremskrivning og scenarie → Tilskud** viser, om årets tilskud kan
-  fremskrives. Appen kræver mindst tre sammenhængende, afsluttede måneder
-  fra januar. De sidste tre måneders gennemsnit bruges frem til december
-  uden sæsonkorrektion. Hvis enkelte produktmålinger mangler, kan appen vise
-  et særskilt estimat fra de observerede månedssummer. Den stiplede kurve
-  viser estimatet.
-- **Pris ved observeret DDD** værdisætter observeret forbrug med senest
-  observerede tilskudspris pr. DDD. Kontrollér prisdato, andel matchet DDD og
-  eventuel afledt DDD under **Varenumre, prisdato og prisgrundlag**.
-  **Produktbaseret prisscenarie** viser et beregnet prisgrundlag frem til
-  december for varer med egnet pris og DDD i de tre beregningsmåneder.
+Åbn **Takstpriser**, søg på varenummer, produktnavn eller ATC-kode, og vælg
+et produkt. Hold markøren over et punkt, eller brug tabellen til at se
+prisen på den enkelte dato. Grafen bruger hele produktets tilgængelige
+historik. Hvert punkt viser pakningsprisen på observationsdatoen. Prisen
+mellem observationerne kan have ændret sig. De observerede tilskudsudgifter
+finder du i **Forbrug og tilskud**.
