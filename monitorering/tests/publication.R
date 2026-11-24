@@ -36,10 +36,11 @@ m<-data.frame(month=sprintf('2026-%02d',1:3),status='query_complete_population_u
 f<-subsidy_forecast(m,2026,as.Date('2026-04-03'))
 stopifnot(f$available,f$estimate==2400)
 m$missing_subsidy[2]<-1L
-stopifnot(!subsidy_forecast(m,2026,as.Date('2026-04-03'))$available)
-m$missing_subsidy[2]<-0L;m$status[2]<-'missing'
-stopifnot(!subsidy_forecast(m,2026,as.Date('2026-04-03'))$available)
-stopifnot(!subsidy_forecast(m[1,,drop=FALSE],2026,as.Date('2026-04-03'))$available)
+stopifnot(subsidy_forecast(m,2026,as.Date('2026-04-03'))$missing==1L)
+m$missing_subsidy[2]<-0L
+m$status[2]<-'missing'
+stopifnot(subsidy_forecast(m,2026,as.Date('2026-04-03'))$annualised)
+stopifnot(subsidy_forecast(m[1,,drop=FALSE],2026,as.Date('2026-04-03'))$months==1L)
 # Synthetic product scenario: three real month slots; a vanished product is excluded.
 pm<-data.frame(atc5='N06BA04',varenummer=c('000001','000001','000001','000002'),
  month=as.Date(c('2026-01-01','2026-02-01','2026-03-01','2026-01-01')),ddd=c(10,20,30,5),
@@ -53,9 +54,9 @@ Sys.setenv(MONITOR_PUBLICATION=path)
 app_path<-normalizePath(file.path(monitor_root,'..','monitorering-app'))
 app<-shiny::shinyAppDir(app_path)
 shiny::testServer(app,{
- session$setInputs(prefix='N06',from='2025-01',to='2025-02',product='',level='7')
+ session$setInputs(prefix='N06',from='2025-01',to='2025-02',product='')
  stopifnot(monthly()$ddd[1]==25198980,is.na(monthly()$ddd[2]),!is.null(cache()))
- stopifnot(grepl('N06',output$scope),grepl('Fremskrivning|Utilstrækkeligt',output$forecast))
+ stopifnot(grepl('N06',output$scope),forecast_result()$available)
  # Bad replacement must retain the previous object and surface a refresh failure.
  saveRDS(list(version=999),path);session$elapse(30001)
  stopifnot(monthly()$ddd[1]==25198980,nzchar(problem()))
@@ -96,16 +97,14 @@ validate_analysis_bundle(synthetic);saveRDS(synthetic,path)
 # Fix the app's clock for stable calendar assertions in future CI years.
 Sys.Date<-function()as.Date('2026-10-30')
 shiny::testServer(shiny::shinyAppDir(app_path),{
- session$setInputs(prefix='N06',from='2026-01',to='2026-09',product='',level='7')
- stopifnot(grepl('2026-07',output$latest_observation),
-  grepl('Scenarie august–december 2026',output$observed_estimate),
-  grepl('Manglende produktmålinger',output$observed_estimate),
-  grepl('Utilstrækkeligt',output$forecast),
-  grepl('Scenarie august–december 2026',output$future_heading),
+ session$setInputs(prefix='N06',from='2026-01',to='2026-09',product='')
+ stopifnot(grepl('2026-07',output$latest_observation),forecast_result()$available,
+  forecast_result()$after_last==5,forecast_result()$missing>0,
+  grepl('Forventede tilskudsudgifter i 2026',output$forecast_summary$html),
   !is.null(output$estimate_series),!is.null(output$year_series),!is.null(output$year_comparison))
 })
 rm(Sys.Date)
-cat('PASS: synthetic July observation boundary, separate estimate text, strict forecast guard and comparison/scenario plots in Shiny.\n')
+cat('PASS: synthetic July observation boundary, unified forecast and comparison plots in Shiny.\n')
 
 # A populated v2 database keeps its national capture, raw hashes and attestation.
 # The regional and national captures deliberately have the same source time.
@@ -168,7 +167,7 @@ with_monitor_db(regional_cfg,TRUE,function(con) {
  stopifnot(identical(mj$ddd,c(4,4,12,NA_real_)),mj$status[4]=='missing',
    is.na(nj$actual_subsidy_kr[2]),nj$status[2]=='query_complete_population_unverified',
    subsidy_forecast(mj,2025,as.Date('2025-04-03'))$estimate==80,
-   !subsidy_forecast(nj,2025,as.Date('2025-04-03'))$available)
+   subsidy_forecast(nj,2025,as.Date('2025-04-03'))$annualised)
  legacy<-z;legacy$version<-1L
  for(name in c('consumption','historical_prices','current_prices','extracts')) {
    legacy$tables[[name]]<-analysis_region_rows(legacy$tables[[name]],'DK')
@@ -179,7 +178,7 @@ with_monitor_db(regional_cfg,TRUE,function(con) {
    is.na(analysis_months(legacy,'N06','2025-01','2025-01',region='MJ')$ddd))
 })
 shiny::testServer(shiny::shinyAppDir(app_path),{
- session$setInputs(prefix='N06',from='2025-01',to='2025-03',product='',level='7')
+ session$setInputs(prefix='N06',from='2025-01',to='2025-03',product='')
  stopifnot(monthly()$ddd[1]==25198980)
  session$setInputs(region='MJ')
  stopifnot(monthly()$ddd[1]==4,grepl('Region Midtjylland',output$scope),
