@@ -31,7 +31,7 @@ ui <- fluidPage(
      .bslib-sidebar-layout > .main{padding-inline:.75rem}
      .nav-tabs .nav-link{font-size:.93rem;padding-inline:.45rem}
      .bslib-sidebar-layout button[aria-controls=filters_panel]{width:auto;padding-inline:.55rem}
-     .bslib-sidebar-layout button[aria-controls=filters_panel]::after{content:"Vælg data";margin-left:.45rem;font-size:.92rem}
+     .bslib-sidebar-layout button[aria-controls=filters_panel]::after{content:"Vælg data";margin-left:.45rem;font-size:.92rem;white-space:nowrap}
    }
    .sidebar .shiny-input-container{margin-bottom:.4rem}
    .sidebar .note{font-size:.88rem;margin:0 0 .35rem}
@@ -86,6 +86,7 @@ ui <- fluidPage(
  layout_sidebar(fillable=FALSE,fill=FALSE,
   sidebar=sidebar(id='filters_panel',title='Vælg data',width=270,open='desktop',gap='.55rem',
    uiOutput('atc_ui'),
+   uiOutput('atc_hint'),
    uiOutput('dates_ui'),
    selectInput('region','Bopælsregion',choices=setNames(names(analysis_regions),analysis_regions),selected='DK',selectize=FALSE),
    actionLink('suggest_dates','Vælg perioden med seneste data'),
@@ -138,6 +139,7 @@ ui <- fluidPage(
     tabPanel('Datastatus',value='status',h2('Datadækning og revisionshistorik'),
       p(textOutput('latest_observation',inline=TRUE)),
       p('Et gennemført udtræk kan stadig mangle enkelte målinger. Kontrol af produktdækning er en særskilt gennemgang af, om alle relevante produkter indgår. Hele Danmark bruger sit eget udtræk.'),
+      p(class='note','Kolonnerne om målingsmangler tæller produktrækker uden en DDD- eller tilskudsmåling. En målt værdi på 0 tæller som en måling.'),
       DTOutput('coverage'),
       tags$details(tags$summary('Import- og revisionshistorik'),uiOutput('publication_details'),
         p(class='note','Kildeafgrænsning: DDD, Flag T3 = Ja, kroniske sygdomme = Ingen valg.'),DTOutput('extracts')))
@@ -190,6 +192,13 @@ server <- function(input,output,session) {
    tagList(selectizeInput('prefix','ATC-kode',choices=choices,selected=selected,
      options=list(create=TRUE,placeholder='Søg fx A10 eller diabetes')),
      p(class='note','Vælg en gruppe eller søg efter en underkode. Du kan også indtaste en anden ATC-kode.'))
+ })
+ output$atc_hint <- renderUI({
+   req(input$prefix)
+   prefix <- toupper(trimws(input$prefix))
+   d <- bundle()$tables$consumption
+   if(!any(startsWith(d$atc5,prefix) & (!is.na(d$ddd) | !is.na(d$regionalt_tilskud_kr))))
+     p(class='note','Der er ingen publicerede forbrugsmålinger for denne ATC-kode.')
  })
  output$dates_ui <- renderUI({
    x <- bundle()
@@ -382,8 +391,11 @@ server <- function(input,output,session) {
    table
  })
  table_out('coverage',function(){
-   d<-monthly()[c('month','status','observation_status','products','missing_ddd','missing_subsidy')]
-   d$status<-unname(status_da[d$status]);d
+   d <- monthly()
+   measures <- c('missing_ddd','missing_subsidy')
+   show <- measures[vapply(d[measures],function(x) any(x>0),logical(1))]
+   d$status <- unname(status_da[d$status])
+   d[c('month','status','observation_status','products',show)]
  })
  table_out('monthly',function(){
    d <- monthly()

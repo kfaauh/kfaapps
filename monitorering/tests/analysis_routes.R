@@ -88,5 +88,7 @@ shiny::testServer(shiny::shinyAppDir(file.path(root,'monitorering-app')),{
  stopifnot(forecast_result()$retrospective,forecast_result()$estimate==1320,nrow(price_history())==5,
    grepl('Ingen',output$historical_status$html) || grepl('0 af',output$historical_status$html))
  stopifnot(!is.null(output$prices),!is.null(output$price_plot),!is.null(output$changes))
+ session$setInputs(prefix='X99')
+ stopifnot(grepl('ingen publicerede forbrugsmålinger',output$atc_hint$html),!forecast_result()$available)
 })
 cat('PASS: synthetic A10 national/regional comparison and forecast, N06 gaps, and observed-only tariff history.\n')
