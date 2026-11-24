@@ -8,31 +8,87 @@ ui <- fluidPage(
  theme=bs_theme(version=5,bg='#F6F8FB',fg='#1F2933',primary='#0033A0',
    base_font="-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"),
  tags$head(tags$title('Monitorering'),tags$style(HTML('
-   body{padding:28px} pre{white-space:pre-wrap;overflow-wrap:anywhere} .container-fluid{max-width:1500px;margin:auto}
-   h1{color:#0033a0;font-weight:700} .well{background:white;border:1px solid #e1e7ef;border-radius:14px}
-   .tab-content{background:white;border:1px solid #e1e7ef;border-radius:0 14px 14px 14px;padding:22px}
-   .scope{padding:15px;border-left:4px solid #0033a0;background:#edf2ff;margin:15px 0}
-   .note{color:#667085} table{font-size:13px}'))),
- h1('Monitorering'),p('Lægemiddelforbrug, faktiske regionale tilskud og taksthistorik'),
+   body{padding:clamp(12px,3vw,28px)} pre{white-space:pre-wrap;overflow-wrap:anywhere}
+   .container-fluid{max-width:1500px;margin:auto}
+   h1{color:#0033a0;font-weight:700;margin-bottom:1rem}
+   h2{font-size:1.25rem;margin:0 0 .8rem}
+   h3{font-size:1.05rem;margin:1.1rem 0 .6rem}
+   .well,.tab-content{background:white;border:1px solid #e1e7ef;border-radius:12px;padding:clamp(12px,2vw,22px)}
+   .tab-content{margin-top:.65rem}
+   .tab-content .tab-content{border:0;padding:0}
+   .shiny-plot-output img{max-width:100%;height:auto}
+   .scope{font-weight:600;margin-bottom:.65rem}
+   .note{color:#475467}
+   .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr));gap:.75rem;margin-bottom:.9rem}
+   .metric{padding:.8rem 1rem;background:#edf2ff;border-radius:8px}
+   .metric strong{display:block;font-size:1.35rem;color:#0033a0}
+   .metric small{display:block}
+   .quality{padding:.65rem .85rem;background:#f6f8fb;border-left:3px solid #63758b;margin-bottom:.8rem}
+   details{margin:.75rem 0} summary{cursor:pointer;font-weight:600}
+   details[open]>summary{margin-bottom:.7rem}
+   table{font-size:13px}')),
+   # Native disclosure elements need to report visibility changes to Shiny.
+   tags$script(HTML("
+     document.addEventListener('toggle', function(event) {
+       if (event.target.tagName === 'DETAILS' && window.jQuery) {
+         window.jQuery(event.target).trigger(event.target.open ? 'shown' : 'hidden');
+       }
+     }, true);
+   "))),
+ h1('Monitorering'),
  sidebarLayout(
   sidebarPanel(width=3,
-   selectInput('region','Bopælsregion',choices=setNames(names(analysis_regions),analysis_regions),selected='DK',selectize=FALSE),
+   h2('Vælg data'),
    uiOutput('atc_ui'),
-   uiOutput('dates_ui'),selectInput('level','Tabellens ATC-niveau',choices=setNames(c(1,3,4,5,7),paste('ATC',1:5)),selected=7),
-   textInput('product','Varenummer · valgfrit (6 cifre)',''),
-   downloadButton('export','Hent filtrerede analysedata'),hr(),
-   p(class='note','DDD · Flag T3: Ja · kroniske sygdomme: Ingen valg.'),
-   p(class='note','Import udføres af administrator uden for appen.')),
+   uiOutput('dates_ui'),
+   selectInput('region','Bopælsregion',choices=setNames(names(analysis_regions),analysis_regions),selected='DK',selectize=FALSE),
+   tags$details(tags$summary('Flere filtre'),
+     textInput('product','Varenummer (6 cifre)','')),
+   downloadButton('export','Hent CSV')),
   mainPanel(width=9,uiOutput('health'),div(class='scope',textOutput('scope')),
    tabsetPanel(
-    tabPanel('Datastatus',textOutput('latest_observation'),p('Forespørgselsdækning dokumenterer indlæst afgrænsning; fuld populationsdækning kræver uafhængig kontrol.'),DTOutput('coverage'),tags$details(tags$summary('Import- og revisionshistorik'),DTOutput('extracts'))),
-    tabPanel('Forbrug og tilskud',plotOutput('series',height='440px'),DTOutput('monthly'),h4('Samme måneder året før'),p('Sammenligningen viser observerede summer. Manglende produktmålinger og ændret dækning kan påvirke forskellen.'),plotOutput('year_series',height='360px'),DTOutput('year_comparison'),h4('ATC / varenummer'),DTOutput('details'),h4('Varenumre'),DTOutput('products')),
-    tabPanel('Takster og kobling',p('Takster med ukendt gyldighed vises i historikken, men bruges ikke som historiske priser. Dagsvægtning antager jævnt salg over måneden.'),DTOutput('tariffs'),h4('Historisk kobling'),DTOutput('historical'),h4('Produkt- og prisændringer'),DTOutput('changes')),
-    tabPanel('Fremskrivning og scenarie',h4('Fremskrivning af faktisk regionalt tilskud'),verbatimTextOutput('forecast'),h4('Estimat fra observerede tilskudssummer · ufuldstændighed mulig'),verbatimTextOutput('observed_estimate'),uiOutput('estimate_plot_ui'),
-      h4('Prisbaseret scenarie · observeret DDD × senest observeret tilskudspris/DDD'),
-      p('Dette er et prisgrundlag ved observeret mængde, ikke faktisk regionalt tilskud og ikke en valideret prognose. Prisens observationsdato bevares. Anvendelse på tidligere måneder er et kontrafaktisk scenarie. Afledt DDD = ekspeditionspris / ekspeditionspris pr. DDD kan bruges som estimat; kildeafrunding kan påvirke resultatet. Manglende grundlag udelades.'),
-      p('Matchandelene nedenfor gælder en tilgængelig pris/DDD og samme ATC; DDD-definitionens sammenlignelighed skal stadig vurderes.'),
-      verbatimTextOutput('scenario'),tags$details(tags$summary('Produktmålinger og prisgrundlag'),DTOutput('current')),h4(textOutput('future_heading')),verbatimTextOutput('future_scenario'),tags$details(tags$summary('Beregnede og udeladte produkter'),DTOutput('future_products')))))))
+    tabPanel('Forbrug og tilskud',
+      uiOutput('overview'),
+      plotOutput('series',height='400px'),
+      p(class='note','Orange ring markerer delvis dækning eller manglende produktmålinger. Huller i kurven viser måneder uden en observeret værdi.'),
+      tags$details(tags$summary('Månedstal'),DTOutput('monthly')),
+      tags$details(tags$summary('ATC og varenumre'),
+        selectInput('level','Tabellens ATC-niveau',choices=setNames(c(1,3,4,5,7),paste('ATC',1:5)),selected=7,selectize=FALSE),
+        DTOutput('details'),h3('Varenumre'),DTOutput('products'))),
+    tabPanel('Sammenlign år',h2('Samme måneder året før'),
+      p(class='note','Sammenligningen bruger observerede summer for samme ATC og geografi. Se dækning og manglende målinger i tabellen, før du tolker en ændring.'),
+      plotOutput('year_series',height='400px'),
+      DTOutput('year_comparison')),
+    tabPanel('Datastatus',h2('Dækning og observationer'),
+      p(textOutput('latest_observation',inline=TRUE)),
+      p('Forespørgselsdækning viser, hvilke ATC-afgrænsninger der er indlæst. Populationsdækning kræver særskilt kontrol. Hele Danmark bruger sit eget udtræk.'),
+      DTOutput('coverage'),
+      tags$details(tags$summary('Import- og revisionshistorik'),uiOutput('publication_details'),
+        p(class='note','Kildeafgrænsning: DDD, Flag T3 = Ja, kroniske sygdomme = Ingen valg.'),DTOutput('extracts'))),
+    tabPanel('Takster og kobling',h2('Historisk kobling'),
+      p('Beregnede historiske priser kræver dokumenteret gyldighed og egnet pris pr. DDD. Dagsvægtningen antager jævnt salg over måneden.'),
+      uiOutput('historical_status'),DTOutput('historical'),
+      tags$details(tags$summary('Takstobservationer'),DTOutput('tariffs')),
+      tags$details(tags$summary('Produkt- og prisændringer'),DTOutput('changes'))),
+    tabPanel('Fremskrivning og scenarie',
+      tabsetPanel(
+        tabPanel('Tilskud',h2('Fremskrivning af observeret tilskud'),
+          p(class='note','Fremskrivningen starter efter sidste afsluttede måned med observationer i den valgte periode. Den kan derfor omfatte måneder, der allerede er gået.'),
+          verbatimTextOutput('forecast'),
+          h3('Estimat fra observerede månedssummer'),
+          verbatimTextOutput('observed_estimate'),uiOutput('estimate_plot_ui')),
+        tabPanel('Pris ved observeret DDD',h2('Pris ved observeret DDD'),
+          p('De valgte måneders observerede DDD værdisættes med den senest observerede tilskudspris pr. DDD. Anvendelse før prisdatoen er et kontrafaktisk scenarie. Afledt DDD kan være påvirket af kildeafrunding.'),
+          verbatimTextOutput('scenario'),
+          tags$details(tags$summary('Varenumre, prisdato og prisgrundlag'),DTOutput('current'))),
+        tabPanel('Produktbaseret prisscenarie',h2(textOutput('future_heading')),
+          p('Mængderne fremskrives pr. varenummer med senest observerede pris pr. DDD. Resultatet er et beregnet prisgrundlag under de valgte antagelser.'),
+          verbatimTextOutput('future_scenario'),
+          tags$details(tags$summary('Beregnede og udeladte produkter'),DTOutput('future_products'))))
+    )
+   )
+  )
+ ))
 server <- function(input,output,session) {
  # One immutable object per read. A failed refresh keeps the last validated object.
  cache <- reactiveVal(NULL); problem <- reactiveVal('Ingen publicerede data læst endnu.');stamp <- NULL
@@ -54,11 +110,14 @@ server <- function(input,output,session) {
    code
  })
  output$health <- renderUI({
-   x<-cache();tagList(if(nzchar(problem())) p(role='alert',problem()),if(!is.null(x)) {
-     e<-analysis_region_rows(x$tables$extracts,region());t<-x$tables$tariffs
-     div(p(paste('Publiceret:',x$published_at)),p(paste('Seneste import:',if(nrow(e)) max(as.character(e$imported_at)) else 'ingen')),
-       p(paste('Seneste indlæste takstobservation:',if(nrow(t)) max(as.character(t$observed_at)) else 'ingen')))
-   })
+   if(nzchar(problem())) p(class='quality',role='alert',problem())
+ })
+ output$publication_details <- renderUI({
+   x<-bundle();e<-analysis_region_rows(x$tables$extracts,region());t<-x$tables$tariffs
+   tags$ul(
+     tags$li(paste('Publiceret (UTC)',x$published_at)),
+     tags$li(paste('Seneste import for geografien (UTC)',if(nrow(e)) max(as.character(e$imported_at)) else 'ingen')),
+     tags$li(paste('Seneste takstobservation (UTC)',if(nrow(t)) max(as.character(t$observed_at)) else 'ingen')))
  })
  output$atc_ui <- renderUI({
    d<-bundle()$tables$consumption;e<-bundle()$tables$extracts
@@ -68,7 +127,7 @@ server <- function(input,output,session) {
      A10='Midler mod diabetes',B01='Antitrombotiske midler',R03='Midler mod obstruktiv lungesygdom')
    labels<-ifelse(codes %in% names(common),paste(codes,common[codes],sep=' · '),codes)
    selected<-isolate(input$prefix);if(is.null(selected)) selected<-if('N06' %in% codes)'N06'else head(codes,1)
-   selectizeInput('prefix','Søg ATC-gruppe eller indtast kode',choices=setNames(codes,labels),selected=selected,
+   selectizeInput('prefix','ATC-gruppe',choices=setNames(codes,labels),selected=selected,
      options=list(create=TRUE,placeholder='Søg fx N06 eller psykoanaleptika'))
  })
  output$dates_ui <- renderUI({
@@ -100,7 +159,28 @@ server <- function(input,output,session) {
    d[keep,,drop=FALSE]
  }
  monthly <- reactive({f<-filters();analysis_months(bundle(),f$prefix,f$from,f$to,f$product,f$region)})
- output$scope <- renderText({f<-filters();paste('Afgrænsning:',f$prefix,'·',f$from,'til',f$to,if(nzchar(f$product))paste('· varenummer',f$product),'·',analysis_regions[[f$region]],'· Summer er observerede værdier. Manglende målinger vises som ukendte.')})
+ output$scope <- renderText({
+   f<-filters()
+   paste(f$prefix,'·',analysis_regions[[f$region]],'·',f$from,'til',f$to,
+     if(nzchar(f$product)) paste('· Varenummer',f$product))
+ })
+ output$overview <- renderUI({
+   d<-monthly()
+   metric <- function(label,values,missing,format_value) {
+     div(class='metric',span(label),strong(format_value(observed_sum(values))),
+       tags$small(paste(sum(!is.na(values)),'af',nrow(d),'måneder med måling')),
+       if(any(missing>0)) tags$small(paste(format_da(sum(missing)),'manglende produktmålinger')))
+   }
+   complete <- sum(d$status %in% c('query_complete_population_unverified','population_verified'))
+   verified <- sum(d$status=='population_verified')
+   tagList(
+     div(class='metrics',
+       metric('Observeret forbrug (DDD)',d$ddd,d$missing_ddd,format_da),
+       metric('Observeret tilskud',d$actual_subsidy_kr,d$missing_subsidy,money_da)),
+     p(class='quality',paste(complete,'af',nrow(d),'måneder har fuld forespørgselsdækning.',
+       paste0(verified,' af ',nrow(d),' har verificeret populationsdækning.'),
+       'Ukendte målinger indgår ikke i summerne. Se Datastatus.')))
+ })
  table_out <- function(id,fun) output[[id]] <- renderDT({
    d<-fun()
    private<-c('extract_id','price_snapshot_id','snapshot_id','previous_id','source','extracted_at','imported_at','assumptions')
@@ -129,8 +209,15 @@ server <- function(input,output,session) {
    if(length(amounts))table<-formatRound(table,columns=amounts,digits=2,mark='.',dec.mark=',')
    table
  })
- table_out('coverage',function(){d<-monthly()[c('month','scope','status','observation_status','products','captures')];d$status<-unname(status_da[d$status]);d})
- table_out('monthly',function(){d<-monthly();d$status<-unname(status_da[d$status]);d})
+ table_out('coverage',function(){
+   d<-monthly()[c('month','status','observation_status','products','missing_ddd','missing_subsidy')]
+   d$status<-unname(status_da[d$status]);d
+ })
+ table_out('monthly',function(){
+   d<-monthly()[c('month','ddd','actual_subsidy_kr','missing_ddd','missing_subsidy',
+     'products','observation_status','status')]
+   d$status<-unname(status_da[d$status]);d
+ })
  table_out('extracts',function(){
    f<-filters();e<-analysis_region_rows(bundle()$tables$extracts,f$region)
    e<-e[(startsWith(e$atc_prefix,f$prefix)|startsWith(f$prefix,e$atc_prefix)) & format(as.Date(e$month),'%Y-%m')>=f$from & format(as.Date(e$month),'%Y-%m')<=f$to,,drop=FALSE]
@@ -147,24 +234,45 @@ server <- function(input,output,session) {
      ddd=observed_sum(z$ddd),actual_subsidy_kr=observed_sum(z$regionalt_tilskud_kr),missing_ddd=sum(is.na(z$ddd)),missing_subsidy=sum(is.na(z$regionalt_tilskud_kr)))))
  })
  table_out('tariffs',function()bundle()$tables$tariffs)
- table_out('historical',function()subset_rows(bundle()$tables$historical_prices))
+ historical <- reactive(subset_rows(bundle()$tables$historical_prices))
+ table_out('historical',historical)
+ output$historical_status <- renderUI({
+   d<-historical()
+   if(!nrow(d)) return(p(class='quality','Ingen produktmålinger i den valgte periode.'))
+   matched<-if('modelled_subsidy_basis_kr' %in% names(d)) sum(!is.na(d$modelled_subsidy_basis_kr)) else 0L
+   p(class='quality',paste(format_da(matched),'af',format_da(nrow(d)),
+     'produktmåneder har et beregnet historisk prisgrundlag. Tabellen viser også det observerede tilskud.'))
+ })
  table_out('current',function()subset_rows(bundle()$tables$current_prices))
  table_out('changes',function(){
    # Change rows lack ATC: restrict keys using products in either snapshot.
    f<-filters();products<-subset_rows(bundle()$tables$tariff_products,'atc',FALSE,geographic=FALSE)$varenummer
    d<-bundle()$tables$tariff_changes;d[d$varenummer %in% products & d$change!='unchanged',,drop=FALSE]
  })
+ month_axis <- function(months) {
+   ticks<-unique(round(seq(1,length(months),length.out=min(12,length(months)))))
+   axis(1,at=ticks,labels=months[ticks],las=2,cex.axis=.75)
+ }
+ plot_units <- function(values,unit) {
+   maximum<-max(c(0,abs(values)),na.rm=TRUE)
+   if(maximum>=1e6) return(list(divisor=1e6,label=paste('mio.',unit)))
+   if(maximum>=1e3) return(list(divisor=1e3,label=paste('tusind',unit)))
+   list(divisor=1,label=unit)
+ }
  output$series <- renderPlot({
-   d<-monthly();par(mfrow=c(2,1),mar=c(4,5,2,1));x<-seq_len(nrow(d))
+   d<-monthly();par(mfrow=c(2,1),mar=c(5,5,1,1));x<-seq_len(nrow(d))
    for(k in c('ddd','actual_subsidy_kr')) {
-     y<-d[[k]]/1e6;ylim<-if(all(is.na(y)))c(0,1)else range(c(0,y),na.rm=TRUE);if(diff(ylim)==0)ylim<-ylim+c(0,1)
-     plot(x,y,type='o',pch=16,col='#0033a0',xaxt='n',xlab='',ylab=if(k=='ddd')'Observeret mio. DDD'else'Observeret tilskud (mio. kr.)',ylim=ylim)
-     axis(1,at=x,labels=d$month,las=2,cex.axis=.75)
+     is_ddd<-k=='ddd'
+     units<-plot_units(d[[k]],if(is_ddd)'DDD' else 'kr.')
+     y<-d[[k]]/units$divisor
+     ylim<-range(c(0,y),na.rm=TRUE);if(diff(ylim)==0)ylim<-c(0,1)
+     plot(x,y,type='o',pch=16,col='#0033a0',xaxt='n',xlab='',las=1,
+       ylab=paste0(if(is_ddd)'Forbrug' else 'Tilskud',' (',units$label,')'),ylim=ylim)
+     month_axis(d$month)
      partial<-d$status %in% c('partial_subscopes','missing') | if(k=='ddd')d$missing_ddd>0 else d$missing_subsidy>0
      points(x[partial],y[partial],pch=1,col='#b45309',cex=1.8)
-     title(sub='Orange ring: delvis dækning eller manglende måling. Brud: ingen observeret værdi.',cex.sub=.8)
    }
- })
+ },alt='Observeret DDD og observeret tilskud pr. måned')
  output$latest_observation <- renderText({
    f<-filters();d<-subset_rows(bundle()$tables$consumption,period=FALSE)
    d<-d[!is.na(d$ddd)|!is.na(d$regionalt_tilskud_kr),,drop=FALSE]
@@ -191,38 +299,47 @@ server <- function(input,output,session) {
    f<-filters();d<-monthly();year<-as.integer(substr(f$to,1,4))
    x<-observed_subsidy_estimate(d,year)
    if(!x$available || nzchar(f$product)) {plot.new();text(.5,.5,'Intet beregneligt tilskudsestimat i afgrænsningen.');return()}
-   m<-d[substr(d$month,1,4)==as.character(year),,drop=FALSE]
+   m<-d[substr(d$month,1,4)==as.character(year) & d$month<=x$last_month,,drop=FALSE]
    last<-as.integer(substr(x$last_month,6,7));actual<-rep(NA_real_,12);future<-actual
-   actual[as.integer(substr(m$month,6,7))]<-m$actual_subsidy_kr/1e6
-   if(last<12L) future[seq.int(last+1L,12L)]<-x$monthly_rate/1e6
-   ylim<-range(c(0,actual,future),na.rm=TRUE);ylim[2]<-max(1e-6,ylim[2]*1.2)
-   par(mar=c(4,5,2,1));matplot(1:12,cbind(actual,future),type='o',pch=c(16,1),lty=c(1,2),
-     col=c('#0033a0','#b45309'),xaxt='n',xlab='',ylab='Mio. kr. pr. måned',ylim=ylim)
-   axis(1,at=1:12,labels=sprintf('%d-%02d',year,1:12),las=2,cex.axis=.75)
+   actual[as.integer(substr(m$month,6,7))]<-m$actual_subsidy_kr
+   if(last<12L) future[seq.int(last+1L,12L)]<-x$monthly_rate
+   units<-plot_units(c(actual,future),'kr.')
+   y<-cbind(actual,future)/units$divisor
+   ylim<-range(c(0,y),na.rm=TRUE);ylim[2]<-max(1,ylim[2]*1.2)
+   par(mar=c(5,5,1,1));matplot(1:12,y,type='o',pch=c(16,1),lty=c(1,2),
+     col=c('#0033a0','#b45309'),xaxt='n',xlab='',las=1,ylab=paste(units$label,'pr. måned'),ylim=ylim)
+   month_axis(sprintf('%d-%02d',year,1:12))
    abline(v=last+.5,col='#667085',lty=3)
    legend('topleft',c('Observerede summer · kan være ufuldstændige','Estimat · seneste tre måneders gennemsnit'),
      col=c('#0033a0','#b45309'),lty=c(1,2),bty='n',cex=.75)
- })
+ },alt='Observerede tilskudssummer og estimat til årets udgang')
  comparison <- reactive({
    f<-filters();d<-monthly();previous<-analysis_months(bundle(),f$prefix,
      sprintf('%d%s',as.integer(substr(f$from,1,4))-1,substr(f$from,5,7)),
      sprintf('%d%s',as.integer(substr(f$to,1,4))-1,substr(f$to,5,7)),f$product,f$region)
    compare_months(d,previous)
  })
- table_out('year_comparison',function(){d<-comparison();d$status<-unname(status_da[d$status]);d$previous_status<-unname(status_da[d$previous_status]);d})
+ table_out('year_comparison',function(){
+   d<-comparison()[c('month','ddd','previous_ddd','ddd_change_pct','actual_subsidy_kr','previous_subsidy_kr',
+     'subsidy_change_pct','status','previous_status','missing_ddd','previous_missing_ddd',
+     'missing_subsidy','previous_missing_subsidy')]
+   d$status<-unname(status_da[d$status]);d$previous_status<-unname(status_da[d$previous_status]);d
+ })
  output$year_series <- renderPlot({
-   d<-comparison();par(mfrow=c(2,1),mar=c(4,5,2,1));x<-seq_len(nrow(d))
+   d<-comparison();par(mfrow=c(2,1),mar=c(5,5,1,1));x<-seq_len(nrow(d))
    for(k in c('ddd','actual_subsidy_kr')) {
      previous<-d[[if(k=='ddd')'previous_ddd'else'previous_subsidy_kr']]
-     y<-cbind(d[[k]],previous)/1e6
-     ylim<-if(all(is.na(y)))c(0,1)else range(c(0,y),na.rm=TRUE);if(diff(ylim)==0)ylim<-c(0,1)
+     values<-cbind(d[[k]],previous)
+     units<-plot_units(values,if(k=='ddd')'DDD' else 'kr.')
+     y<-values/units$divisor
+     ylim<-range(c(0,y),na.rm=TRUE);if(diff(ylim)==0)ylim<-c(0,1)
      ylim[2]<-ylim[2]+diff(ylim)*.2
      matplot(x,y,type='o',pch=c(16,1),lty=c(1,2),col=c('#0033a0','#667085'),xaxt='n',xlab='',
-       ylab=if(k=='ddd')'Mio. DDD'else'Mio. kr.',ylim=ylim)
-     axis(1,at=x,labels=d$month,las=2,cex.axis=.75)
+       ylab=units$label,las=1,ylim=ylim)
+     month_axis(d$month)
      legend('topleft',c('Valgte måneder','Samme måneder året før'),col=c('#0033a0','#667085'),lty=c(1,2),bty='n',cex=.8)
    }
- })
+ },alt='Observeret DDD og tilskud sammenlignet med samme måneder året før')
  output$forecast <- renderText({
    f<-filters();if(nzchar(f$product))return('Utilstrækkeligt datagrundlag: produktfremskrivning er ikke aktiveret.')
    ans<-subsidy_forecast(monthly(),as.integer(substr(f$to,1,4)))
@@ -235,20 +352,20 @@ server <- function(input,output,session) {
    paste('Rækker med prisgrundlag:',sum(ok),'/',nrow(d),
      '\nObserveret DDD med prisgrundlag:',format_da(observed_sum(d$ddd[ok])),'/',format_da(observed_sum(d$ddd)),
      '\nDDD-andel med prisgrundlag:',if(is.na(observed_sum(d$ddd)) || observed_sum(d$ddd)<=0)'Ikke tilgængelig'else paste0(format_da(100*sum(d$ddd[ok],na.rm=TRUE)/observed_sum(d$ddd),1),' %'),
-     '\nAndelen gælder observeret DDD, ikke dokumenteret populationsdækning.',
+     '\nAndelen gælder kun observeret DDD. Vurder også DDD-definitionen og prisdatoen.',
      '\nPrisgrundlag på matchede rækker:',money_da(observed_sum(d$current_price_subsidy_basis_kr)),
      '\nHeraf rækker med afledt DDD (estimat):',sum(ok & d$ddd_provenance=='unverified_ratio',na.rm=TRUE),
      '\nUdeladte rækker:',sum(!ok),'· manglende/ukendt DDD eller pris, ATC-uoverensstemmelse eller manglende produkt.',
      '\nSe kolonnen Anvendt pris observeret (UTC) for prisens observationsdato. Ingen automatisk antagelse om, at prisen fortsat gælder.')
  })
  future <- reactive({f<-filters();price_projection(subset_rows(bundle()$tables$current_prices),monthly(),as.integer(substr(f$to,1,4)))})
- output$future_heading <- renderText({x<-future();if(x$available)x$period else 'Produktbaseret prisscenarie'})
+ output$future_heading <- renderText({x<-future();if(x$available)x$period else 'Prisscenarie for resten af året'})
  output$future_scenario <- renderText({x<-future();if(!x$available)return(x$reason)
    d<-x$products;ok<-!is.na(d$modelled_future_basis_kr)
    paste(x$reason,'\nProdukter beregnet:',sum(ok),'/',nrow(d),
      '\nObserveret DDD i de tre måneder for beregnede produkter:',format_da(observed_sum(d$recent_ddd[ok])),'/',format_da(observed_sum(d$recent_ddd)),
      '\nModelberegnet prisgrundlag i scenarieperioden:',money_da(observed_sum(d$modelled_future_basis_kr)),
-     '\nDette er ikke en prognose for faktisk regionalt tilskud. Udeladte produkter tæller ikke som nul.')
+     '\nUdeladte produkter indgår ikke i beløbet.')
  })
  table_out('future_products',function(){x<-future();if(x$available)x$products else data.frame(Besked=x$reason)})
  output$export <- downloadHandler(filename=function()paste0('monitorering_',filters()$prefix,'_',filters()$region,'.csv'),
