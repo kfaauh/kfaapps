@@ -31,12 +31,17 @@ stopifnot(all(
   c("Drugid", "AktiveSubstanser", "ATC-kode") %in% names(drugs_data)
 ))
 
-drugs_data <- drugs_data %>%
-  transmute(
-    V1 = trimws(Drugid),
-    V5 = trimws(AktiveSubstanser),
-    V7 = toupper(trimws(`ATC-kode`))
-  )
+drugs_data <- data.frame(
+  V1 = trimws(drugs_data$Drugid),
+  V5 = trimws(drugs_data$AktiveSubstanser),
+  V7 = toupper(trimws(drugs_data[["ATC-kode"]])),
+  in_medicinpriser = if ("Er i Medicinpriser" %in% names(drugs_data)) {
+    tolower(trimws(drugs_data[["Er i Medicinpriser"]])) %in% "ja"
+  } else {
+    rep(FALSE, nrow(drugs_data))
+  }
+)
+source("interaktionsdatabasen.R", local = TRUE, encoding = "UTF-8")
 # acb_data <- read_excel("data/anticholinergic_bcpt.xlsx", skip=1)  # Loading the Excel file
 acb_data <- read_excel("data/antikolinerg_IRF_2019.xlsx", skip=0)  # Loading the Excel file
 sepo_data <- read_delim("data/seponeringslisten_v2.csv", delim = ";")  # Semicolon-separated CSV
@@ -135,24 +140,6 @@ scrape_nyrefunktion_for_atc <- function(atc) {
     kidney_output = NULL
   ))
 }
-
-# Function to retrieve one drug ID per ATC code
-get_drug_ids <- function(atc_codes) {
-  # Subset the data based on ATC codes, using the correct column "V7" for ATC codes
-  drugs_subset <- drugs_data[drugs_data$V7 %in% atc_codes, ]
-
-  # Remove duplicates: keep only the first entry per ATC code
-  drugs_subset <- drugs_subset %>%
-    group_by(V7) %>%  # Group by ATC code
-    slice(1) %>%      # Select the first match for each ATC code
-    ungroup()
-
-  # Extract the drug IDs from the correct "V1" column
-  drug_ids <- drugs_subset$V1
-
-  return(drug_ids)
-}
-
 
 # Function to generate Stockley's Interactions URL
 generate_stockleys_url <- function(atc_codes) {
@@ -833,6 +820,7 @@ $(document).on('click', '#clear_output', function() {
               "Interaktionsdatabasen.dk  \u2197",
               class = "btn-wide"
             ),
+            uiOutput("interaktionsdatabasen_link"),
 
             actionButton(
               "generate_interaksjoner",
@@ -1456,11 +1444,59 @@ server <- function(input, output, session) {
 
 
   # Check interactions on interaktionsdatabasen.dk
-  observeEvent(input$generate_interaktionsdatabasen, {
-    atc_codes <- atc_codes()
-    drug_ids <- get_drug_ids(atc_codes)
-    url <- paste0("http://interaktionsdatabasen.dk/SearchResult.aspx?pids=", paste(drug_ids, collapse = ","))
+  interaction_lookup <- reactiveVal(NULL)
 
+  output$interaktionsdatabasen_link <- renderUI({
+    lookup <- interaction_lookup()
+    if (!is.null(lookup) && identical(lookup$atc_codes, atc_codes())) {
+      tags$a(href = lookup$url, target = "_blank", rel = "noopener",
+             "Åbn resultatet")
+    }
+  })
+
+  observeEvent(input$generate_interaktionsdatabasen, {
+    interaction_lookup(NULL)
+    codes <- atc_codes()
+    if (!length(codes)) {
+      showNotification("Indtast mindst én ATC-kode.", type = "warning")
+      return()
+    }
+
+    result <- withProgress(message = "Slår lægemidler op i Interaktionsdatabasen", {
+      tryCatch(
+        resolve_interaction_ids(codes, drugs_data),
+        error = function(e) NULL
+      )
+    })
+    if (is.null(result)) {
+      showNotification(
+        "Lister kunne ikke kontrollere opslaget i Interaktionsdatabasen. Prøv igen, eller søg direkte i databasen.",
+        type = "error", duration = NULL
+      )
+      return()
+    }
+
+    ids <- unname(result[!is.na(result)])
+    missing_codes <- names(result)[is.na(result)]
+    if (length(missing_codes)) {
+      showModal(modalDialog(
+        title = if (length(ids)) "Ufuldstændigt interaktionstjek" else "Ingen ATC-koder kunne bekræftes",
+        tags$p("Lister kunne ikke bekræfte et præparat for følgende ATC-koder:"),
+        tags$p(paste(missing_codes, collapse = ", ")),
+        if (length(ids)) tags$p("Et delvist opslag omfatter kun de lægemidler, som databasen genkendte."),
+        footer = tagList(
+          modalButton("Luk"),
+          if (length(ids)) tags$a(
+            href = interaction_result_url(ids), target = "_blank", rel = "noopener",
+            class = "btn btn-primary", "Åbn delvist opslag"
+          )
+        )
+      ))
+      return()
+    }
+
+    url <- interaction_result_url(ids)
+    interaction_lookup(list(atc_codes = codes, url = url))
     session$sendCustomMessage(type = "redirect", message = list(url = url))
   })
 
